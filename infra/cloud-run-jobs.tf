@@ -2,6 +2,7 @@ resource "google_cloud_run_v2_job" "batch" {
   name     = "${local.prefix}-batch"
   location = var.region
   labels   = local.labels
+  deletion_protection = false
 
   template {
     task_count = 1

@@ -59,7 +59,7 @@ resource "google_logging_metric" "batch_duration" {
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "INT64"
-    unit        = "s"
+    unit        = "1"
     display_name = "Batch Job Duration"
   }
 }
@@ -79,7 +79,7 @@ resource "google_monitoring_dashboard" "overview" {
             dataSets = [{
               timeSeriesQuery = {
                 timeSeriesFilter = {
-                  filter = "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"${google_cloud_run_v2_job.batch.name}\""
+                  filter = "resource.type=\"cloud_run_job\" AND metric.type=\"run.googleapis.com/job/completed_execution_count\" AND resource.labels.job_name=\"${google_cloud_run_v2_job.batch.name}\""
                   aggregation = {
                     alignmentPeriod  = "3600s"
                     perSeriesAligner = "ALIGN_COUNT"
