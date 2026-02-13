@@ -1,0 +1,16 @@
+{
+  "period": "daily",
+  "totalRaces": 85,
+  "ml": {
+    "hit1st": 0.24705882352941178,
+    "hitAll": 0.011764705882352941,
+    "hitTechnique": 0.5058823529411764,
+    "avgCourseMatch": 1.0823529411764705,
+    "avgSTMAE": 0.11599921568627454
+  },
+  "ai": {
+    "hit1st": 0,
+    "hitTrifecta": 0,
+    "hitTechnique": 0
+  }
+}

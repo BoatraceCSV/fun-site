@@ -1,0 +1,181 @@
+{
+  "raceCode": "202602130412",
+  "raceDate": "2026-02-13",
+  "stadium": "ボートレース平和島",
+  "raceNumber": 12,
+  "boats": [
+    {
+      "boatNumber": 1,
+      "registrationNumber": 4117,
+      "racerName": "廣中智紗",
+      "age": 45,
+      "branch": "東京",
+      "weight": 46,
+      "rank": "A1",
+      "nationalWinRate": 5.65,
+      "nationalTop2Rate": 37.63,
+      "localWinRate": 6.34,
+      "localTop2Rate": 43.08,
+      "motorNumber": 62,
+      "motorTop2Rate": 32,
+      "boatBodyNumber": 38,
+      "boatTop2Rate": 35.77,
+      "currentResults": [
+        "8-"
+      ]
+    },
+    {
+      "boatNumber": 2,
+      "registrationNumber": 3435,
+      "racerName": "寺田千恵",
+      "age": 56,
+      "branch": "岡山",
+      "weight": 46,
+      "rank": "A1",
+      "nationalWinRate": 6.22,
+      "nationalTop2Rate": 42.17,
+      "localWinRate": 6.7,
+      "localTop2Rate": 50,
+      "motorNumber": 61,
+      "motorTop2Rate": 29.06,
+      "boatBodyNumber": 72,
+      "boatTop2Rate": 20.75,
+      "currentResults": [
+        "6-"
+      ]
+    },
+    {
+      "boatNumber": 3,
+      "registrationNumber": 3900,
+      "racerName": "香川素子",
+      "age": 49,
+      "branch": "滋賀",
+      "weight": 47,
+      "rank": "A1",
+      "nationalWinRate": 6.15,
+      "nationalTop2Rate": 43.64,
+      "localWinRate": 6.63,
+      "localTop2Rate": 44.44,
+      "motorNumber": 74,
+      "motorTop2Rate": 26.79,
+      "boatBodyNumber": 58,
+      "boatTop2Rate": 27.5,
+      "currentResults": []
+    },
+    {
+      "boatNumber": 4,
+      "registrationNumber": 4373,
+      "racerName": "若狭奈美",
+      "age": 37,
+      "branch": "岡山",
+      "weight": 47,
+      "rank": "A1",
+      "nationalWinRate": 6.17,
+      "nationalTop2Rate": 42.2,
+      "localWinRate": 5.7,
+      "localTop2Rate": 30,
+      "motorNumber": 19,
+      "motorTop2Rate": 37.5,
+      "boatBodyNumber": 74,
+      "boatTop2Rate": 37.39,
+      "currentResults": [
+        "5-"
+      ]
+    },
+    {
+      "boatNumber": 5,
+      "registrationNumber": 3618,
+      "racerName": "海野ゆか",
+      "age": 52,
+      "branch": "広島",
+      "weight": 44,
+      "rank": "A1",
+      "nationalWinRate": 6.12,
+      "nationalTop2Rate": 45.13,
+      "localWinRate": 6.72,
+      "localTop2Rate": 55.17,
+      "motorNumber": 45,
+      "motorTop2Rate": 39.1,
+      "boatBodyNumber": 69,
+      "boatTop2Rate": 29.66,
+      "currentResults": []
+    },
+    {
+      "boatNumber": 6,
+      "registrationNumber": 4011,
+      "racerName": "堀之内紀",
+      "age": 46,
+      "branch": "岡山",
+      "weight": 46,
+      "rank": "A1",
+      "nationalWinRate": 5.26,
+      "nationalTop2Rate": 31.88,
+      "localWinRate": 5.24,
+      "localTop2Rate": 23.81,
+      "motorNumber": 43,
+      "motorTop2Rate": 41.54,
+      "boatBodyNumber": 47,
+      "boatTop2Rate": 35.29,
+      "currentResults": [
+        "7-"
+      ]
+    }
+  ],
+  "mlPrediction": {
+    "first": 2,
+    "second": 1,
+    "third": 3,
+    "technique": "逃げ"
+  },
+  "aiPrediction": {
+    "startFormation": {
+      "entries": [
+        {
+          "boatNumber": 1,
+          "courseNumber": 6,
+          "predictedST": 0.026
+        },
+        {
+          "boatNumber": 2,
+          "courseNumber": 1,
+          "predictedST": 0.031
+        },
+        {
+          "boatNumber": 3,
+          "courseNumber": 2,
+          "predictedST": 0.022
+        },
+        {
+          "boatNumber": 4,
+          "courseNumber": 4,
+          "predictedST": 0.043
+        },
+        {
+          "boatNumber": 5,
+          "courseNumber": 5,
+          "predictedST": 0.057
+        },
+        {
+          "boatNumber": 6,
+          "courseNumber": 3,
+          "predictedST": 0.041
+        }
+      ],
+      "pattern": "flat"
+    },
+    "firstTurnScenario": "ML予測のみ（AI分析は利用不可）",
+    "predictedTechnique": "nige",
+    "predictedOrder": [
+      2,
+      1,
+      3
+    ],
+    "confidence": 0.3,
+    "narrative": "AI分析が利用できなかったため、ML予測結果のみを表示しています。",
+    "suggestedBets": []
+  },
+  "imageUrl": "",
+  "ogImageUrl": "",
+  "imageType": "svg-fallback",
+  "createdAt": "2026-02-13T12:01:14.999Z"
+}

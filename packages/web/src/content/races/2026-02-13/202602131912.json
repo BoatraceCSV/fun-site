@@ -1,0 +1,194 @@
+{
+  "raceCode": "202602131912",
+  "raceDate": "2026-02-13",
+  "stadium": "ボートレース下関",
+  "raceNumber": 12,
+  "boats": [
+    {
+      "boatNumber": 1,
+      "registrationNumber": 4874,
+      "racerName": "池田奈津",
+      "age": 32,
+      "branch": "福岡",
+      "weight": 52,
+      "rank": "B1",
+      "nationalWinRate": 4.37,
+      "nationalTop2Rate": 17.46,
+      "localWinRate": 4.69,
+      "localTop2Rate": 26.92,
+      "motorNumber": 17,
+      "motorTop2Rate": 29.38,
+      "boatBodyNumber": 65,
+      "boatTop2Rate": 35.79,
+      "currentResults": [
+        "3-1",
+        "5-",
+        "6-"
+      ]
+    },
+    {
+      "boatNumber": 2,
+      "registrationNumber": 5241,
+      "racerName": "門田 栞",
+      "age": 25,
+      "branch": "香川",
+      "weight": 48,
+      "rank": "B1",
+      "nationalWinRate": 4.08,
+      "nationalTop2Rate": 25.49,
+      "localWinRate": 2.7,
+      "localTop2Rate": 5.41,
+      "motorNumber": 47,
+      "motorTop2Rate": 42.63,
+      "boatBodyNumber": 35,
+      "boatTop2Rate": 36.61,
+      "currentResults": [
+        "3-",
+        "4-4"
+      ]
+    },
+    {
+      "boatNumber": 3,
+      "registrationNumber": 5057,
+      "racerName": "上田紗奈",
+      "age": 29,
+      "branch": "大阪",
+      "weight": 45,
+      "rank": "B1",
+      "nationalWinRate": 4.86,
+      "nationalTop2Rate": 30.77,
+      "localWinRate": 5.78,
+      "localTop2Rate": 33.33,
+      "motorNumber": 52,
+      "motorTop2Rate": 36.26,
+      "boatBodyNumber": 23,
+      "boatTop2Rate": 27.37,
+      "currentResults": [
+        "2-",
+        "2-4"
+      ]
+    },
+    {
+      "boatNumber": 4,
+      "registrationNumber": 4433,
+      "racerName": "川野芽唯",
+      "age": 39,
+      "branch": "福岡",
+      "weight": 46,
+      "rank": "A1",
+      "nationalWinRate": 6.86,
+      "nationalTop2Rate": 49.06,
+      "localWinRate": 7,
+      "localTop2Rate": 50,
+      "motorNumber": 71,
+      "motorTop2Rate": 40.51,
+      "boatBodyNumber": 70,
+      "boatTop2Rate": 35.45,
+      "currentResults": [
+        "1-2",
+        "4-5",
+        "7-"
+      ]
+    },
+    {
+      "boatNumber": 5,
+      "registrationNumber": 5297,
+      "racerName": "南 彩寧",
+      "age": 23,
+      "branch": "兵庫",
+      "weight": 50,
+      "rank": "B1",
+      "nationalWinRate": 2.77,
+      "nationalTop2Rate": 9.33,
+      "localWinRate": 1.27,
+      "localTop2Rate": 0,
+      "motorNumber": 40,
+      "motorTop2Rate": 30.73,
+      "boatBodyNumber": 72,
+      "boatTop2Rate": 28.57,
+      "currentResults": [
+        "5-",
+        "6-6"
+      ]
+    },
+    {
+      "boatNumber": 6,
+      "registrationNumber": 5003,
+      "racerName": "来田衣織",
+      "age": 29,
+      "branch": "兵庫",
+      "weight": 45,
+      "rank": "B1",
+      "nationalWinRate": 4.48,
+      "nationalTop2Rate": 27.54,
+      "localWinRate": 2.82,
+      "localTop2Rate": 0,
+      "motorNumber": 28,
+      "motorTop2Rate": 24.4,
+      "boatBodyNumber": 67,
+      "boatTop2Rate": 34.57,
+      "currentResults": [
+        "6-5",
+        "4-",
+        "3-"
+      ]
+    }
+  ],
+  "mlPrediction": {
+    "first": 2,
+    "second": 6,
+    "third": 4,
+    "technique": "逃げ"
+  },
+  "aiPrediction": {
+    "startFormation": {
+      "entries": [
+        {
+          "boatNumber": 1,
+          "courseNumber": 5,
+          "predictedST": 0.006
+        },
+        {
+          "boatNumber": 2,
+          "courseNumber": 1,
+          "predictedST": -0.018
+        },
+        {
+          "boatNumber": 3,
+          "courseNumber": 6,
+          "predictedST": -0.03
+        },
+        {
+          "boatNumber": 4,
+          "courseNumber": 4,
+          "predictedST": 0.099
+        },
+        {
+          "boatNumber": 5,
+          "courseNumber": 3,
+          "predictedST": -0.005
+        },
+        {
+          "boatNumber": 6,
+          "courseNumber": 2,
+          "predictedST": 0.072
+        }
+      ],
+      "pattern": "flat"
+    },
+    "firstTurnScenario": "ML予測のみ（AI分析は利用不可）",
+    "predictedTechnique": "nige",
+    "predictedOrder": [
+      2,
+      6,
+      4
+    ],
+    "confidence": 0.3,
+    "narrative": "AI分析が利用できなかったため、ML予測結果のみを表示しています。",
+    "suggestedBets": []
+  },
+  "imageUrl": "",
+  "ogImageUrl": "",
+  "imageType": "svg-fallback",
+  "createdAt": "2026-02-13T12:00:59.457Z"
+}

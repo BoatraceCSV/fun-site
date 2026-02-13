@@ -1,0 +1,201 @@
+{
+  "raceCode": "202602130312",
+  "raceDate": "2026-02-13",
+  "stadium": "ボートレース江戸川",
+  "raceNumber": 12,
+  "boats": [
+    {
+      "boatNumber": 1,
+      "registrationNumber": 4769,
+      "racerName": "馬場 剛",
+      "age": 33,
+      "branch": "東京",
+      "weight": 52,
+      "rank": "A2",
+      "nationalWinRate": 6.02,
+      "nationalTop2Rate": 42.31,
+      "localWinRate": 6.5,
+      "localTop2Rate": 49.56,
+      "motorNumber": 54,
+      "motorTop2Rate": 32.18,
+      "boatBodyNumber": 38,
+      "boatTop2Rate": 30.94,
+      "currentResults": [
+        "2-5",
+        "1-",
+        "1-2",
+        "2-1"
+      ]
+    },
+    {
+      "boatNumber": 2,
+      "registrationNumber": 4064,
+      "racerName": "原田篤志",
+      "age": 46,
+      "branch": "山口",
+      "weight": 53,
+      "rank": "A1",
+      "nationalWinRate": 6.78,
+      "nationalTop2Rate": 48.7,
+      "localWinRate": 6.92,
+      "localTop2Rate": 54.9,
+      "motorNumber": 37,
+      "motorTop2Rate": 37.14,
+      "boatBodyNumber": 21,
+      "boatTop2Rate": 31.21,
+      "currentResults": [
+        "4-2",
+        "2-",
+        "1-1",
+        "1-"
+      ]
+    },
+    {
+      "boatNumber": 3,
+      "registrationNumber": 5087,
+      "racerName": "佐藤 航",
+      "age": 26,
+      "branch": "埼玉",
+      "weight": 54,
+      "rank": "A2",
+      "nationalWinRate": 6.69,
+      "nationalTop2Rate": 48.35,
+      "localWinRate": 5.05,
+      "localTop2Rate": 36.84,
+      "motorNumber": 16,
+      "motorTop2Rate": 31.95,
+      "boatBodyNumber": 17,
+      "boatTop2Rate": 29.41,
+      "currentResults": [
+        "4-",
+        "3-1",
+        "1-"
+      ]
+    },
+    {
+      "boatNumber": 4,
+      "registrationNumber": 3300,
+      "racerName": "川崎智幸",
+      "age": 58,
+      "branch": "岡山",
+      "weight": 53,
+      "rank": "A1",
+      "nationalWinRate": 5.8,
+      "nationalTop2Rate": 42.86,
+      "localWinRate": 5.91,
+      "localTop2Rate": 39.62,
+      "motorNumber": 66,
+      "motorTop2Rate": 38.1,
+      "boatBodyNumber": 56,
+      "boatTop2Rate": 45,
+      "currentResults": [
+        "3-3",
+        "1-1",
+        "2-",
+        "5-1"
+      ]
+    },
+    {
+      "boatNumber": 5,
+      "registrationNumber": 4148,
+      "racerName": "枝尾 賢",
+      "age": 44,
+      "branch": "福岡",
+      "weight": 53,
+      "rank": "A2",
+      "nationalWinRate": 5.94,
+      "nationalTop2Rate": 42.73,
+      "localWinRate": 7.56,
+      "localTop2Rate": 66.67,
+      "motorNumber": 13,
+      "motorTop2Rate": 28.66,
+      "boatBodyNumber": 58,
+      "boatTop2Rate": 40.94,
+      "currentResults": [
+        "6-",
+        "1-1",
+        "2-"
+      ]
+    },
+    {
+      "boatNumber": 6,
+      "registrationNumber": 3686,
+      "racerName": "鳥居塚孝",
+      "age": 51,
+      "branch": "群馬",
+      "weight": 52,
+      "rank": "A2",
+      "nationalWinRate": 5.79,
+      "nationalTop2Rate": 39.02,
+      "localWinRate": 6.02,
+      "localTop2Rate": 36.05,
+      "motorNumber": 45,
+      "motorTop2Rate": 27.33,
+      "boatBodyNumber": 39,
+      "boatTop2Rate": 33.33,
+      "currentResults": [
+        "1-3",
+        "4-",
+        "2-1",
+        "1-5"
+      ]
+    }
+  ],
+  "mlPrediction": {
+    "first": 2,
+    "second": 1,
+    "third": 4,
+    "technique": "逃げ"
+  },
+  "aiPrediction": {
+    "startFormation": {
+      "entries": [
+        {
+          "boatNumber": 1,
+          "courseNumber": 3,
+          "predictedST": 0.021
+        },
+        {
+          "boatNumber": 2,
+          "courseNumber": 1,
+          "predictedST": 0.009
+        },
+        {
+          "boatNumber": 3,
+          "courseNumber": 6,
+          "predictedST": 0.057
+        },
+        {
+          "boatNumber": 4,
+          "courseNumber": 4,
+          "predictedST": 0.041
+        },
+        {
+          "boatNumber": 5,
+          "courseNumber": 5,
+          "predictedST": 0.033
+        },
+        {
+          "boatNumber": 6,
+          "courseNumber": 2,
+          "predictedST": 0.012
+        }
+      ],
+      "pattern": "flat"
+    },
+    "firstTurnScenario": "ML予測のみ（AI分析は利用不可）",
+    "predictedTechnique": "nige",
+    "predictedOrder": [
+      2,
+      1,
+      4
+    ],
+    "confidence": 0.3,
+    "narrative": "AI分析が利用できなかったため、ML予測結果のみを表示しています。",
+    "suggestedBets": []
+  },
+  "imageUrl": "",
+  "ogImageUrl": "",
+  "imageType": "svg-fallback",
+  "createdAt": "2026-02-13T12:01:20.619Z"
+}
