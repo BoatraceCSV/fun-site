@@ -1,0 +1,31 @@
+# GCP Project
+project_id   = "your-gcp-project-id"
+project_name = "fun-site"
+region       = "us-central1"
+
+# Domain
+domain_name = "example.com"
+
+# Batch settings
+batch_schedule  = "0 2 * * *"
+batch_timezone  = "Asia/Tokyo"
+batch_cpu       = "2"
+batch_memory    = "2Gi"
+batch_timeout   = "1800s"
+batch_max_retries = 1
+
+# CDN
+cdn_cache_ttl = 3600
+
+# Storage
+storage_lifecycle_age_days = 90
+
+# Vertex AI
+vertex_ai_location = "us-central1"
+
+# Monitoring
+alert_notification_email = "your-email@example.com"
+
+# Cloud Build (GitHub)
+github_owner = "your-github-username"
+github_repo  = "fun-site"

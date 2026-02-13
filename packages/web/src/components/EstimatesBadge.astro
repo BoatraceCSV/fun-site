@@ -1,0 +1,19 @@
+---
+import type { MlPrediction } from "@fun-site/shared";
+
+interface Props {
+  ml: MlPrediction;
+}
+
+const { ml } = Astro.props;
+---
+
+<div class="flex items-center gap-3 bg-indigo-50 rounded-lg px-4 py-2 text-sm">
+  <span class="font-semibold text-indigo-700">ML予測</span>
+  <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded font-mono">
+    {ml.first}-{ml.second}-{ml.third}
+  </span>
+  {ml.technique && (
+    <span class="text-indigo-600">{ml.technique}</span>
+  )}
+</div>

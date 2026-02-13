@@ -1,0 +1,15 @@
+---
+interface Props {
+  confidence: number;
+}
+
+const { confidence } = Astro.props;
+const filledStars = Math.round(confidence * 5);
+const stars = Array.from({ length: 5 }, (_, i) => i < filledStars);
+---
+
+<span class="inline-flex gap-0.5" aria-label={`信頼度 ${(confidence * 100).toFixed(0)}%`}>
+  {stars.map((filled) => (
+    <span class={filled ? "text-yellow-400" : "text-gray-300"}>&#9733;</span>
+  ))}
+</span>

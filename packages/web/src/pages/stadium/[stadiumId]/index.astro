@@ -1,0 +1,79 @@
+---
+import { STADIUMS, parseRaceCode } from "@fun-site/shared";
+import RaceCard from "../../../components/RaceCard.astro";
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const latestDate = dates[0];
+  if (!latestDate) {
+    return STADIUMS.map((s) => ({
+      params: { stadiumId: s.id },
+      props: { stadium: s, predictions: [], date: "" },
+    }));
+  }
+
+  const predictions = await loadPredictions(latestDate);
+  const stadiumPredictions = new Map<string, typeof predictions>();
+  for (const prediction of predictions) {
+    const parsed = parseRaceCode(prediction.raceCode);
+    const group = stadiumPredictions.get(parsed.stadiumId) ?? [];
+    group.push(prediction);
+    stadiumPredictions.set(parsed.stadiumId, group);
+  }
+
+  return STADIUMS.map((s) => ({
+    params: { stadiumId: s.id },
+    props: {
+      stadium: s,
+      predictions: stadiumPredictions.get(s.id) ?? [],
+      date: latestDate,
+    },
+  }));
+}
+
+interface Props {
+  stadium: (typeof STADIUMS)[number];
+  predictions: Awaited<ReturnType<typeof loadPredictions>>;
+  date: string;
+}
+
+const { stadium, predictions, date } = Astro.props;
+const sortedPredictions = [...predictions].sort(
+  (a, b) => a.raceNumber - b.raceNumber,
+);
+---
+
+<BaseLayout title={`${stadium.name} ${date} - 展開予想`}>
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <span>{stadium.name}</span>
+  </nav>
+
+  <h1 class="text-2xl font-bold mb-2">{stadium.name}</h1>
+  <p class="text-gray-500 text-sm mb-6">
+    {stadium.prefecture}
+    {date && <span> - {date}</span>}
+  </p>
+
+  {sortedPredictions.length === 0 ? (
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <p class="text-lg mb-2">本日の予想データはありません</p>
+      <p class="text-sm">この会場では本日開催がないか、データがまだ生成されていません</p>
+    </div>
+  ) : (
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {sortedPredictions.map((prediction) => (
+        <RaceCard prediction={prediction} />
+      ))}
+    </div>
+  )}
+
+  <div class="mt-8 text-center">
+    <a href="/" class="text-blue-600 hover:text-blue-800 text-sm">
+      ← 全会場一覧に戻る
+    </a>
+  </div>
+</BaseLayout>

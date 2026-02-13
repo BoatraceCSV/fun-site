@@ -1,0 +1,84 @@
+steps:
+  # 1. Install dependencies
+  - id: "install"
+    name: "node:22"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "corepack enable && pnpm install --frozen-lockfile"
+    env:
+      - "COREPACK_HOME=/workspace/.corepack"
+
+  # 2. Lint (Biome) - runs in parallel with typecheck and test
+  - id: "lint"
+    name: "node:22"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "corepack enable && pnpm lint"
+    env:
+      - "COREPACK_HOME=/workspace/.corepack"
+    waitFor: ["install"]
+
+  # 3. Typecheck - runs in parallel with lint and test
+  - id: "typecheck"
+    name: "node:22"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "corepack enable && pnpm typecheck"
+    env:
+      - "COREPACK_HOME=/workspace/.corepack"
+    waitFor: ["install"]
+
+  # 4. Test - runs in parallel with lint and typecheck
+  - id: "test"
+    name: "node:22"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "corepack enable && pnpm test"
+    env:
+      - "COREPACK_HOME=/workspace/.corepack"
+    waitFor: ["install"]
+
+  # 5. Docker build (batch container) - waits for all checks to pass
+  - id: "docker-build"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch:$COMMIT_SHA"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch:latest"
+      - "-f"
+      - "packages/batch/Dockerfile"
+      - "."
+    waitFor: ["lint", "typecheck", "test"]
+
+  # 6. Push to Artifact Registry
+  - id: "docker-push"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "--all-tags"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch"
+    waitFor: ["docker-build"]
+
+  # 7. Update Cloud Run Job
+  - id: "deploy"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    args:
+      - "gcloud"
+      - "run"
+      - "jobs"
+      - "update"
+      - "${_JOB_NAME}"
+      - "--image"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch:$COMMIT_SHA"
+      - "--region"
+      - "${_REGION}"
+    waitFor: ["docker-push"]
+
+options:
+  logging: CLOUD_LOGGING_ONLY

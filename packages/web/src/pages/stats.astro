@@ -1,0 +1,71 @@
+---
+import type { AccuracyStats } from "@fun-site/shared";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+let stats: AccuracyStats | undefined;
+try {
+  const content = await readFile(
+    resolve(import.meta.dirname, "../content/stats/accuracy.json"),
+    "utf-8",
+  );
+  stats = JSON.parse(content) as AccuracyStats;
+} catch {
+  // Stats not yet available
+}
+---
+
+<BaseLayout title="的中実績 - ボートレース展開予想">
+  <h1 class="text-2xl font-bold mb-6">的中実績</h1>
+
+  {!stats ? (
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <p>的中実績データはまだありません</p>
+    </div>
+  ) : (
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section class="bg-white rounded-lg shadow-sm p-6">
+        <h2 class="font-bold text-lg mb-4 text-indigo-700">ML予測</h2>
+        <p class="text-sm text-gray-500 mb-4">対象: {stats.totalRaces} レース</p>
+        <dl class="space-y-3">
+          <div class="flex justify-between">
+            <dt class="text-gray-600">1着的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ml.hit1st * 100).toFixed(1)}%</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600">3連単的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ml.hitAll * 100).toFixed(1)}%</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600">決まり手的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ml.hitTechnique * 100).toFixed(1)}%</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600">平均コース一致数</dt>
+            <dd class="font-mono font-bold">{stats.ml.avgCourseMatch.toFixed(2)} / 6</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="bg-white rounded-lg shadow-sm p-6">
+        <h2 class="font-bold text-lg mb-4 text-green-700">AI予想</h2>
+        <p class="text-sm text-gray-500 mb-4">対象: {stats.totalRaces} レース</p>
+        <dl class="space-y-3">
+          <div class="flex justify-between">
+            <dt class="text-gray-600">1着的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ai.hit1st * 100).toFixed(1)}%</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600">3連単的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ai.hitTrifecta * 100).toFixed(1)}%</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-600">決まり手的中率</dt>
+            <dd class="font-mono font-bold">{(stats.ai.hitTechnique * 100).toFixed(1)}%</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  )}
+</BaseLayout>

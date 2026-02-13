@@ -1,0 +1,39 @@
+# Dependencies (installed inside the container)
+**/node_modules
+
+# Version control
+.git
+.gitignore
+
+# Build artifacts
+**/dist
+**/.astro
+**/*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Temporary files and documentation
+.tmp
+*.md
+LICENSE
+
+# Note: packages/web is intentionally NOT excluded because
+# the batch pipeline builds the Astro site (astro build) inside the container
+
+# Infrastructure (Terraform)
+infra
+
+# CI/CD config (not needed inside container)
+cloudbuild.yaml
+
+# IDE and editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Corepack cache
+.corepack

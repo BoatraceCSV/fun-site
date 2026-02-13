@@ -1,0 +1,30 @@
+---
+interface Props {
+  imageUrl: string;
+  imageType: "generated" | "svg-fallback";
+  alt: string;
+}
+
+const { imageUrl, imageType, alt } = Astro.props;
+---
+
+<div class="relative rounded-lg overflow-hidden bg-blue-900">
+  {imageType === "generated" ? (
+    <img
+      src={imageUrl}
+      alt={alt}
+      loading="lazy"
+      class="w-full aspect-video object-cover"
+    />
+  ) : (
+    <img
+      src={imageUrl}
+      alt={alt}
+      loading="lazy"
+      class="w-full aspect-video"
+    />
+  )}
+  <span class="absolute top-2 right-2 text-xs px-2 py-0.5 rounded bg-black/50 text-white">
+    {imageType === "generated" ? "AI生成" : "SVG"}
+  </span>
+</div>

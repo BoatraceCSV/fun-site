@@ -1,0 +1,181 @@
+---
+import { WINNING_TECHNIQUES, getStadiumByName, parseRaceCode } from "@fun-site/shared";
+import type { ConfirmationRow } from "@fun-site/shared";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadConfirmations, loadPredictions } from "../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+
+  for (const date of dates) {
+    const predictions = await loadPredictions(date);
+    const confirmations = await loadConfirmations(date);
+    paths.push({
+      params: { date },
+      props: { predictions, confirmations, date, allDates: dates },
+    });
+  }
+
+  return paths;
+}
+
+interface Props {
+  predictions: Awaited<ReturnType<typeof loadPredictions>>;
+  confirmations: ConfirmationRow[];
+  date: string;
+  allDates: string[];
+}
+
+const { predictions, confirmations, date, allDates } = Astro.props;
+
+const confirmationMap = new Map<string, ConfirmationRow>();
+for (const c of confirmations) {
+  confirmationMap.set(c.raceCode, c);
+}
+
+const stadiumGroups = new Map<string, typeof predictions>();
+for (const prediction of predictions) {
+  const key = prediction.stadium;
+  const group = stadiumGroups.get(key) ?? [];
+  group.push(prediction);
+  stadiumGroups.set(key, group);
+}
+
+const hasConfirmations = confirmations.length > 0;
+const otherDates = allDates.filter((d) => d !== date).slice(0, 10);
+---
+
+<BaseLayout title={`${date} の予想結果 - アーカイブ`}>
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <span>アーカイブ</span>
+    <span class="mx-1">/</span>
+    <span>{date}</span>
+  </nav>
+
+  <h1 class="text-2xl font-bold mb-4">{date} の予想結果</h1>
+
+  {hasConfirmations && (
+    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 text-sm text-green-800">
+      結果データあり - 予想と実際の結果を対比表示しています
+    </div>
+  )}
+
+  {predictions.length === 0 ? (
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <p>この日のデータはありません</p>
+    </div>
+  ) : (
+    <div class="space-y-8">
+      {[...stadiumGroups.entries()].map(([stadiumName, races]) => {
+        const stadium = getStadiumByName(stadiumName);
+        const sortedRaces = [...races].sort((a, b) => a.raceNumber - b.raceNumber);
+        return (
+          <section>
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+              <span class="w-1 h-6 bg-blue-600 rounded-full" />
+              {stadium?.name ?? stadiumName}
+              {stadium && <span class="text-sm text-gray-400 font-normal">{stadium.prefecture}</span>}
+            </h2>
+            <div class="overflow-x-auto">
+              <table class="w-full bg-white rounded-lg shadow-sm text-sm">
+                <thead>
+                  <tr class="border-b bg-gray-50">
+                    <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">R</th>
+                    <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">AI予想</th>
+                    <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">決まり手</th>
+                    {hasConfirmations && (
+                      <>
+                        <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">実際</th>
+                        <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">結果</th>
+                      </>
+                    )}
+                    <th scope="col" class="px-3 py-3 text-left font-medium text-gray-600">信頼度</th>
+                    <th scope="col" class="px-3 py-3 text-right font-medium text-gray-600" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRaces.map((race) => {
+                    const parsed = parseRaceCode(race.raceCode);
+                    const techniqueName = WINNING_TECHNIQUES[race.aiPrediction.predictedTechnique] ?? race.aiPrediction.predictedTechnique;
+                    const raceUrl = `/race/${parsed.date}/${parsed.stadiumId}/${race.raceNumber}`;
+                    const confidencePercent = Math.round(race.aiPrediction.confidence * 100);
+                    const confirmation = confirmationMap.get(race.raceCode);
+                    return (
+                      <tr class="border-b last:border-0 hover:bg-gray-50">
+                        <td class="px-3 py-3 font-bold">{race.raceNumber}R</td>
+                        <td class="px-3 py-3 font-mono">
+                          {race.aiPrediction.predictedOrder.slice(0, 3).join("-")}
+                        </td>
+                        <td class="px-3 py-3">
+                          <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-medium">
+                            {techniqueName}
+                          </span>
+                        </td>
+                        {hasConfirmations && (
+                          <>
+                            <td class="px-3 py-3 font-mono">
+                              {confirmation
+                                ? `${confirmation.actual1st}-${confirmation.actual2nd}-${confirmation.actual3rd}`
+                                : "-"}
+                            </td>
+                            <td class="px-3 py-3">
+                              {confirmation ? (
+                                <span class={`text-xs px-2 py-0.5 rounded font-medium ${
+                                  confirmation.hitAll
+                                    ? "bg-green-100 text-green-800"
+                                    : confirmation.hit1st
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-gray-100 text-gray-600"
+                                }`}>
+                                  {confirmation.hitAll ? "3連単的中" : confirmation.hit1st ? "1着的中" : "不的中"}
+                                </span>
+                              ) : (
+                                <span class="text-gray-400">-</span>
+                              )}
+                            </td>
+                          </>
+                        )}
+                        <td class="px-3 py-3 text-gray-600">{confidencePercent}%</td>
+                        <td class="px-3 py-3 text-right">
+                          <a href={raceUrl} class="text-blue-600 hover:text-blue-800 text-xs">
+                            詳細 →
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  )}
+
+  {/* 他の日付 */}
+  {otherDates.length > 0 && (
+    <section class="mt-10">
+      <h2 class="font-bold mb-3">他の日付</h2>
+      <div class="flex flex-wrap gap-2">
+        {otherDates.map((d) => (
+          <a
+            href={`/archive/${d}`}
+            class="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+          >
+            {d}
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <div class="mt-8 text-center">
+    <a href="/" class="text-blue-600 hover:text-blue-800 text-sm">
+      ← トップページに戻る
+    </a>
+  </div>
+</BaseLayout>

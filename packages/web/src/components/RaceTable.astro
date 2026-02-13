@@ -1,0 +1,51 @@
+---
+import type { ProgramBoat } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  boats: readonly ProgramBoat[];
+}
+
+const { boats } = Astro.props;
+---
+
+<div class="overflow-x-auto">
+  <table class="w-full text-sm border-collapse">
+    <thead>
+      <tr class="bg-gray-100 text-gray-600">
+        <th class="px-2 py-1.5 text-left">艇</th>
+        <th class="px-2 py-1.5 text-left">選手名</th>
+        <th class="px-2 py-1.5 text-center">級別</th>
+        <th class="px-2 py-1.5 text-right">全国勝率</th>
+        <th class="px-2 py-1.5 text-right hidden sm:table-cell">当地勝率</th>
+        <th class="px-2 py-1.5 text-right hidden sm:table-cell">モーター</th>
+      </tr>
+    </thead>
+    <tbody>
+      {boats.map((boat) => {
+        const color = isValidBoatNumber(boat.boatNumber) ? BOAT_COLORS[boat.boatNumber] : undefined;
+        return (
+          <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="px-2 py-1.5">
+              <span
+                class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                style={`background-color: ${color?.hex ?? '#999'}; color: ${color?.textHex ?? '#fff'};${boat.boatNumber === 1 ? ' border: 1px solid #ccc;' : ''}`}
+              >
+                {boat.boatNumber}
+              </span>
+            </td>
+            <td class="px-2 py-1.5 font-medium">{boat.racerName}</td>
+            <td class="px-2 py-1.5 text-center">
+              <span class={`text-xs font-semibold ${boat.rank === 'A1' ? 'text-red-600' : boat.rank === 'A2' ? 'text-orange-500' : 'text-gray-500'}`}>
+                {boat.rank}
+              </span>
+            </td>
+            <td class="px-2 py-1.5 text-right font-mono">{boat.nationalWinRate.toFixed(2)}</td>
+            <td class="px-2 py-1.5 text-right font-mono hidden sm:table-cell">{boat.localWinRate.toFixed(2)}</td>
+            <td class="px-2 py-1.5 text-right font-mono hidden sm:table-cell">{boat.motorTop2Rate.toFixed(1)}%</td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>

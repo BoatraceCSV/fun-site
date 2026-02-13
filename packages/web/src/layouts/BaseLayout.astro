@@ -1,0 +1,69 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const { title, description = "AIが生成した画像でレース展開予想を視覚化するボートレースファンサイト", ogImage } = Astro.props;
+const siteUrl = Astro.site?.toString() ?? "";
+const canonicalUrl = new URL(Astro.url.pathname, siteUrl).toString();
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+    <meta name="twitter:card" content={ogImage ? "summary_large_image" : "summary"} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
+  </head>
+  <body class="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
+    <header class="bg-blue-900 text-white shadow-lg">
+      <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+        <a href="/" class="text-xl font-bold tracking-tight">
+          BoatRace AI
+        </a>
+        <nav class="flex gap-4 text-sm">
+          <a href="/" class="hover:text-blue-200">トップ</a>
+          <a href="/stats" class="hover:text-blue-200">的中実績</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
+      <slot />
+    </main>
+
+    <footer class="bg-gray-800 text-gray-400 text-xs">
+      <div class="max-w-5xl mx-auto px-4 py-6 space-y-2">
+        <p>
+          本サイトはエンターテインメント目的のファンサイトです。
+          掲載している予想は参考情報であり、投票を推奨するものではありません。
+        </p>
+        <p>
+          データソース:
+          <a href="https://github.com/BoatraceCSV" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">
+            BoatraceCSV
+          </a>
+          | AI分析: Gemini 3 Pro
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  @import "../styles/global.css";
+</style>

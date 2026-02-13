@@ -1,0 +1,72 @@
+---
+import { getStadiumByName, toJSTDateString } from "@fun-site/shared";
+import RaceCard from "../components/RaceCard.astro";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../lib/data";
+
+const today = toJSTDateString(new Date());
+const dates = await loadAvailableDates();
+const latestDate = dates[0] ?? today;
+const predictions = await loadPredictions(latestDate);
+
+// 注目レース: 信頼度の高い上位3レースをピックアップ
+const featuredPredictions = [...predictions]
+  .sort((a, b) => b.aiPrediction.confidence - a.aiPrediction.confidence)
+  .slice(0, 3);
+
+const stadiumGroups = new Map<string, typeof predictions>();
+for (const prediction of predictions) {
+  const key = prediction.stadium;
+  const group = stadiumGroups.get(key) ?? [];
+  group.push(prediction);
+  stadiumGroups.set(key, group);
+}
+---
+
+<BaseLayout title={`ボートレース展開予想 - ${latestDate}`}>
+  <h1 class="text-2xl font-bold mb-6">{latestDate} の展開予想</h1>
+
+  {predictions.length === 0 ? (
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <p class="text-lg mb-2">本日の予想データはまだありません</p>
+      <p class="text-sm">AM 2:00 のバッチ処理後に更新されます</p>
+    </div>
+  ) : (
+    <div class="space-y-8">
+      {/* 注目レース */}
+      {featuredPredictions.length > 0 && (
+        <section>
+          <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+            <span class="w-1 h-6 bg-orange-500 rounded-full" />
+            注目レース
+            <span class="text-sm text-gray-400 font-normal">信頼度の高い予想</span>
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {featuredPredictions.map((prediction) => (
+              <RaceCard prediction={prediction} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 会場別一覧 */}
+      {[...stadiumGroups.entries()].map(([stadiumName, races]) => {
+        const stadium = getStadiumByName(stadiumName);
+        return (
+          <section>
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+              <span class="w-1 h-6 bg-blue-600 rounded-full" />
+              {stadium?.name ?? stadiumName}
+              {stadium && <span class="text-sm text-gray-400 font-normal">{stadium.prefecture}</span>}
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {races.map((prediction) => (
+                <RaceCard prediction={prediction} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  )}
+</BaseLayout>

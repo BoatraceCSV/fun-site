@@ -1,0 +1,43 @@
+---
+import type { RacePrediction } from "@fun-site/shared";
+import { WINNING_TECHNIQUES, getStadiumByName } from "@fun-site/shared";
+import { parseRaceCode } from "@fun-site/shared";
+import ConfidenceStars from "./ConfidenceStars.astro";
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const parsed = parseRaceCode(prediction.raceCode);
+const stadium = getStadiumByName(prediction.stadium);
+const techniqueName = WINNING_TECHNIQUES[prediction.aiPrediction.predictedTechnique] ?? prediction.aiPrediction.predictedTechnique;
+const raceUrl = `/race/${parsed.date}/${parsed.stadiumId}/${prediction.raceNumber}`;
+---
+
+<a href={raceUrl} class="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden">
+  {prediction.imageUrl && (
+    <img
+      src={prediction.imageUrl}
+      alt={`${prediction.stadium} ${prediction.raceNumber}R 展開予想`}
+      loading="lazy"
+      class="w-full aspect-video object-cover"
+    />
+  )}
+  <div class="p-4">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="font-bold text-lg">
+        {stadium?.name ?? prediction.stadium} {prediction.raceNumber}R
+      </h3>
+      <ConfidenceStars confidence={prediction.aiPrediction.confidence} />
+    </div>
+    <div class="flex items-center gap-3 text-sm text-gray-600">
+      <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-medium">
+        {techniqueName}
+      </span>
+      <span class="font-mono">
+        {prediction.aiPrediction.predictedOrder.slice(0, 3).join("-")}
+      </span>
+    </div>
+  </div>
+</a>
