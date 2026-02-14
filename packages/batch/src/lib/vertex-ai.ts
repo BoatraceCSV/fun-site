@@ -15,7 +15,11 @@ let vertexAiInstance: VertexAI | undefined;
 /** 共通の VertexAI インスタンスを取得（シングルトン） */
 export const getVertexAI = (): VertexAI => {
   if (!vertexAiInstance) {
-    vertexAiInstance = new VertexAI({ project: PROJECT_ID, location: LOCATION });
+    vertexAiInstance = new VertexAI({
+      project: PROJECT_ID,
+      location: LOCATION,
+      apiEndpoint: LOCATION === "global" ? "aiplatform.googleapis.com" : undefined,
+    });
   }
   return vertexAiInstance;
 };
