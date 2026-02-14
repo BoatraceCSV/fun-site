@@ -7,7 +7,8 @@ if (!PROJECT_ID) {
   throw new Error("GCP_PROJECT_ID environment variable is required");
 }
 
-export const MODEL_ID = "gemini-3-pro";
+export const MODEL_ID = "gemini-3-pro-preview";
+export const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
 
 let vertexAiInstance: VertexAI | undefined;
 

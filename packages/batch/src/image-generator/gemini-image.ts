@@ -1,10 +1,10 @@
-import { INITIAL_DELAY_MS, MAX_RETRIES, MODEL_ID, delay, getVertexAI } from "../lib/vertex-ai.js";
+import { IMAGE_MODEL_ID, INITIAL_DELAY_MS, MAX_RETRIES, delay, getVertexAI } from "../lib/vertex-ai.js";
 
 /** Gemini 3 Pro で画像生成（バイナリ取得） */
 export const generateImage = async (prompt: string): Promise<Buffer> => {
   const vertexAi = getVertexAI();
   const model = vertexAi.getGenerativeModel({
-    model: MODEL_ID,
+    model: IMAGE_MODEL_ID,
     generationConfig: {
       responseMimeType: "image/png",
       temperature: 0.8,
