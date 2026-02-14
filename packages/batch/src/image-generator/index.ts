@@ -1,6 +1,5 @@
 import type { RacePrediction } from "@fun-site/shared";
 import pMap from "p-map";
-import { MAX_RETRY_COUNT, checkImageQuality } from "../quality-checker/index.js";
 import { generateImage } from "./gemini-image.js";
 import { buildImagePrompt } from "./prompt-builder.js";
 import { buildImageUrl, uploadImage } from "./storage.js";
@@ -11,37 +10,18 @@ const CONCURRENCY = 3;
 const FALLBACK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect fill="#1a2980" width="800" height="450"/><text x="400" y="225" text-anchor="middle" fill="white" font-size="24">画像生成に失敗しました</text></svg>';
 
-/** 1レース分の画像を生成し、品質チェック + リトライ */
-const generateWithQualityCheck = async (
-  prediction: RacePrediction,
-): Promise<Buffer | undefined> => {
+/** 1レース分の画像を生成（品質チェックは一時的に無効化） */
+const generateImageForRace = async (prediction: RacePrediction): Promise<Buffer | undefined> => {
   const imagePrompt = buildImagePrompt(prediction);
 
-  for (let attempt = 0; attempt <= MAX_RETRY_COUNT; attempt++) {
-    try {
-      const imageData = await generateImage(imagePrompt);
-      const quality = await checkImageQuality(prediction, imageData);
-
-      if (quality.passed) {
-        if (attempt > 0) {
-          console.info(
-            `Quality check passed on retry ${attempt}: ${prediction.stadium} ${prediction.raceNumber}R (score: ${quality.score})`,
-          );
-        }
-        return imageData;
-      }
-
-      console.warn(
-        `Quality check failed (attempt ${attempt + 1}/${MAX_RETRY_COUNT + 1}): ${prediction.stadium} ${prediction.raceNumber}R - score: ${quality.score}, issues: ${quality.issues.join(", ")}`,
-      );
-    } catch (error) {
-      console.warn(
-        `Image generation attempt ${attempt + 1} failed: ${error instanceof Error ? error.message : error}`,
-      );
-    }
+  try {
+    return await generateImage(imagePrompt);
+  } catch (error) {
+    console.warn(
+      `Image generation failed: ${prediction.stadium} ${prediction.raceNumber}R - ${error instanceof Error ? error.message : error}`,
+    );
+    return undefined;
   }
-
-  return undefined;
 };
 
 /** 全予想レースの画像を生成してアップロード */
@@ -55,7 +35,7 @@ export const generateAndUploadImages = async (
         // SVG フォールバックと画像生成を並列実行
         const [svgResult, imageData] = await Promise.allSettled([
           generateSvg(prediction),
-          generateWithQualityCheck(prediction),
+          generateImageForRace(prediction),
         ]);
 
         const svgData = svgResult.status === "fulfilled" ? svgResult.value : FALLBACK_SVG;
