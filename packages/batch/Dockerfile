@@ -41,6 +41,8 @@ COPY --from=builder /app/packages/batch/tsconfig.json ./packages/batch/
 COPY --from=builder /app/packages/batch/package.json ./packages/batch/
 COPY --from=builder /app/packages/web/ ./packages/web/
 
+RUN chown -R node:node /app/packages/web/src/content/
+
 USER node
 WORKDIR /app/packages/batch
 CMD ["node", "--import", "tsx/esm", "src/main.ts"]
