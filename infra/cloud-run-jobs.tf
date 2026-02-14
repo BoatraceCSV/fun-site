@@ -62,6 +62,11 @@ resource "google_cloud_run_v2_job" "batch" {
           name  = "GOOGLE_CLOUD_LOCATION"
           value = var.vertex_ai_location
         }
+
+        env {
+          name  = "SITE_URL"
+          value = "https://${var.domain_name}"
+        }
       }
     }
   }

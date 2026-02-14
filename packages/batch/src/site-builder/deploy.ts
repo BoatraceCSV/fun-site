@@ -82,7 +82,10 @@ export const deployToStorage = async (): Promise<void> => {
   console.info(`Uploaded ${uploadedNames.size} files`);
 
   // ローカルに存在しないリモートファイルを削除（rsync -d 相当）
-  const toDelete = [...existingNames].filter((name) => !uploadedNames.has(name));
+  // images/ プレフィックスは画像生成ステップで別途アップロードされるため除外
+  const toDelete = [...existingNames].filter(
+    (name) => !(uploadedNames.has(name) || name.startsWith("images/")),
+  );
   if (toDelete.length > 0) {
     for (const name of toDelete) {
       await bucket.file(name).delete();

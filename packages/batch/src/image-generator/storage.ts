@@ -1,7 +1,8 @@
 import { parseRaceCode } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
 
-const BUCKET_NAME = process.env["GCS_DATA_BUCKET"] ?? "fun-site-data";
+const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web";
+const SITE_URL = process.env["SITE_URL"] ?? "https://fun-site.example.com";
 
 let storageInstance: Storage | undefined;
 
@@ -41,11 +42,11 @@ export const uploadImage = async (
     metadata: { cacheControl: "public, max-age=86400" },
   });
 
-  return `https://storage.googleapis.com/${BUCKET_NAME}/${filePath}`;
+  return `${SITE_URL}/${filePath}`;
 };
 
 /** 画像 URL を構築（アップロードせずにURLだけ返す） */
 export const buildImageUrl = (raceCode: string, fileName: string): string => {
   const filePath = buildImagePath(raceCode, fileName);
-  return `https://storage.googleapis.com/${BUCKET_NAME}/${filePath}`;
+  return `${SITE_URL}/${filePath}`;
 };
