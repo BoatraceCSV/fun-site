@@ -76,7 +76,7 @@ variable "alert_notification_email" {
 variable "vertex_ai_location" {
   description = "Location for Vertex AI API calls"
   type        = string
-  default     = "us-central1"
+  default     = "global"
 }
 
 variable "github_owner" {

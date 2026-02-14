@@ -1,7 +1,7 @@
 import { VertexAI } from "@google-cloud/vertexai";
 
 const PROJECT_ID = process.env["GCP_PROJECT_ID"];
-const LOCATION = process.env["VERTEX_AI_LOCATION"] ?? "us-central1";
+const LOCATION = process.env["VERTEX_AI_LOCATION"] ?? "global";
 
 if (!PROJECT_ID) {
   throw new Error("GCP_PROJECT_ID environment variable is required");

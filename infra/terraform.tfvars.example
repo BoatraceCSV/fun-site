@@ -21,7 +21,7 @@ cdn_cache_ttl = 3600
 storage_lifecycle_age_days = 90
 
 # Vertex AI
-vertex_ai_location = "us-central1"
+vertex_ai_location = "global"
 
 # Monitoring
 alert_notification_email = "your-email@example.com"
