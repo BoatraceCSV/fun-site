@@ -43,9 +43,26 @@ export const selectTargetRaces = (
 ): readonly MergedRaceData[] =>
   mergedData.filter((data) => data.program.raceNumber === TARGET_RACE_NUMBER);
 
+/** レスポンス文字列からJSON部分を抽出 */
+const extractJson = (text: string): string => {
+  // ```json ... ``` で囲まれている場合を処理
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch?.[1]) {
+    return codeBlockMatch[1].trim();
+  }
+  // 最初の { から最後の } までを抽出
+  const braceStart = text.indexOf("{");
+  const braceEnd = text.lastIndexOf("}");
+  if (braceStart !== -1 && braceEnd > braceStart) {
+    return text.slice(braceStart, braceEnd + 1);
+  }
+  return text;
+};
+
 /** Gemini 3 Pro の JSON 応答を AiPrediction 型に変換 */
 const parseAiResponse = (responseText: string): AiPrediction => {
-  return aiPredictionSchema.parse(JSON.parse(responseText));
+  const jsonStr = extractJson(responseText);
+  return aiPredictionSchema.parse(JSON.parse(jsonStr));
 };
 
 /** 1レース分の展開予想を生成 */
