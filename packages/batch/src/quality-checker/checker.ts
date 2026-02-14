@@ -1,6 +1,6 @@
 import type { RacePrediction } from "@fun-site/shared";
 import { z } from "zod";
-import { MODEL_ID, getVertexAI } from "../lib/vertex-ai.js";
+import { MODEL_ID, ai } from "../lib/vertex-ai.js";
 import { QUALITY_CRITERIA, QUALITY_THRESHOLD } from "./criteria.js";
 import type { QualityCheckResult } from "./criteria.js";
 
@@ -43,36 +43,27 @@ export const checkImageQuality = async (
   prediction: RacePrediction,
   imageData: Buffer,
 ): Promise<QualityCheckResult> => {
-  const vertexAi = getVertexAI();
-  const model = vertexAi.getGenerativeModel({
-    model: MODEL_ID,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.3,
-    },
-  });
-
   const prompt = buildQualityCheckPrompt(prediction);
 
   try {
-    const result = await model.generateContent({
+    const response = await ai.models.generateContent({
+      model: MODEL_ID,
       contents: [
+        { text: prompt },
         {
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/png",
-                data: imageData.toString("base64"),
-              },
-            },
-          ],
+          inlineData: {
+            mimeType: "image/png",
+            data: imageData.toString("base64"),
+          },
         },
       ],
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.3,
+      },
     });
 
-    const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = response.text;
     if (!text) {
       return { passed: false, score: 0, issues: ["品質チェック応答が空"], retryInstruction: "" };
     }

@@ -47,6 +47,21 @@ resource "google_cloud_run_v2_job" "batch" {
           name  = "VERTEX_AI_IMAGE_LOCATION"
           value = "global"
         }
+
+        env {
+          name  = "GOOGLE_GENAI_USE_VERTEXAI"
+          value = "true"
+        }
+
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project_id
+        }
+
+        env {
+          name  = "GOOGLE_CLOUD_LOCATION"
+          value = var.vertex_ai_location
+        }
       }
     }
   }

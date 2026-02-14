@@ -1,24 +1,22 @@
-import { INITIAL_DELAY_MS, MAX_RETRIES, MODEL_ID, delay, getVertexAI } from "../lib/vertex-ai.js";
+import { INITIAL_DELAY_MS, MAX_RETRIES, MODEL_ID, ai, delay } from "../lib/vertex-ai.js";
 
 /** Gemini 3 Pro でテキスト生成（JSON応答指定） */
 export const generateText = async (prompt: string): Promise<string> => {
-  const vertexAi = getVertexAI();
-  const model = vertexAi.getGenerativeModel({
-    model: MODEL_ID,
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-    },
-  });
-
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      const response = await ai.models.generateContent({
+        model: MODEL_ID,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+          maxOutputTokens: 8192,
+        },
+      });
+
+      const text = response.text;
       if (!text) {
         throw new Error("Empty response from Gemini");
       }
@@ -40,22 +38,20 @@ export const generateText = async (prompt: string): Promise<string> => {
 
 /** Gemini 3 Pro でテキスト生成（プレーンテキスト応答） */
 export const generatePlainText = async (prompt: string): Promise<string> => {
-  const vertexAi = getVertexAI();
-  const model = vertexAi.getGenerativeModel({
-    model: MODEL_ID,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 8192,
-    },
-  });
-
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+      const response = await ai.models.generateContent({
+        model: MODEL_ID,
+        contents: prompt,
+        config: {
+          temperature: 0.7,
+          maxOutputTokens: 8192,
+        },
+      });
+
+      const text = response.text;
       if (!text) {
         throw new Error("Empty response from Gemini");
       }
