@@ -9,3 +9,5 @@ dist
 !*.tfvars.example
 .terraform/
 .terraform.lock.hcl
+.corepack/
+.pnpm-store/
