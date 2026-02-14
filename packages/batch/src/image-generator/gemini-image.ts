@@ -1,32 +1,61 @@
-import {
-  IMAGE_MODEL_ID,
-  INITIAL_DELAY_MS,
-  MAX_RETRIES,
-  delay,
-  getVertexAI,
-} from "../lib/vertex-ai.js";
+import { GoogleAuth } from "google-auth-library";
+import { IMAGE_MODEL_ID, INITIAL_DELAY_MS, MAX_RETRIES, delay } from "../lib/vertex-ai.js";
 
-/** Gemini 3 Pro で画像生成（バイナリ取得） */
+const PROJECT_ID = process.env["GCP_PROJECT_ID"];
+const LOCATION = process.env["VERTEX_AI_LOCATION"] ?? "global";
+
+const auth = new GoogleAuth({ scopes: "https://www.googleapis.com/auth/cloud-platform" });
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+interface GeminiResponse {
+  candidates?: { content?: { parts?: GeminiPart[] } }[];
+}
+
+/** Gemini 3 Pro Image で画像生成（REST API 直接呼び出し） */
 export const generateImage = async (prompt: string): Promise<Buffer> => {
-  const vertexAi = getVertexAI();
-  const model = vertexAi.getGenerativeModel({
-    model: IMAGE_MODEL_ID,
+  const endpoint =
+    LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
+  const url = `https://${endpoint}/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${IMAGE_MODEL_ID}:generateContent`;
+
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: {
-      responseMimeType: "image/png",
+      responseModalities: ["IMAGE"],
       temperature: 0.8,
     },
-  });
+  };
 
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const result = await model.generateContent(prompt);
-      const response = result.response;
-      const part = response.candidates?.[0]?.content?.parts?.[0];
+      const client = await auth.getClient();
+      const token = await client.getAccessToken();
 
-      if (part?.inlineData?.data) {
-        return Buffer.from(part.inlineData.data, "base64");
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`${res.status} ${res.statusText}. ${errorText}`);
+      }
+
+      const json = (await res.json()) as GeminiResponse;
+      const parts = json.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = parts.find((p) => p.inlineData?.data);
+
+      if (imagePart?.inlineData?.data) {
+        return Buffer.from(imagePart.inlineData.data, "base64");
       }
 
       throw new Error("No image data in Gemini response");
