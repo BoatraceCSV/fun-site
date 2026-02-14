@@ -6,6 +6,27 @@ import { generateText } from "./gemini-client.js";
 import { buildAnalysisPrompt } from "./prompt-builder.js";
 
 const TARGET_RACE_NUMBER = 12;
+const MAX_TARGET_RACES = 3;
+
+type RaceGrade = "SG" | "GI" | "GII" | "GIII" | "GENERAL";
+
+const GRADE_PRIORITY: Record<RaceGrade, number> = {
+  SG: 0,
+  GI: 1,
+  GII: 2,
+  GIII: 3,
+  GENERAL: 4,
+};
+
+/** titleからレースグレードを判定 */
+export const detectGrade = (title: string): RaceGrade => {
+  if (/ＳＧ|SG/.test(title)) return "SG";
+  // GIII / ＧＩＩＩを先にチェック（GI, GII の誤マッチ防止）
+  if (/ＧＩＩＩ|ＧⅢ|Ｇ３|GIII|G3/.test(title)) return "GIII";
+  if (/ＧＩＩ|ＧⅡ|Ｇ２|GII|G2/.test(title)) return "GII";
+  if (/ＧＩ|ＧⅠ|Ｇ１|GI|G1/.test(title)) return "GI";
+  return "GENERAL";
+};
 
 const startFormationEntrySchema = z.object({
   boatNumber: z.number().int().min(1).max(6),
@@ -37,11 +58,17 @@ const aiPredictionSchema = z.object({
   suggestedBets: z.array(z.string().max(20)).max(10),
 });
 
-/** 対象レースを選定（各場12Rのみ） */
+/** 対象レースを選定（各場12R → グレード優先で最大3件） */
 export const selectTargetRaces = (
   mergedData: readonly MergedRaceData[],
-): readonly MergedRaceData[] =>
-  mergedData.filter((data) => data.program.raceNumber === TARGET_RACE_NUMBER);
+): readonly MergedRaceData[] => {
+  const race12 = mergedData.filter((data) => data.program.raceNumber === TARGET_RACE_NUMBER);
+  const sorted = [...race12].sort(
+    (a, b) =>
+      GRADE_PRIORITY[detectGrade(a.program.title)] - GRADE_PRIORITY[detectGrade(b.program.title)],
+  );
+  return sorted.slice(0, MAX_TARGET_RACES);
+};
 
 /** レスポンス文字列からJSON部分を抽出 */
 const extractJson = (text: string): string => {

@@ -10,7 +10,8 @@ export const analyzePredictions = async (
   mergedData: readonly MergedRaceData[],
 ): Promise<readonly RacePrediction[]> => {
   const targetRaces = selectTargetRaces(mergedData);
-  console.info(`Analyzing ${targetRaces.length} races (12R from each stadium)`);
+  const stadiums = targetRaces.map((r) => r.program.stadium).join(", ");
+  console.info(`Analyzing ${targetRaces.length} races (max 3, grade priority): ${stadiums}`);
 
   const predictions = await pMap(
     targetRaces,
@@ -32,6 +33,11 @@ export const analyzePredictions = async (
   return predictions;
 };
 
-export { analyzeRace, createFallbackPrediction, selectTargetRaces } from "./analyze.js";
+export {
+  analyzeRace,
+  createFallbackPrediction,
+  detectGrade,
+  selectTargetRaces,
+} from "./analyze.js";
 export { generateText } from "./gemini-client.js";
 export { buildAnalysisPrompt } from "./prompt-builder.js";
