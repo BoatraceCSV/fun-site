@@ -2,8 +2,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ConfirmationRow, RacePrediction } from "@fun-site/shared";
 
-const CONTENT_DIR = resolve(import.meta.dirname, "../content/races");
-const CONFIRMATIONS_DIR = resolve(import.meta.dirname, "../content/confirmations");
+const CONTENT_DIR = resolve(process.cwd(), "src/content/races");
+const CONFIRMATIONS_DIR = resolve(process.cwd(), "src/content/confirmations");
 
 /** 指定日付の全予想データを読み込み */
 export const loadPredictions = async (date: string): Promise<RacePrediction[]> => {
