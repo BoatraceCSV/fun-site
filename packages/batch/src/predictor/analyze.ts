@@ -22,7 +22,7 @@ const winningTechniqueSchema = z.enum([
   "megumare",
 ]);
 
-const formationPatternSchema = z.enum(["flat", "inner-late", "outer-late"]);
+const formationPatternSchema = z.enum(["flat", "inner-late", "middle-late", "outer-late"]);
 
 const aiPredictionSchema = z.object({
   startFormation: z.object({

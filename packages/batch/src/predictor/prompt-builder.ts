@@ -94,7 +94,7 @@ ${formatEstimate(estimate)}
 
 注意:
 - startFormation.entries は6艇すべて含めてください
-- startFormation.pattern は "flat"（横一線）、"inner-late"（内凹み）、"outer-late"（外凹み）のいずれか
+- startFormation.pattern は "flat"（横一線）、"inner-late"（内凹み）、"middle-late"（中凹み）、"outer-late"（外凹み）のいずれか
 - predictedTechnique は ${winningTechniqueList} のいずれか
 - predictedOrder は6艇すべての着順予想（艇番の配列）
 - suggestedBets は3連単の買い目（5〜10点）`;

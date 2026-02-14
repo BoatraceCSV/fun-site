@@ -25,7 +25,7 @@ export const getVertexAI = (): VertexAI => {
 };
 
 const INITIAL_DELAY_MS = 2000;
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 3;
 
 export { MAX_RETRIES, INITIAL_DELAY_MS };
 

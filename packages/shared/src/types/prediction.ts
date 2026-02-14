@@ -4,7 +4,7 @@
 export type WinningTechnique = "nige" | "sashi" | "makuri" | "makuri-sashi" | "nuki" | "megumare";
 
 /** スリット隊形パターン */
-export type FormationPattern = "flat" | "inner-late" | "outer-late";
+export type FormationPattern = "flat" | "inner-late" | "middle-late" | "outer-late";
 
 /** 画像タイプ */
 export type ImageType = "generated" | "svg-fallback";
