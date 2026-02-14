@@ -45,6 +45,15 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", "dist", ".astro", ".tmp", "**/*.astro", "packages/web/src/content/", ".corepack/", ".pnpm-store/"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".astro",
+      ".tmp",
+      "**/*.astro",
+      "packages/web/src/content/",
+      ".corepack/",
+      ".pnpm-store/"
+    ]
   }
 }
