@@ -42,6 +42,11 @@ resource "google_cloud_run_v2_job" "batch" {
           name  = "VERTEX_AI_LOCATION"
           value = var.vertex_ai_location
         }
+
+        env {
+          name  = "VERTEX_AI_IMAGE_LOCATION"
+          value = var.region
+        }
       }
     }
   }

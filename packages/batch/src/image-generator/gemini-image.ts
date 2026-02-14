@@ -2,7 +2,7 @@ import { GoogleAuth } from "google-auth-library";
 import { IMAGE_MODEL_ID, INITIAL_DELAY_MS, MAX_RETRIES, delay } from "../lib/vertex-ai.js";
 
 const PROJECT_ID = process.env["GCP_PROJECT_ID"];
-const LOCATION = process.env["VERTEX_AI_LOCATION"] ?? "global";
+const IMAGE_LOCATION = process.env["VERTEX_AI_IMAGE_LOCATION"] ?? "us-central1";
 
 const auth = new GoogleAuth({ scopes: "https://www.googleapis.com/auth/cloud-platform" });
 
@@ -15,11 +15,10 @@ interface GeminiResponse {
   candidates?: { content?: { parts?: GeminiPart[] } }[];
 }
 
-/** Gemini 3 Pro Image で画像生成（REST API 直接呼び出し） */
+/** Gemini 2.5 Flash Image で画像生成（REST API 直接呼び出し） */
 export const generateImage = async (prompt: string): Promise<Buffer> => {
-  const endpoint =
-    LOCATION === "global" ? "aiplatform.googleapis.com" : `${LOCATION}-aiplatform.googleapis.com`;
-  const url = `https://${endpoint}/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${IMAGE_MODEL_ID}:generateContent`;
+  const endpoint = `${IMAGE_LOCATION}-aiplatform.googleapis.com`;
+  const url = `https://${endpoint}/v1/projects/${PROJECT_ID}/locations/${IMAGE_LOCATION}/publishers/google/models/${IMAGE_MODEL_ID}:generateContent`;
 
   const body = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],

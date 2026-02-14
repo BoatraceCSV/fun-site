@@ -8,7 +8,7 @@ if (!PROJECT_ID) {
 }
 
 export const MODEL_ID = "gemini-3-pro-preview";
-export const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
+export const IMAGE_MODEL_ID = "gemini-2.5-flash-image";
 
 let vertexAiInstance: VertexAI | undefined;
 
