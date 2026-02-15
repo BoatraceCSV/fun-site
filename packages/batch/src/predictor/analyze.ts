@@ -6,7 +6,7 @@ import { generateText } from "./gemini-client.js";
 import { buildAnalysisPrompt } from "./prompt-builder.js";
 
 const TARGET_RACE_NUMBER = 12;
-const MAX_TARGET_RACES = 3;
+const MAX_TARGET_RACES = 2;
 
 type RaceGrade = "SG" | "GI" | "GII" | "GIII" | "GENERAL";
 

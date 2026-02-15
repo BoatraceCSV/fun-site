@@ -9,11 +9,6 @@ const dates = await loadAvailableDates();
 const latestDate = dates[0] ?? today;
 const predictions = await loadPredictions(latestDate);
 
-// 注目レース: 信頼度の高い上位3レースをピックアップ
-const featuredPredictions = [...predictions]
-  .sort((a, b) => b.aiPrediction.confidence - a.aiPrediction.confidence)
-  .slice(0, 3);
-
 const stadiumGroups = new Map<string, typeof predictions>();
 for (const prediction of predictions) {
   const key = prediction.stadium;
@@ -33,22 +28,6 @@ for (const prediction of predictions) {
     </div>
   ) : (
     <div class="space-y-8">
-      {/* 注目レース */}
-      {featuredPredictions.length > 0 && (
-        <section>
-          <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
-            <span class="w-1 h-6 bg-orange-500 rounded-full" />
-            注目レース
-            <span class="text-sm text-gray-400 font-normal">信頼度の高い予想</span>
-          </h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {featuredPredictions.map((prediction) => (
-              <RaceCard prediction={prediction} />
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* 会場別一覧 */}
       {[...stadiumGroups.entries()].map(([stadiumName, races]) => {
         const stadium = getStadiumByName(stadiumName);
