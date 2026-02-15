@@ -35,53 +35,9 @@ export const IMAGE_SYSTEM_INSTRUCTION = `システム指示: ボートレース1
 4～6号艇（アウトコース）: 外側から大きくスピードを乗せて先行艇群を抜き去る「まくり」の航跡。
 この指示に基づき、ボートレース1周目第1ターンマークの戦略的な駆け引きと、各艇の航跡がシンプルかつ明瞭に表現された図を生成してください。`;
 
-const boatColorDescriptions = Object.entries(BOAT_COLORS)
-  .map(([num, color]) => `${num}号艇(${color.name} ${color.hex})`)
-  .join(", ");
-
-/** 画像生成プロンプトを構築 */
-export const buildImagePrompt = (prediction: RacePrediction): string => {
-  const stadium = getStadiumByName(prediction.stadium);
-  const stadiumName = stadium?.name ?? prediction.stadium;
-  const techniqueName =
-    WINNING_TECHNIQUES[prediction.aiPrediction.predictedTechnique] ??
-    prediction.aiPrediction.predictedTechnique;
-
-  const courseEntries = [...prediction.aiPrediction.startFormation.entries]
-    .sort((a, b) => a.courseNumber - b.courseNumber)
-    .map((entry) => {
-      const color = isValidBoatNumber(entry.boatNumber) ? BOAT_COLORS[entry.boatNumber] : undefined;
-      return `- コース${entry.courseNumber}: ${entry.boatNumber}号艇(${color?.name ?? "不明"}) ST${entry.predictedST.toFixed(2)}秒`;
-    })
-    .join("\n");
-
-  return `ボートレースの展開予想図を生成してください。鳥瞰図の視点で、以下の要素を含めてください。
-
-【レイアウト】
-- 水面を上から見た図（青い水面）
-- 左側にスタートライン、右側に1マーク（ターンマーク）
-- 反時計回りのコースレイアウト
-
-【スタート隊形と各艇の配置】
-${courseEntries}
-
-【6艇の色は厳密に】
-${boatColorDescriptions}
-
-【予想展開】
-- 予想決まり手: ${techniqueName}
-- 予想着順: ${prediction.aiPrediction.predictedOrder.join("-")}
-- ${prediction.aiPrediction.firstTurnScenario}
-
-【表示テキスト】
-- 各艇に番号ラベルのみ（日本語テキストは不要）
-
-【スタイル】
-- スポーツ解説図風のクリーンなイラスト
-- 矢印で各艇の進行方向と展開を示す
-- 背景は濃い青のグラデーション
-- ${stadiumName} ${prediction.raceNumber}R の展開予想図`;
-};
+/** 画像生成プロンプトを構築（1マーク展開テキストのみ） */
+export const buildImagePrompt = (prediction: RacePrediction): string =>
+  prediction.aiPrediction.firstTurnScenario;
 
 /** SVG生成用プロンプトを構築 */
 export const buildSvgPrompt = (prediction: RacePrediction): string => {
