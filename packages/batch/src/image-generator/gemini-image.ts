@@ -3,6 +3,7 @@ import { IMAGE_SYSTEM_INSTRUCTION } from "./prompt-builder.js";
 
 /** Gemini 2.5 Flash Image で画像生成 */
 export const generateImage = async (prompt: string): Promise<Buffer> => {
+  console.info(`Image generation prompt:\n${prompt}`);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
