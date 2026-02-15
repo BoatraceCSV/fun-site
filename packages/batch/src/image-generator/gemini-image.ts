@@ -1,4 +1,5 @@
 import { IMAGE_MODEL_ID, INITIAL_DELAY_MS, MAX_RETRIES, ai, delay } from "../lib/vertex-ai.js";
+import { IMAGE_SYSTEM_INSTRUCTION } from "./prompt-builder.js";
 
 /** Gemini 2.5 Flash Image で画像生成 */
 export const generateImage = async (prompt: string): Promise<Buffer> => {
@@ -9,6 +10,9 @@ export const generateImage = async (prompt: string): Promise<Buffer> => {
       const response = await ai.models.generateContent({
         model: IMAGE_MODEL_ID,
         contents: prompt,
+        config: {
+          systemInstruction: IMAGE_SYSTEM_INSTRUCTION,
+        },
       });
 
       for (const part of response.candidates?.[0]?.content?.parts ?? []) {
