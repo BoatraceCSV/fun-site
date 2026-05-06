@@ -1,0 +1,79 @@
+---
+import type { RaceRacer } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  racers: readonly RaceRacer[];
+}
+
+const { racers } = Astro.props;
+const sorted = [...racers].sort((a, b) => a.boatNumber - b.boatNumber);
+
+const rankColor = (rank: string): string => {
+  if (rank === "A1") return "text-red-600";
+  if (rank === "A2") return "text-orange-500";
+  if (rank === "B1") return "text-gray-700";
+  return "text-gray-500";
+};
+---
+
+<div class="overflow-x-auto">
+  <table class="w-full text-sm border-collapse">
+    <thead>
+      <tr class="bg-gray-100 text-gray-600">
+        <th scope="col" class="px-2 py-2 text-left">艇</th>
+        <th scope="col" class="px-2 py-2 text-left">選手</th>
+        <th scope="col" class="px-2 py-2 text-center">級別</th>
+        <th scope="col" class="px-2 py-2 text-right">全国 勝率/2連</th>
+        <th scope="col" class="px-2 py-2 text-right hidden sm:table-cell">当地 勝率/2連</th>
+        <th scope="col" class="px-2 py-2 text-right hidden md:table-cell">モーター</th>
+      </tr>
+    </thead>
+    <tbody>
+      {sorted.map((racer) => {
+        const color = isValidBoatNumber(racer.boatNumber)
+          ? BOAT_COLORS[racer.boatNumber]
+          : undefined;
+        return (
+          <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <td class="px-2 py-2 align-top">
+              <span
+                class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+              >
+                {racer.boatNumber}
+              </span>
+            </td>
+            <td class="px-2 py-2">
+              <div class="font-medium">{racer.racerName}</div>
+              <div class="text-xs text-gray-500">
+                {racer.age && <span>{racer.age}歳</span>}
+                {racer.branch && <span class="ml-1">{racer.branch}</span>}
+              </div>
+            </td>
+            <td class="px-2 py-2 text-center">
+              <span class={`text-xs font-semibold ${rankColor(racer.classGrade)}`}>
+                {racer.classGrade}
+              </span>
+            </td>
+            <td class="px-2 py-2 text-right font-mono text-xs">
+              {racer.nationalWinRate.toFixed(2)}
+              <span class="text-gray-400"> / </span>
+              {racer.nationalTop2Rate.toFixed(1)}%
+            </td>
+            <td class="px-2 py-2 text-right font-mono text-xs hidden sm:table-cell">
+              {racer.localWinRate.toFixed(2)}
+              <span class="text-gray-400"> / </span>
+              {racer.localTop2Rate.toFixed(1)}%
+            </td>
+            <td class="px-2 py-2 text-right font-mono text-xs hidden md:table-cell">
+              #{racer.motorNumber}
+              <span class="text-gray-400"> / </span>
+              {racer.motorTop2Rate.toFixed(1)}%
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>

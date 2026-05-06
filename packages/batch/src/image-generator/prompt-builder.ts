@@ -1,4 +1,4 @@
-import type { RacePrediction } from "@fun-site/shared";
+import type { LegacyRacePrediction as RacePrediction } from "@fun-site/shared";
 import {
   BOAT_COLORS,
   WINNING_TECHNIQUES,

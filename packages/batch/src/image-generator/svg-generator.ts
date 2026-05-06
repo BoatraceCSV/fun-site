@@ -1,4 +1,4 @@
-import type { RacePrediction } from "@fun-site/shared";
+import type { LegacyRacePrediction as RacePrediction } from "@fun-site/shared";
 import { generatePlainText } from "../predictor/gemini-client.js";
 import { buildSvgPrompt } from "./prompt-builder.js";
 

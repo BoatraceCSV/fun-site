@@ -1,0 +1,209 @@
+{
+  "raceCode": "202605061209",
+  "raceDate": "2026-05-06",
+  "stadiumId": "12",
+  "stadiumName": "住之江",
+  "raceNumber": 9,
+  "raceName": "予選",
+  "raceTitle": "２０２６ラピートカップ",
+  "votingDeadline": "19:03",
+  "racers": [
+    {
+      "boatNumber": 1,
+      "registrationNumber": 4653,
+      "racerName": "小野 達哉",
+      "classGrade": "A1",
+      "age": 40,
+      "branch": "大阪",
+      "nationalAvgST": 0.14,
+      "nationalWinRate": 6.58,
+      "nationalTop2Rate": 49.5,
+      "localWinRate": 6.73,
+      "localTop2Rate": 50,
+      "motorNumber": 29,
+      "motorTop2Rate": 57.6
+    },
+    {
+      "boatNumber": 2,
+      "registrationNumber": 4639,
+      "racerName": "雑賀 勇貴",
+      "classGrade": "B1",
+      "age": 35,
+      "branch": "大阪",
+      "nationalAvgST": 0.16,
+      "nationalWinRate": 4.6,
+      "nationalTop2Rate": 27.1,
+      "localWinRate": 4.64,
+      "localTop2Rate": 26.8,
+      "motorNumber": 73,
+      "motorTop2Rate": 37.9
+    },
+    {
+      "boatNumber": 3,
+      "registrationNumber": 3557,
+      "racerName": "太田 和美",
+      "classGrade": "A1",
+      "age": 53,
+      "branch": "大阪",
+      "nationalAvgST": 0.15,
+      "nationalWinRate": 6.95,
+      "nationalTop2Rate": 52.6,
+      "localWinRate": 6.71,
+      "localTop2Rate": 47.7,
+      "motorNumber": 72,
+      "motorTop2Rate": 37
+    },
+    {
+      "boatNumber": 4,
+      "registrationNumber": 4908,
+      "racerName": "上田 龍星",
+      "classGrade": "A1",
+      "age": 30,
+      "branch": "大阪",
+      "nationalAvgST": 0.14,
+      "nationalWinRate": 6.53,
+      "nationalTop2Rate": 42.7,
+      "localWinRate": 6.31,
+      "localTop2Rate": 41.6,
+      "motorNumber": 19,
+      "motorTop2Rate": 39.3
+    },
+    {
+      "boatNumber": 5,
+      "registrationNumber": 3904,
+      "racerName": "森 貴洋",
+      "classGrade": "B2",
+      "age": 48,
+      "branch": "大阪",
+      "nationalAvgST": 0.18,
+      "nationalWinRate": 4.95,
+      "nationalTop2Rate": 31,
+      "localWinRate": 6.55,
+      "localTop2Rate": 50.9,
+      "motorNumber": 33,
+      "motorTop2Rate": 33.3
+    },
+    {
+      "boatNumber": 6,
+      "registrationNumber": 4788,
+      "racerName": "小池 哲也",
+      "classGrade": "A2",
+      "age": 36,
+      "branch": "大阪",
+      "nationalAvgST": 0.15,
+      "nationalWinRate": 5.96,
+      "nationalTop2Rate": 38.6,
+      "localWinRate": 7.35,
+      "localTop2Rate": 60,
+      "motorNumber": 54,
+      "motorTop2Rate": 42.1
+    }
+  ],
+  "startPrediction": {
+    "fromExhibition": false,
+    "entries": [
+      {
+        "boatNumber": 1,
+        "courseNumber": 1,
+        "startTiming": 0.14
+      },
+      {
+        "boatNumber": 2,
+        "courseNumber": 2,
+        "startTiming": 0.16
+      },
+      {
+        "boatNumber": 3,
+        "courseNumber": 3,
+        "startTiming": 0.15
+      },
+      {
+        "boatNumber": 4,
+        "courseNumber": 4,
+        "startTiming": 0.14
+      },
+      {
+        "boatNumber": 5,
+        "courseNumber": 5,
+        "startTiming": 0.18
+      },
+      {
+        "boatNumber": 6,
+        "courseNumber": 6,
+        "startTiming": 0.15
+      }
+    ]
+  },
+  "aiEvaluation": {
+    "state": "daily",
+    "entries": [
+      {
+        "boatNumber": 1,
+        "contribution": {
+          "frame": 29.97,
+          "racer": 6.35,
+          "motor": 13.07,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 58.91
+      },
+      {
+        "boatNumber": 2,
+        "contribution": {
+          "frame": 23.46,
+          "racer": 6.35,
+          "motor": 11.67,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 51.01
+      },
+      {
+        "boatNumber": 3,
+        "contribution": {
+          "frame": 22,
+          "racer": 6.35,
+          "motor": 13.55,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 51.43
+      },
+      {
+        "boatNumber": 4,
+        "contribution": {
+          "frame": 21.23,
+          "racer": 6.35,
+          "motor": 15.61,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 52.72
+      },
+      {
+        "boatNumber": 5,
+        "contribution": {
+          "frame": 17.82,
+          "racer": 6.35,
+          "motor": 11.04,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 44.74
+      },
+      {
+        "boatNumber": 6,
+        "contribution": {
+          "frame": 15.16,
+          "racer": 6.35,
+          "motor": 12.52,
+          "exhibition": 0,
+          "weather": 0
+        },
+        "strengthPt": 43.56
+      }
+    ]
+  },
+  "generatedAt": "2026-05-06T03:07:28.204Z"
+}

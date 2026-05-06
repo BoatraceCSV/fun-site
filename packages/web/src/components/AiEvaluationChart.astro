@@ -1,0 +1,128 @@
+---
+import type { AiEvaluation, AiEvaluationEntry } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  evaluation: AiEvaluation;
+}
+
+const { evaluation } = Astro.props;
+
+const isDaily = evaluation.state === "daily";
+
+const SEGMENTS = [
+  { key: "frame", label: "枠番", color: "#3b82f6" },
+  { key: "racer", label: "選手", color: "#22c55e" },
+  { key: "motor", label: "モーター", color: "#f97316" },
+  ...(isDaily
+    ? []
+    : [
+        { key: "exhibition", label: "展示", color: "#a855f7" },
+        { key: "weather", label: "気象", color: "#06b6d4" },
+      ]),
+] as const;
+
+type SegmentKey = (typeof SEGMENTS)[number]["key"];
+
+const segmentValue = (entry: AiEvaluationEntry, key: SegmentKey): number => {
+  const c = entry.contribution;
+  if (key === "frame") return c.frame;
+  if (key === "racer") return c.racer;
+  if (key === "motor") return c.motor;
+  if (key === "exhibition") return c.exhibition;
+  return c.weather;
+};
+
+const sortedEntries = [...evaluation.entries].sort((a, b) => a.boatNumber - b.boatNumber);
+
+type Bar = {
+  readonly entry: AiEvaluationEntry;
+  readonly total: number;
+  readonly segments: readonly {
+    readonly key: SegmentKey;
+    readonly label: string;
+    readonly color: string;
+    readonly value: number;
+    readonly widthPct: number;
+  }[];
+};
+
+const buildBar = (entry: AiEvaluationEntry): Bar => {
+  const total = SEGMENTS.reduce((sum, seg) => sum + Math.max(0, segmentValue(entry, seg.key)), 0);
+  const segments = SEGMENTS.flatMap((seg) => {
+    const value = Math.max(0, segmentValue(entry, seg.key));
+    if (value === 0) return [];
+    const widthPct = total > 0 ? (value / total) * 100 : 0;
+    return [{ key: seg.key, label: seg.label, color: seg.color, value, widthPct }];
+  });
+  return { entry, total, segments };
+};
+
+const bars: Bar[] = sortedEntries.map(buildBar);
+
+const rawMax = Math.max(1, ...bars.map((b) => b.total));
+const axisMax = Math.ceil(rawMax / 10) * 10;
+---
+
+<div class="space-y-3">
+  {/* 凡例 */}
+  <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
+    {SEGMENTS.map((seg) => (
+      <span class="inline-flex items-center gap-1.5">
+        <span
+          class="inline-block w-3 h-3 rounded-sm"
+          style={`background-color: ${seg.color};`}
+          aria-hidden="true"
+        />
+        {seg.label}
+      </span>
+    ))}
+  </div>
+
+  {/* バー一覧 */}
+  <ul class="space-y-2">
+    {bars.map((bar) => {
+      const totalPct = (bar.total / axisMax) * 100;
+      const boatColor = isValidBoatNumber(bar.entry.boatNumber)
+        ? BOAT_COLORS[bar.entry.boatNumber]
+        : undefined;
+      return (
+        <li class="flex items-center gap-3">
+          <span
+            class="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0"
+            style={`background-color: ${boatColor?.hex ?? "#999"}; color: ${boatColor?.textHex ?? "#fff"};${bar.entry.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+          >
+            {bar.entry.boatNumber}
+          </span>
+
+          <div
+            class="flex-1 h-7 bg-gray-100 rounded overflow-hidden relative"
+            role="img"
+            aria-label={`${bar.entry.boatNumber}枠 合計 ${bar.total.toFixed(1)}pt`}
+          >
+            <div class="flex h-full" style={`width: ${totalPct}%`}>
+              {bar.segments.map((seg) => (
+                <div
+                  class="h-full flex items-center justify-center text-[10px] text-white font-semibold"
+                  style={`width: ${seg.widthPct}%; background-color: ${seg.color};`}
+                  title={`${seg.label}: ${seg.value.toFixed(1)}pt`}
+                >
+                  {seg.widthPct >= 12 ? seg.value.toFixed(1) : ""}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <span class="w-14 text-right font-mono text-sm text-gray-700 flex-shrink-0">
+            {bar.total.toFixed(1)}
+          </span>
+        </li>
+      );
+    })}
+  </ul>
+
+  <p class="text-xs text-gray-500">
+    各セグメントは寄与pt（合計が強さptに相当）。
+    {isDaily && "直前情報未取得のため、展示・気象は表示していません。"}
+  </p>
+</div>

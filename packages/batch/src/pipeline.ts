@@ -1,10 +1,17 @@
 import { toJSTDateString } from "@fun-site/shared";
-import { fetchAllCsvData, mergeRaceData } from "./fetcher/index.js";
-import { generateAndUploadImages } from "./image-generator/index.js";
-import { analyzePredictions } from "./predictor/index.js";
-import { buildAndDeploy } from "./site-builder/index.js";
+import { fetchAllCsvData } from "./fetcher/index.js";
+import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js";
 
-/** パイプライン全体のオーケストレーション */
+/**
+ * パイプライン全体のオーケストレーション。
+ *
+ * 1. BoatraceCSV から programs / race_cards / stt / index を取得
+ * 2. レース単位の RacePrediction を生成
+ * 3. JSON に書き出し → Astro ビルド → デプロイ
+ *
+ * stt は直前情報。AM 2:00 のバッチ時点では未取得のレースが多いため、
+ * 進入コースは枠番フォールバック、ST は race_cards の全国平均ST で表示する。
+ */
 export const runPipeline = async (): Promise<void> => {
   const today = toJSTDateString(new Date());
   console.info(`Pipeline started for ${today}`);
@@ -13,30 +20,28 @@ export const runPipeline = async (): Promise<void> => {
   console.info("Step 1: Fetching CSV data...");
   const csvData = await fetchAllCsvData(today);
   console.info(
-    `Fetched: ${csvData.programs.length} programs, ${csvData.estimates.length} estimates`,
+    `Fetched: ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index, ${csvData.programs.length} programs`,
   );
 
-  if (csvData.programs.length === 0) {
-    console.warn("No programs found. Skipping pipeline.");
+  if (csvData.raceCards.length === 0) {
+    console.warn("No race_cards found. Skipping pipeline.");
     return;
   }
 
-  // Step 2: データ結合
-  const mergedData = mergeRaceData(csvData);
-  console.info(`Merged ${mergedData.length} races`);
+  // Step 2: RacePrediction の組み立て
+  console.info("Step 2: Building race predictions...");
+  const generatedAt = new Date().toISOString();
+  const predictions = buildAllRacePredictions(
+    csvData.raceCards,
+    csvData.stt,
+    csvData.indexes,
+    csvData.programs,
+    generatedAt,
+  );
+  console.info(`Built ${predictions.length} predictions`);
 
-  // Step 3: 予想分析（Gemini 3 Pro）
-  console.info("Step 3: Analyzing predictions...");
-  const predictions = await analyzePredictions(mergedData);
-  console.info(`Generated ${predictions.length} predictions`);
-
-  // Step 4: 画像生成 + 品質チェック
-  console.info("Step 4: Generating images...");
-  const predictionsWithImages = await generateAndUploadImages(predictions);
-  console.info("Image generation completed");
-
-  // Step 5: サイトビルド + デプロイ
-  console.info("Step 5: Building and deploying...");
-  await buildAndDeploy(predictionsWithImages, csvData.confirmations);
+  // Step 3: 書き出し → Astro ビルド → デプロイ
+  console.info("Step 3: Writing data, building and deploying...");
+  await buildAndDeploy(predictions);
   console.info("Pipeline completed successfully");
 };

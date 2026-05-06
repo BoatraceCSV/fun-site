@@ -5,7 +5,7 @@ interface Props {
   ogImage?: string;
 }
 
-const { title, description = "AIが生成した画像でレース展開予想を視覚化するボートレースファンサイト", ogImage } = Astro.props;
+const { title, description = "ボートレースのスタート予想とAI総合評価を表示するファンサイト", ogImage } = Astro.props;
 const siteUrl = Astro.site?.toString() ?? "";
 const canonicalUrl = new URL(Astro.url.pathname, siteUrl).toString();
 ---
@@ -37,7 +37,6 @@ const canonicalUrl = new URL(Astro.url.pathname, siteUrl).toString();
         </a>
         <nav class="flex gap-4 text-sm">
           <a href="/" class="hover:text-blue-200">トップ</a>
-          <a href="/stats" class="hover:text-blue-200">的中実績</a>
         </nav>
       </div>
     </header>
@@ -57,7 +56,6 @@ const canonicalUrl = new URL(Astro.url.pathname, siteUrl).toString();
           <a href="https://github.com/BoatraceCSV" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">
             BoatraceCSV
           </a>
-          | AI分析: Gemini 3 Pro
         </p>
       </div>
     </footer>

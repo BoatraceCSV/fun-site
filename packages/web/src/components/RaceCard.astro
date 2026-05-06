@@ -1,43 +1,51 @@
 ---
 import type { RacePrediction } from "@fun-site/shared";
-import { WINNING_TECHNIQUES, getStadiumByName } from "@fun-site/shared";
-import { parseRaceCode } from "@fun-site/shared";
-import ConfidenceStars from "./ConfidenceStars.astro";
+import { BOAT_COLORS, getStadiumById, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   prediction: RacePrediction;
 }
 
 const { prediction } = Astro.props;
-const parsed = parseRaceCode(prediction.raceCode);
-const stadium = getStadiumByName(prediction.stadium);
-const techniqueName = WINNING_TECHNIQUES[prediction.aiPrediction.predictedTechnique] ?? prediction.aiPrediction.predictedTechnique;
-const raceUrl = `/race/${parsed.date}/${parsed.stadiumId}/${prediction.raceNumber}`;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceUrl = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}`;
+
+// AI 評価で強さptが最も高い艇を「本命」として表示
+const topEntry = [...prediction.aiEvaluation.entries].sort(
+  (a, b) => b.strengthPt - a.strengthPt,
+)[0];
+const topColor =
+  topEntry && isValidBoatNumber(topEntry.boatNumber)
+    ? BOAT_COLORS[topEntry.boatNumber]
+    : undefined;
 ---
 
-<a href={raceUrl} class="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 overflow-hidden">
-  {prediction.imageUrl && (
-    <img
-      src={prediction.imageUrl}
-      alt={`${prediction.stadium} ${prediction.raceNumber}R 展開予想`}
-      loading="lazy"
-      class="w-full aspect-video object-cover"
-    />
-  )}
-  <div class="p-4">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="font-bold text-lg">
-        {stadium?.name ?? prediction.stadium} {prediction.raceNumber}R
-      </h3>
-      <ConfidenceStars confidence={prediction.aiPrediction.confidence} />
-    </div>
-    <div class="flex items-center gap-3 text-sm text-gray-600">
-      <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-medium">
-        {techniqueName}
-      </span>
-      <span class="font-mono">
-        {prediction.aiPrediction.predictedOrder.slice(0, 3).join("-")}
-      </span>
-    </div>
+<a
+  href={raceUrl}
+  class="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4"
+>
+  <div class="flex items-center justify-between mb-2">
+    <h3 class="font-bold text-base">
+      {stadiumName} <span class="text-blue-600">{prediction.raceNumber}R</span>
+    </h3>
+    {prediction.votingDeadline && (
+      <span class="text-xs text-gray-500">締切 {prediction.votingDeadline}</span>
+    )}
   </div>
+  {prediction.raceName && (
+    <p class="text-xs text-gray-600 mb-2 truncate">{prediction.raceName}</p>
+  )}
+  {topEntry && (
+    <div class="flex items-center gap-2 text-sm">
+      <span class="text-xs text-gray-500">本命</span>
+      <span
+        class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+        style={`background-color: ${topColor?.hex ?? "#999"}; color: ${topColor?.textHex ?? "#fff"};${topEntry.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+      >
+        {topEntry.boatNumber}
+      </span>
+      <span class="font-mono text-gray-700">{topEntry.strengthPt.toFixed(1)}pt</span>
+    </div>
+  )}
 </a>

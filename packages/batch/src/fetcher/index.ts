@@ -1,30 +1,30 @@
 import type {
-  ConfirmationRow,
   EstimateRow,
+  IndexRow,
   PredictionPreviewRow,
   ProgramRow,
+  RaceCardRow,
   ResultRow,
+  SttRow,
 } from "@fun-site/shared";
 import { formatDate, getPreviousDate, parseDate } from "@fun-site/shared";
 import { fetchCsvText } from "./csv-client.js";
-import {
-  parseConfirmations,
-  parseEstimates,
-  parsePredictionPreviews,
-  parsePrograms,
-  parseResults,
-} from "./schemas.js";
+import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
+import { parsePrograms, parseResults } from "./schemas.js";
 
 /** 全CSVデータの取得結果 */
 export type FetchedCsvData = {
   readonly programs: readonly ProgramRow[];
-  readonly predictionPreviews: readonly PredictionPreviewRow[];
-  readonly estimates: readonly EstimateRow[];
+  readonly raceCards: readonly RaceCardRow[];
+  readonly stt: readonly SttRow[];
+  readonly indexes: readonly IndexRow[];
   readonly results: readonly ResultRow[];
-  readonly confirmations: readonly ConfirmationRow[];
 };
 
-/** レース単位の統合データ */
+/**
+ * レガシー: programs + prediction-preview + estimate をレースコードで結合した型。
+ * prediction-preview / estimate は CSV 生成停止のため、実行時は常に undefined。
+ */
 export type MergedRaceData = {
   readonly program: ProgramRow;
   readonly predictionPreview: PredictionPreviewRow | undefined;
@@ -47,30 +47,40 @@ const fetchAndParse = async <T>(
   }
 };
 
-/** 当日分 + 前日分の全CSVデータを取得・パース */
+/**
+ * 当日分 + 前日分の CSV データを取得・パースする。
+ *
+ * 取得するのは BoatraceCSV で現在生成されている 5 種:
+ * - 当日分: programs / race_cards / stt / index
+ * - 前日分: results
+ *
+ * 旧 prediction-preview / estimate / confirm は 2026-05 以降生成停止のため
+ * fetcher からは外している（型は残置）。
+ */
 export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => {
   const previousDate = formatDate(getPreviousDate(parseDate(date)));
 
-  const [programs, predictionPreviews, estimates, results, confirmations] = await Promise.all([
+  const [programs, raceCards, stt, indexes, results] = await Promise.all([
     fetchAndParse("programs", date, parsePrograms),
-    fetchAndParse("prediction-preview", date, parsePredictionPreviews),
-    fetchAndParse("estimate", date, parseEstimates),
+    fetchAndParse("race_cards", date, parseRaceCards),
+    fetchAndParse("stt", date, parseStt),
+    fetchAndParse("index", date, parseIndex),
     fetchAndParse("results", previousDate, parseResults),
-    fetchAndParse("confirm", previousDate, parseConfirmations),
   ]);
 
-  return { programs, predictionPreviews, estimates, results, confirmations };
+  return { programs, raceCards, stt, indexes, results };
 };
 
-/** Programs + PredictionPreviews + Estimates をレースコードで結合 */
+/** Programs を MergedRaceData にマップする（レガシー API 互換用） */
 export const mergeRaceData = (data: FetchedCsvData): readonly MergedRaceData[] =>
   data.programs.map((program) => ({
     program,
-    predictionPreview: data.predictionPreviews.find((pp) => pp.raceCode === program.raceCode),
-    estimate: data.estimates.find((e) => e.raceCode === program.raceCode),
+    predictionPreview: undefined,
+    estimate: undefined,
   }));
 
 export { fetchCsvText } from "./csv-client.js";
+export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export {
   parseConfirmations,
   parseEstimates,

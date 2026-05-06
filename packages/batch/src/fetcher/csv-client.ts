@@ -3,13 +3,23 @@ const BASE_URL = "https://boatracecsv.github.io/data";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
 
-export type CsvType = "programs" | "prediction-preview" | "estimate" | "results" | "confirm";
+// BoatraceCSV で現在公開されている CSV のみを列挙する。
+// prediction-preview / estimate / confirm は生成停止に伴い 2026-05 以降に廃止。
+export type CsvType = "programs" | "results" | "race_cards" | "stt" | "index";
+
+const CSV_PATH_PREFIX: Record<CsvType, string> = {
+  programs: "programs",
+  results: "results",
+  race_cards: "race_cards",
+  stt: "previews/stt",
+  index: "index",
+};
 
 const buildCsvUrl = (type: CsvType, date: string): string => {
   // date は "YYYY-MM-DD" 形式なので、直接文字列操作でスラッシュ区切りに変換
   // new Date(date) を使うとタイムゾーン依存のバグが発生する
   const dateSlash = date.replaceAll("-", "/");
-  return `${BASE_URL}/${type}/${dateSlash}.csv`;
+  return `${BASE_URL}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
 };
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

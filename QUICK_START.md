@@ -121,7 +121,7 @@ terraform apply
 - Cloud Storage（Web ホスティング用 + データ用）
 - Cloud CDN + ロードバランサ
 - Cloud Run Jobs（バッチ処理）
-- Cloud Scheduler（毎日 AM 2:00 JST に実行）
+- Cloud Scheduler（毎日 AM 9:00 JST に実行）
 - Artifact Registry（Docker イメージ）
 - Cloud Build（CI/CD トリガー）
 - Cloud DNS ゾーン

@@ -51,7 +51,7 @@
       ".astro",
       ".tmp",
       "**/*.astro",
-      "packages/web/src/content/",
+      "packages/web/src/data/",
       ".corepack/",
       ".pnpm-store/"
     ]

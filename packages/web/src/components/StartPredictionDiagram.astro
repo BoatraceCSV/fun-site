@@ -1,0 +1,183 @@
+---
+import type { StartPrediction } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  start: StartPrediction;
+}
+
+const { start } = Astro.props;
+
+// 表示レンジ（秒）。STの一般的な範囲をカバーする
+const ST_MIN = -0.05; // フライング側
+const ST_MAX = 0.3;
+const ST_SPAN = ST_MAX - ST_MIN;
+
+// 図のサイズ
+const VIEWBOX_W = 600;
+const VIEWBOX_H = 360;
+const LEFT_PAD = 60; // コース番号ラベル分
+const RIGHT_PAD = 80; // ST値ラベル分
+const TOP_PAD = 24;
+const BOTTOM_PAD = 36;
+const LANES = 6;
+const LANE_HEIGHT = (VIEWBOX_H - TOP_PAD - BOTTOM_PAD) / LANES;
+const TRACK_LEFT = LEFT_PAD;
+const TRACK_RIGHT = VIEWBOX_W - RIGHT_PAD;
+const TRACK_W = TRACK_RIGHT - TRACK_LEFT;
+
+// ST → x 座標。ST=0 でスタートラインの位置。STが大きいほど後方（左寄り）。
+const stToX = (st: number): number => {
+  const clamped = Math.min(Math.max(st, ST_MIN), ST_MAX);
+  // ST_MIN が右端、ST_MAX が左端
+  return TRACK_RIGHT - ((clamped - ST_MIN) / ST_SPAN) * TRACK_W;
+};
+
+// スタートラインの x 座標（ST=0 の位置）
+const startLineX = stToX(0);
+
+// 進入コースごとに 1〜6 の lane を割り当て
+const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.courseNumber);
+
+// ST 軸の目盛りラベル
+const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
+---
+
+<figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
+  <svg
+    viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="スタート予想図"
+    class="w-full h-auto"
+  >
+    {/* 水面背景 */}
+    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill="#dbeafe" />
+
+    {/* レーン区切り */}
+    {Array.from({ length: LANES + 1 }).map((_, i) => {
+      const y = TOP_PAD + i * LANE_HEIGHT;
+      return (
+        <line
+          x1={TRACK_LEFT}
+          y1={y}
+          x2={TRACK_RIGHT}
+          y2={y}
+          stroke="#bfdbfe"
+          stroke-width="1"
+        />
+      );
+    })}
+
+    {/* スタートライン（赤、太線） */}
+    <line
+      x1={startLineX}
+      y1={TOP_PAD}
+      x2={startLineX}
+      y2={TOP_PAD + LANE_HEIGHT * LANES}
+      stroke="#dc2626"
+      stroke-width="2.5"
+    />
+    <text
+      x={startLineX}
+      y={TOP_PAD - 8}
+      text-anchor="middle"
+      font-size="11"
+      fill="#dc2626"
+      font-weight="600"
+    >
+      スタートライン
+    </text>
+
+    {/* ST 目盛り */}
+    {tickValues.map((tv) => {
+      const x = stToX(tv);
+      return (
+        <g>
+          <line
+            x1={x}
+            y1={TOP_PAD + LANE_HEIGHT * LANES}
+            x2={x}
+            y2={TOP_PAD + LANE_HEIGHT * LANES + 4}
+            stroke="#94a3b8"
+            stroke-width="1"
+          />
+          <text
+            x={x}
+            y={TOP_PAD + LANE_HEIGHT * LANES + 16}
+            text-anchor="middle"
+            font-size="10"
+            fill="#64748b"
+          >
+            {tv.toFixed(2)}
+          </text>
+        </g>
+      );
+    })}
+    <text
+      x={(TRACK_LEFT + TRACK_RIGHT) / 2}
+      y={VIEWBOX_H - 6}
+      text-anchor="middle"
+      font-size="10"
+      fill="#64748b"
+    >
+      スタートタイミング(秒)
+    </text>
+
+    {/* コース行 */}
+    {entriesByCourse.map((entry, i) => {
+      const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
+      const color = isValidBoatNumber(entry.boatNumber) ? BOAT_COLORS[entry.boatNumber] : undefined;
+      const fill = color?.hex ?? "#cbd5e1";
+      const stroke = entry.boatNumber === 1 ? "#94a3b8" : fill;
+      const textColor = color?.textHex ?? "#0f172a";
+      const boatX = stToX(entry.startTiming);
+      return (
+        <g>
+          {/* コース番号 */}
+          <text
+            x={TRACK_LEFT - 14}
+            y={cy + 4}
+            text-anchor="end"
+            font-size="13"
+            fill="#1e3a8a"
+            font-weight="700"
+          >
+            {entry.courseNumber}コース
+          </text>
+
+          {/* 艇本体（円） */}
+          <circle cx={boatX} cy={cy} r="13" fill={fill} stroke={stroke} stroke-width="1.5" />
+          <text
+            x={boatX}
+            y={cy + 4}
+            text-anchor="middle"
+            font-size="12"
+            font-weight="700"
+            fill={textColor}
+          >
+            {entry.boatNumber}
+          </text>
+
+          {/* ST 値 */}
+          <text
+            x={TRACK_RIGHT + 8}
+            y={cy + 4}
+            font-size="13"
+            fill="#0f172a"
+            font-family="monospace"
+          >
+            {entry.startTiming.toFixed(2)}
+          </text>
+        </g>
+      );
+    })}
+  </svg>
+  <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
+    {start.fromExhibition
+      ? "進入コースは直前情報のスタート展示を基準に表示しています。"
+      : "直前情報がまだ届いていないため、進入コースは枠番を仮表示しています。"}
+    {" "}
+    スタートタイミングは選手の全国平均STです。
+  </figcaption>
+</figure>

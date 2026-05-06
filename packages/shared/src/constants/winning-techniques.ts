@@ -1,4 +1,4 @@
-import type { WinningTechnique } from "../types/prediction.js";
+import type { WinningTechnique } from "../types/legacy-prediction.js";
 
 /** 決まり手の定義 */
 export const WINNING_TECHNIQUES: Record<WinningTechnique, string> = {

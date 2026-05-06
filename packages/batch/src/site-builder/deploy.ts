@@ -3,7 +3,11 @@ import { join, relative, resolve } from "node:path";
 import { Storage } from "@google-cloud/storage";
 
 const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
-const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web";
+// バケット名は Terraform の `${local.prefix}-web-${var.project_id}` 規則で
+// 生成される (例: fun-site-web-boatrace-487212)。Cloud Run Job では
+// GCS_WEB_BUCKET 環境変数経由で渡されるが、ローカル実行用にもデフォルトを
+// 同じ値に揃えておく。別プロジェクトで動かすときは GCS_WEB_BUCKET で上書き。
+const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web-boatrace-487212";
 
 const storage = new Storage();
 

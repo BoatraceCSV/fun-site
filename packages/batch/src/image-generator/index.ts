@@ -1,4 +1,4 @@
-import type { RacePrediction } from "@fun-site/shared";
+import type { LegacyRacePrediction as RacePrediction } from "@fun-site/shared";
 import pMap from "p-map";
 import { generateImage } from "./gemini-image.js";
 import { buildImagePrompt } from "./prompt-builder.js";

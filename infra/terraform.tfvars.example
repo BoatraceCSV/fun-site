@@ -7,7 +7,9 @@ region       = "us-central1"
 domain_name = "example.com"
 
 # Batch settings
-batch_schedule  = "0 2 * * *"
+# 09:00 JST に起動。BoatraceCSV の daily-sync.yml (08:30 JST 起動・~10 分) で
+# 当日分の programs / race_cards / index が公開された直後に走らせる。
+batch_schedule  = "0 9 * * *"
 batch_timezone  = "Asia/Tokyo"
 batch_cpu       = "2"
 batch_memory    = "2Gi"

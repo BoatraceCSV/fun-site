@@ -21,9 +21,9 @@ variable "domain_name" {
 }
 
 variable "batch_schedule" {
-  description = "Cron schedule for daily batch job (in Asia/Tokyo timezone)"
+  description = "Cron schedule for daily batch job (in Asia/Tokyo timezone). BoatraceCSV daily-sync.yml が 08:30 JST から ~10 分実行されるため、当日分の race_cards / index が出揃うのを待って 09:00 JST に走らせる。"
   type        = string
-  default     = "0 2 * * *"
+  default     = "0 9 * * *"
 }
 
 variable "batch_timezone" {

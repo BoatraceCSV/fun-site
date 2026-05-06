@@ -1,6 +1,6 @@
 resource "google_cloud_scheduler_job" "daily_batch" {
   name        = "${local.prefix}-daily-batch"
-  description = "Triggers the daily batch job at AM 2:00 JST"
+  description = "Triggers the daily batch job at AM 9:00 JST (after BoatraceCSV daily-sync.yml completes around AM 8:40 JST)"
   schedule    = var.batch_schedule
   time_zone   = var.batch_timezone
   region      = var.region

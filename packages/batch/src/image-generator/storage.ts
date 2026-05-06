@@ -1,7 +1,7 @@
 import { parseRaceCode } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
 
-const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web";
+const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web-boatrace-487212";
 const SITE_URL = process.env["SITE_URL"] ?? "https://fun-site.example.com";
 
 let storageInstance: Storage | undefined;

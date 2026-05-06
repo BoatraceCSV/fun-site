@@ -1,4 +1,4 @@
-import type { RacePrediction } from "@fun-site/shared";
+import type { LegacyRacePrediction as RacePrediction } from "@fun-site/shared";
 import { z } from "zod";
 import { MODEL_ID, ai } from "../lib/vertex-ai.js";
 import { QUALITY_CRITERIA, QUALITY_THRESHOLD } from "./criteria.js";

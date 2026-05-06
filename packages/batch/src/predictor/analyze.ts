@@ -1,5 +1,9 @@
 import { toWinningTechnique } from "@fun-site/shared";
-import type { AiPrediction, RacePrediction, WinningTechnique } from "@fun-site/shared";
+import type {
+  AiPrediction,
+  LegacyRacePrediction as RacePrediction,
+  WinningTechnique,
+} from "@fun-site/shared";
 import { z } from "zod";
 import type { MergedRaceData } from "../fetcher/index.js";
 import { generateText } from "./gemini-client.js";

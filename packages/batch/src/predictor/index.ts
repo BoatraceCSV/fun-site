@@ -1,4 +1,4 @@
-import type { RacePrediction } from "@fun-site/shared";
+import type { LegacyRacePrediction as RacePrediction } from "@fun-site/shared";
 import pMap from "p-map";
 import type { MergedRaceData } from "../fetcher/index.js";
 import { analyzeRace, createFallbackPrediction, selectTargetRaces } from "./analyze.js";
