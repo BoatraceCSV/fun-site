@@ -4,8 +4,8 @@
   "stadiumId": "01",
   "stadiumName": "桐生",
   "raceNumber": 10,
-  "raceName": "準優勝戦",
-  "raceTitle": "１Ｒ  一般          Ｈ１８００ｍ  電話投票締切予定１５：１８",
+  "raceName": "特別選抜戦",
+  "raceTitle": "第５３回上毛新聞社杯",
   "votingDeadline": "19:17",
   "racers": [
     {
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

@@ -4,9 +4,9 @@
   "stadiumId": "06",
   "stadiumName": "浜名湖",
   "raceNumber": 8,
-  "raceName": "ブレイクタイ",
-  "raceTitle": "浜松市長杯争奪戦やらまいかカップ",
-  "votingDeadline": "15:00",
+  "raceName": "ブレイクタイム",
+  "raceTitle": "浜松市長杯争奪戦　やらまいかカップ",
+  "votingDeadline": "14:55",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

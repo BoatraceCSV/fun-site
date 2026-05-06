@@ -4,9 +4,9 @@
   "stadiumId": "23",
   "stadiumName": "唐津",
   "raceNumber": 11,
-  "raceName": "準優勝戦",
+  "raceName": "特別選抜戦",
   "raceTitle": "ＢＯＡＴＲＡＣＥ振興会会長賞ＧＷ唐津特選",
-  "votingDeadline": "13:36",
+  "votingDeadline": "13:30",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,18 +135,18 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 30.28,
           "racer": 11.99,
-          "motor": 6.45,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 5.94,
+          "exhibition": 6.66,
+          "weather": 1.23
         },
-        "strengthPt": 58.06
+        "strengthPt": 56.1
       },
       {
         "boatNumber": 2,
@@ -154,10 +154,10 @@
           "frame": 25,
           "racer": 11.99,
           "motor": 5.94,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.84,
+          "weather": 2.61
         },
-        "strengthPt": 52.27
+        "strengthPt": 53.38
       },
       {
         "boatNumber": 3,
@@ -165,45 +165,45 @@
           "frame": 24.02,
           "racer": 11.99,
           "motor": 5.94,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.29,
+          "weather": 2.18
         },
-        "strengthPt": 51.3
+        "strengthPt": 51.42
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 22.01,
           "racer": 11.99,
-          "motor": 6.89,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 5.94,
+          "exhibition": 6.46,
+          "weather": 3.07
         },
-        "strengthPt": 50.24
+        "strengthPt": 49.47
       },
       {
         "boatNumber": 5,
         "contribution": {
           "frame": 19.62,
           "racer": 11.99,
-          "motor": 5.53,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 5.94,
+          "exhibition": 6.49,
+          "weather": 2.85
         },
-        "strengthPt": 46.49
+        "strengthPt": 46.89
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 15.43,
           "racer": 11.99,
-          "motor": 3.68,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 5.94,
+          "exhibition": 5.93,
+          "weather": 3.46
         },
-        "strengthPt": 40.45
+        "strengthPt": 42.76
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

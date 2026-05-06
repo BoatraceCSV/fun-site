@@ -5,10 +5,11 @@ const INITIAL_DELAY_MS = 1000;
 
 // BoatraceCSV で現在公開されている CSV のみを列挙する。
 // prediction-preview / estimate / confirm は生成停止に伴い 2026-05 以降に廃止。
-export type CsvType = "programs" | "results" | "race_cards" | "stt" | "index";
+export type CsvType = "programs" | "title" | "results" | "race_cards" | "stt" | "index";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   programs: "programs",
+  title: "programs/title",
   results: "results",
   race_cards: "programs/race_cards",
   stt: "previews/stt",

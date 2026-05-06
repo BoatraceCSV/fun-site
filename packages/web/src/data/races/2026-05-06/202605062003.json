@@ -6,7 +6,7 @@
   "raceNumber": 3,
   "raceName": "一般戦",
   "raceTitle": "スポーツニッポン杯ＧＷ特選競走",
-  "votingDeadline": "16:10",
+  "votingDeadline": "16:09",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

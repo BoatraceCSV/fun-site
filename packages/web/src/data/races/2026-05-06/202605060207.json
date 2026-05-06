@@ -4,8 +4,8 @@
   "stadiumId": "02",
   "stadiumName": "戸田",
   "raceNumber": 7,
-  "raceName": "ウインウイン",
-  "raceTitle": "１Ｒ  一般戦          Ｈ１８００ｍ  電話投票締切予定１０：４７",
+  "raceName": "ウインウイン７",
+  "raceTitle": "第３７回ウインビーカップ",
   "votingDeadline": "13:45",
   "racers": [
     {
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,7 +135,7 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
@@ -143,54 +143,54 @@
           "frame": 21.06,
           "racer": 9.32,
           "motor": 16.91,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 5.88,
+          "weather": 1.73
         },
-        "strengthPt": 54.63
+        "strengthPt": 54.9
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 17.72,
           "racer": 9.32,
-          "motor": 28.95,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 16.91,
+          "exhibition": 6.03,
+          "weather": -0.56
         },
-        "strengthPt": 63.32
+        "strengthPt": 49.41
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 17.45,
           "racer": 9.32,
-          "motor": 34.94,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 16.91,
+          "exhibition": 7.06,
+          "weather": 0.7
         },
-        "strengthPt": 69.05
+        "strengthPt": 51.43
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 16.58,
           "racer": 9.32,
-          "motor": 35.51,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 16.91,
+          "exhibition": 5.28,
+          "weather": 2.89
         },
-        "strengthPt": 68.75
+        "strengthPt": 50.99
       },
       {
         "boatNumber": 5,
         "contribution": {
           "frame": 14.37,
           "racer": 9.32,
-          "motor": 32.98,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 16.91,
+          "exhibition": 5.1,
+          "weather": 2.1
         },
-        "strengthPt": 64
+        "strengthPt": 47.79
       },
       {
         "boatNumber": 6,
@@ -198,12 +198,12 @@
           "frame": 11.22,
           "racer": 9.32,
           "motor": 16.91,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.02,
+          "weather": 1.81
         },
-        "strengthPt": 44.79
+        "strengthPt": 45.28
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

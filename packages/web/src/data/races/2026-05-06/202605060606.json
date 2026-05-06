@@ -5,8 +5,8 @@
   "stadiumName": "浜名湖",
   "raceNumber": 6,
   "raceName": "予選",
-  "raceTitle": "浜松市長杯争奪戦やらまいかカップ",
-  "votingDeadline": "13:59",
+  "raceTitle": "浜松市長杯争奪戦　やらまいかカップ",
+  "votingDeadline": "13:48",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,40 +135,40 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 28.37,
           "racer": 10.01,
-          "motor": 10.22,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.6,
+          "exhibition": 7.57,
+          "weather": 2.58
         },
-        "strengthPt": 58.5
+        "strengthPt": 57.12
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 23.17,
           "racer": 10.01,
-          "motor": 8.18,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.6,
+          "exhibition": 7.66,
+          "weather": 3.46
         },
-        "strengthPt": 51.25
+        "strengthPt": 52.89
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 22.47,
           "racer": 10.01,
-          "motor": 12.67,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.6,
+          "exhibition": 6.15,
+          "weather": 2.47
         },
-        "strengthPt": 55.05
+        "strengthPt": 49.69
       },
       {
         "boatNumber": 4,
@@ -176,10 +176,10 @@
           "frame": 20.98,
           "racer": 10.01,
           "motor": 8.6,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.11,
+          "weather": 4.03
         },
-        "strengthPt": 49.49
+        "strengthPt": 49.72
       },
       {
         "boatNumber": 5,
@@ -187,10 +187,10 @@
           "frame": 19.01,
           "racer": 10.01,
           "motor": 8.6,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.07,
+          "weather": 2.79
         },
-        "strengthPt": 47.52
+        "strengthPt": 47.48
       },
       {
         "boatNumber": 6,
@@ -198,12 +198,12 @@
           "frame": 14.83,
           "racer": 10.01,
           "motor": 8.6,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.02,
+          "weather": 3.57
         },
-        "strengthPt": 43.34
+        "strengthPt": 43.02
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

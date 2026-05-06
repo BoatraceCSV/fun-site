@@ -6,15 +6,17 @@ import type {
   RaceCardRow,
   ResultRow,
   SttRow,
+  TitleRow,
 } from "@fun-site/shared";
 import { formatDate, getPreviousDate, parseDate } from "@fun-site/shared";
 import { fetchCsvText } from "./csv-client.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
-import { parsePrograms, parseResults } from "./schemas.js";
+import { parsePrograms, parseResults, parseTitles } from "./schemas.js";
 
 /** 全CSVデータの取得結果 */
 export type FetchedCsvData = {
   readonly programs: readonly ProgramRow[];
+  readonly titles: readonly TitleRow[];
   readonly raceCards: readonly RaceCardRow[];
   readonly stt: readonly SttRow[];
   readonly indexes: readonly IndexRow[];
@@ -50,9 +52,13 @@ const fetchAndParse = async <T>(
 /**
  * 当日分 + 前日分の CSV データを取得・パースする。
  *
- * 取得するのは BoatraceCSV で現在生成されている 5 種:
- * - 当日分: programs / race_cards / stt / index
+ * 取得するのは BoatraceCSV で現在生成されている CSV:
+ * - 当日分: programs / programs/title / race_cards / stt / index
  * - 前日分: results
+ *
+ * `programs/title` はレース名・タイトル・締切時刻などのメタ情報専用。
+ * 出走表メタの取得は title CSV を優先し、programs CSV は AI predictor が
+ * 必要とする選手データ (boats) のために併せて取得する。
  *
  * 旧 prediction-preview / estimate / confirm は 2026-05 以降生成停止のため
  * fetcher からは外している（型は残置）。
@@ -60,15 +66,16 @@ const fetchAndParse = async <T>(
 export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => {
   const previousDate = formatDate(getPreviousDate(parseDate(date)));
 
-  const [programs, raceCards, stt, indexes, results] = await Promise.all([
+  const [programs, titles, raceCards, stt, indexes, results] = await Promise.all([
     fetchAndParse("programs", date, parsePrograms),
+    fetchAndParse("title", date, parseTitles),
     fetchAndParse("race_cards", date, parseRaceCards),
     fetchAndParse("stt", date, parseStt),
     fetchAndParse("index", date, parseIndex),
     fetchAndParse("results", previousDate, parseResults),
   ]);
 
-  return { programs, raceCards, stt, indexes, results };
+  return { programs, titles, raceCards, stt, indexes, results };
 };
 
 /** Programs を MergedRaceData にマップする（レガシー API 互換用） */
@@ -87,4 +94,5 @@ export {
   parsePredictionPreviews,
   parsePrograms,
   parseResults,
+  parseTitles,
 } from "./schemas.js";

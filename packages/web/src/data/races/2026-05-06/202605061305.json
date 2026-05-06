@@ -5,8 +5,8 @@
   "stadiumName": "尼崎",
   "raceNumber": 5,
   "raceName": "予選",
-  "raceTitle": "１Ｒ  朝からセンプ          Ｈ１８００ｍ  電話投票締切予定１０：３４",
-  "votingDeadline": "12:22",
+  "raceTitle": "第５８回報知金杯争奪　六甲賞競走",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

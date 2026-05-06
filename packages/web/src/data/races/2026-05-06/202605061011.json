@@ -4,9 +4,9 @@
   "stadiumId": "10",
   "stadiumName": "三国",
   "raceNumber": 11,
-  "raceName": "記者特選",
+  "raceName": "準優勝戦",
   "raceTitle": "ＧＷ三国ボートフェスタ",
-  "votingDeadline": "13:50",
+  "votingDeadline": "13:43",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -118,12 +118,12 @@
         "startTiming": 0.13
       },
       {
-        "boatNumber": 4,
+        "boatNumber": 5,
         "courseNumber": 4,
         "startTiming": 0.17
       },
       {
-        "boatNumber": 5,
+        "boatNumber": 4,
         "courseNumber": 5,
         "startTiming": 0.17
       },
@@ -135,18 +135,18 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 26.84,
           "racer": 13.8,
-          "motor": 15.72,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.38,
+          "exhibition": 6.31,
+          "weather": 1.65
         },
-        "strengthPt": 64.51
+        "strengthPt": 56.98
       },
       {
         "boatNumber": 2,
@@ -154,56 +154,56 @@
           "frame": 21.32,
           "racer": 13.8,
           "motor": 8.38,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 5.89,
+          "weather": 2.28
         },
-        "strengthPt": 51.65
+        "strengthPt": 51.66
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 20.53,
           "racer": 13.8,
-          "motor": 20.3,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.38,
+          "exhibition": 6.78,
+          "weather": 1.92
         },
-        "strengthPt": 62.77
+        "strengthPt": 51.41
       },
       {
         "boatNumber": 4,
         "contribution": {
-          "frame": 19.23,
+          "frame": 16.56,
           "racer": 13.8,
           "motor": 8.38,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.37,
+          "weather": 2.27
         },
-        "strengthPt": 49.56
+        "strengthPt": 47.38
       },
       {
         "boatNumber": 5,
         "contribution": {
-          "frame": 16.56,
+          "frame": 19.23,
           "racer": 13.8,
-          "motor": 22.91,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.38,
+          "exhibition": 5.14,
+          "weather": 2.07
         },
-        "strengthPt": 61.42
+        "strengthPt": 48.61
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 13.43,
           "racer": 13.8,
-          "motor": 20.3,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.38,
+          "exhibition": 5.87,
+          "weather": 2.39
         },
-        "strengthPt": 55.68
+        "strengthPt": 43.86
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

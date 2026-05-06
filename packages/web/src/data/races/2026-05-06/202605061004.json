@@ -4,9 +4,9 @@
   "stadiumId": "10",
   "stadiumName": "三国",
   "raceNumber": 4,
-  "raceName": "みくにあさ推",
+  "raceName": "みくにあさ推し",
   "raceTitle": "ＧＷ三国ボートフェスタ",
-  "votingDeadline": "10:06",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

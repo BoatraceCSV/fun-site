@@ -4,8 +4,8 @@
   "stadiumId": "07",
   "stadiumName": "蒲郡",
   "raceNumber": 11,
-  "raceName": "準優勝戦",
-  "raceTitle": "１Ｒ  一般戦          Ｈ１８００ｍ  電話投票締切予定１５：２３",
+  "raceName": "特別選抜戦",
+  "raceTitle": "中日スポーツ賞　第５５回竹島弁天杯",
   "votingDeadline": "20:00",
   "racers": [
     {
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

@@ -9,6 +9,7 @@ import type {
   ResultPayouts,
   ResultPosition,
   ResultRow,
+  TitleRow,
 } from "@fun-site/shared";
 import { parse } from "csv-parse/sync";
 
@@ -73,6 +74,23 @@ const parseProgramRow = (row: Record<string, string>): ProgramRow => {
     boats,
   };
 };
+
+// === Programs/Title CSV パーサー ===
+
+const parseTitleRow = (row: Record<string, string>): TitleRow => ({
+  raceCode: row["レースコード"] ?? "",
+  raceDate: row["レース日"] ?? "",
+  stadiumId: row["レース場コード"] ?? "",
+  stadium: row["レース場"] ?? "",
+  raceNumber: toNumber(row["レース回"]?.replace(/[^0-9]/g, "")),
+  title: row["タイトル"] ?? "",
+  dayNumber: toNumber(row["日次"]?.replace(/[^0-9]/g, "")),
+  grade: row["グレード"] ?? "",
+  isNighter: (row["ナイター"] ?? "").trim() === "Y",
+  raceName: row["レース名"] ?? "",
+  votingDeadline: row["電話投票締切予定"] ?? "",
+  cancellationStatus: row["中止状態"] ?? "",
+});
 
 // === Prediction Previews CSV パーサー ===
 
@@ -234,6 +252,8 @@ const parseCsv = (csvText: string): Record<string, string>[] =>
 
 export const parsePrograms = (csvText: string): ProgramRow[] =>
   parseCsv(csvText).map(parseProgramRow);
+
+export const parseTitles = (csvText: string): TitleRow[] => parseCsv(csvText).map(parseTitleRow);
 
 export const parsePredictionPreviews = (csvText: string): PredictionPreviewRow[] =>
   parseCsv(csvText).map(parsePredictionPreviewRow);

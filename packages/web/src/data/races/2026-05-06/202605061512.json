@@ -4,8 +4,8 @@
   "stadiumId": "15",
   "stadiumName": "丸亀",
   "raceNumber": 12,
-  "raceName": "ドリーム戦",
-  "raceTitle": "１Ｒ  予選          Ｈ１８００ｍ  電話投票締切予定１５：１７",
+  "raceName": "予選",
+  "raceTitle": "第１１回レディースオールスター",
   "votingDeadline": "20:45",
   "racers": [
     {
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

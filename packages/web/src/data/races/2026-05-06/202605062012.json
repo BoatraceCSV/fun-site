@@ -4,7 +4,7 @@
   "stadiumId": "20",
   "stadiumName": "若松",
   "raceNumber": 12,
-  "raceName": "一般戦",
+  "raceName": "優勝戦",
   "raceTitle": "スポーツニッポン杯ＧＷ特選競走",
   "votingDeadline": "20:34",
   "racers": [
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

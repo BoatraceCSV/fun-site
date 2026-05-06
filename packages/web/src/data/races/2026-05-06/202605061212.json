@@ -4,7 +4,7 @@
   "stadiumId": "12",
   "stadiumName": "住之江",
   "raceNumber": 12,
-  "raceName": "予選特別Ａ戦",
+  "raceName": "一般特別戦",
   "raceTitle": "２０２６ラピートカップ",
   "votingDeadline": "20:42",
   "racers": [
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

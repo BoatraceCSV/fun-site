@@ -6,7 +6,7 @@
   "raceNumber": 11,
   "raceName": "予選",
   "raceTitle": "ニッカン・コム杯争奪戦",
-  "votingDeadline": "13:42",
+  "votingDeadline": "13:37",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,29 +135,29 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 32.59,
           "racer": 9.81,
-          "motor": 7.47,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 6.14,
+          "exhibition": 8.87,
+          "weather": 2.32
         },
-        "strengthPt": 60.57
+        "strengthPt": 59.74
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 24.75,
           "racer": 9.81,
-          "motor": 5.14,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 6.14,
+          "exhibition": 8.42,
+          "weather": 2.68
         },
-        "strengthPt": 50.41
+        "strengthPt": 51.81
       },
       {
         "boatNumber": 3,
@@ -165,21 +165,21 @@
           "frame": 23.89,
           "racer": 9.81,
           "motor": 6.14,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 8.09,
+          "weather": 3.01
         },
-        "strengthPt": 50.55
+        "strengthPt": 50.95
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 22.61,
           "racer": 9.81,
-          "motor": 5.75,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 6.14,
+          "exhibition": 10,
+          "weather": 2.34
         },
-        "strengthPt": 48.88
+        "strengthPt": 50.91
       },
       {
         "boatNumber": 5,
@@ -187,10 +187,10 @@
           "frame": 19.96,
           "racer": 9.81,
           "motor": 6.14,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 5.96,
+          "weather": 3.51
         },
-        "strengthPt": 46.61
+        "strengthPt": 45.38
       },
       {
         "boatNumber": 6,
@@ -198,12 +198,12 @@
           "frame": 16.23,
           "racer": 9.81,
           "motor": 6.14,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.49,
+          "weather": 2.49
         },
-        "strengthPt": 42.89
+        "strengthPt": 41.17
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

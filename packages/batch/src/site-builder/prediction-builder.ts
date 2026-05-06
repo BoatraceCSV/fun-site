@@ -2,7 +2,6 @@ import type {
   AiEvaluation,
   AiEvaluationEntry,
   IndexRow,
-  ProgramRow,
   RaceCardRacer,
   RaceCardRow,
   RacePrediction,
@@ -10,6 +9,7 @@ import type {
   StartPrediction,
   StartPredictionEntry,
   SttRow,
+  TitleRow,
 } from "@fun-site/shared";
 import { getStadiumById, parseRaceCode } from "@fun-site/shared";
 
@@ -99,19 +99,19 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     motorTop2Rate: r.motorTop2Rate,
   }));
 
-/** race_cards / stt / index / programs を 1 レース分の RacePrediction に統合 */
+/** race_cards / stt / index / programs/title を 1 レース分の RacePrediction に統合 */
 export const buildRacePrediction = (
   cards: RaceCardRow,
   stt: SttRow | undefined,
   idx: IndexRow | undefined,
-  program: ProgramRow | undefined,
+  title: TitleRow | undefined,
   generatedAt: string,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
-  // programs CSV の "ボートレース桐生" 形式は prefix を取り除き正規名に揃える
+  // title CSV の "ボートレース桐生" 形式は prefix を取り除き正規名に揃える
   const stadiumName =
-    stadium?.name ?? program?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
+    stadium?.name ?? title?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
 
   return {
     raceCode: cards.raceCode,
@@ -119,9 +119,9 @@ export const buildRacePrediction = (
     stadiumId: parsed.stadiumId,
     stadiumName,
     raceNumber: parsed.raceNumber,
-    raceName: program?.raceName ?? "",
-    raceTitle: program?.title ?? "",
-    votingDeadline: program?.votingDeadline ?? stt?.votingDeadline ?? "",
+    raceName: title?.raceName ?? "",
+    raceTitle: title?.title ?? "",
+    votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers: toRaceRacers(cards),
     startPrediction: buildStartPrediction(cards, stt),
     aiEvaluation: idx ? buildAiEvaluation(idx) : buildEmptyAiEvaluation(),
@@ -134,19 +134,19 @@ export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
   indexes: readonly IndexRow[],
-  programs: readonly ProgramRow[],
+  titles: readonly TitleRow[],
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const indexByCode = new Map(indexes.map((i) => [i.raceCode, i]));
-  const programByCode = new Map(programs.map((p) => [p.raceCode, p]));
+  const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
 
   return raceCards.map((cards) =>
     buildRacePrediction(
       cards,
       sttByCode.get(cards.raceCode),
       indexByCode.get(cards.raceCode),
-      programByCode.get(cards.raceCode),
+      titleByCode.get(cards.raceCode),
       generatedAt,
     ),
   );

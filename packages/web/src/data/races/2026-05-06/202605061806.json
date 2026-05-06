@@ -6,7 +6,7 @@
   "raceNumber": 6,
   "raceName": "予選",
   "raceTitle": "ニッカン・コム杯争奪戦",
-  "votingDeadline": "10:57",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

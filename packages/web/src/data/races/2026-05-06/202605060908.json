@@ -6,7 +6,7 @@
   "raceNumber": 8,
   "raceName": "一般",
   "raceTitle": "スポーツニッポンパール賞競走",
-  "votingDeadline": "13:53",
+  "votingDeadline": "13:48",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -118,14 +118,14 @@
         "startTiming": 0.17
       },
       {
-        "boatNumber": 4,
+        "boatNumber": 5,
         "courseNumber": 4,
-        "startTiming": 0.22
+        "startTiming": 0.14
       },
       {
-        "boatNumber": 5,
+        "boatNumber": 4,
         "courseNumber": 5,
-        "startTiming": 0.14
+        "startTiming": 0.22
       },
       {
         "boatNumber": 6,
@@ -135,7 +135,7 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
@@ -143,21 +143,21 @@
           "frame": 30.73,
           "racer": 10.11,
           "motor": 7.75,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.86,
+          "weather": 1.55
         },
-        "strengthPt": 58.47
+        "strengthPt": 58
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 24.19,
           "racer": 10.11,
-          "motor": 10.5,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 7.75,
+          "exhibition": 8.07,
+          "weather": 3.07
         },
-        "strengthPt": 54.69
+        "strengthPt": 53.19
       },
       {
         "boatNumber": 3,
@@ -165,45 +165,45 @@
           "frame": 22.57,
           "racer": 10.11,
           "motor": 7.75,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.45,
+          "weather": 2.32
         },
-        "strengthPt": 50.31
+        "strengthPt": 49.2
       },
       {
         "boatNumber": 4,
         "contribution": {
-          "frame": 21.49,
+          "frame": 19.53,
           "racer": 10.11,
-          "motor": 6.7,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 7.75,
+          "exhibition": 6.65,
+          "weather": 3.03
         },
-        "strengthPt": 48.19
+        "strengthPt": 47.07
       },
       {
         "boatNumber": 5,
         "contribution": {
-          "frame": 19.53,
+          "frame": 21.49,
           "racer": 10.11,
-          "motor": 7.98,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 7.75,
+          "exhibition": 7.64,
+          "weather": 2.71
         },
-        "strengthPt": 47.5
+        "strengthPt": 49.71
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 14.89,
           "racer": 10.11,
-          "motor": 9.06,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 7.75,
+          "exhibition": 8,
+          "weather": 1.89
         },
-        "strengthPt": 43.95
+        "strengthPt": 42.65
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

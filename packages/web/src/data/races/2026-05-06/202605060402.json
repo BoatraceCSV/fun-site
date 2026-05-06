@@ -4,9 +4,9 @@
   "stadiumId": "04",
   "stadiumName": "平和島",
   "raceNumber": 2,
-  "raceName": "東京ベイラン",
-  "raceTitle": "１Ｒ  予選          Ｈ１８００ｍ  電話投票締切予定１１：５５",
-  "votingDeadline": "12:24",
+  "raceName": "東京ベイランチ",
+  "raceTitle": "第２回京急開発グループ杯",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

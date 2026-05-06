@@ -4,9 +4,9 @@
   "stadiumId": "23",
   "stadiumName": "唐津",
   "raceNumber": 10,
-  "raceName": "準優勝戦",
+  "raceName": "特別選抜戦",
   "raceTitle": "ＢＯＡＴＲＡＣＥ振興会会長賞ＧＷ唐津特選",
-  "votingDeadline": "13:00",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

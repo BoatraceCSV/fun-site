@@ -5,8 +5,8 @@
   "stadiumName": "常滑",
   "raceNumber": 2,
   "raceName": "予選",
-  "raceTitle": "１Ｒ  朝トコ小判Ｒ          Ｈ１８００ｍ  電話投票締切予定１０：２０",
-  "votingDeadline": "10:50",
+  "raceTitle": "中日スポーツ杯争奪第４６回チャンピオン大会",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

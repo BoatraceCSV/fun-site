@@ -4,8 +4,8 @@
   "stadiumId": "16",
   "stadiumName": "児島",
   "raceNumber": 12,
-  "raceName": "くらしき選抜",
-  "raceTitle": "１Ｒ  予選          Ｈ１８００ｍ  電話投票締切予定１０：５３",
+  "raceName": "準優勝戦",
+  "raceTitle": "第４２回鷲羽杯",
   "votingDeadline": "16:50",
   "racers": [
     {
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

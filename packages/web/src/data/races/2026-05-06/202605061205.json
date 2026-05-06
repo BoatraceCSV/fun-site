@@ -4,7 +4,7 @@
   "stadiumId": "12",
   "stadiumName": "住之江",
   "raceNumber": 5,
-  "raceName": "住之江ファイ",
+  "raceName": "住之江ファイブ",
   "raceTitle": "２０２６ラピートカップ",
   "votingDeadline": "17:00",
   "racers": [
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

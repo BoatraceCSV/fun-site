@@ -5,7 +5,7 @@
   "stadiumName": "びわこ",
   "raceNumber": 7,
   "raceName": "一般",
-  "raceTitle": "滋賀県知事杯争奪第２７回ビナちゃんカップ",
+  "raceTitle": "滋賀県知事杯争奪　第２７回ビナちゃんカップ",
   "votingDeadline": "13:39",
   "racers": [
     {
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,18 +135,18 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 24.25,
           "racer": 11.78,
-          "motor": 23.69,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 13.16,
+          "exhibition": 6.5,
+          "weather": 2.51
         },
-        "strengthPt": 66.88
+        "strengthPt": 58.19
       },
       {
         "boatNumber": 2,
@@ -154,56 +154,56 @@
           "frame": 19.5,
           "racer": 11.78,
           "motor": 13.16,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 5.72,
+          "weather": 1.3
         },
-        "strengthPt": 51.6
+        "strengthPt": 51.47
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 19.03,
           "racer": 11.78,
-          "motor": 29.61,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 13.16,
+          "exhibition": 5.08,
+          "weather": 2.31
         },
-        "strengthPt": 67.59
+        "strengthPt": 51.36
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 17.01,
           "racer": 11.78,
-          "motor": 22.19,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 13.16,
+          "exhibition": 4.89,
+          "weather": 1.47
         },
-        "strengthPt": 58.14
+        "strengthPt": 48.31
       },
       {
         "boatNumber": 5,
         "contribution": {
           "frame": 15.57,
           "racer": 11.78,
-          "motor": 26.9,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 13.16,
+          "exhibition": 5.4,
+          "weather": 1.73
         },
-        "strengthPt": 61.42
+        "strengthPt": 47.64
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 11.87,
           "racer": 11.78,
-          "motor": 23.03,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 13.16,
+          "exhibition": 4.37,
+          "weather": 1.7
         },
-        "strengthPt": 53.84
+        "strengthPt": 42.88
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

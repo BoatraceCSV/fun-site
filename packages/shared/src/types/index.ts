@@ -10,6 +10,7 @@ export type {
   ResultPayouts,
   ResultPosition,
   ResultRow,
+  TitleRow,
 } from "./csv.js";
 export type {
   AccuracyStats,

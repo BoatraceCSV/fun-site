@@ -4,9 +4,9 @@
   "stadiumId": "10",
   "stadiumName": "三国",
   "raceNumber": 12,
-  "raceName": "カニ坊選抜",
+  "raceName": "準優勝戦",
   "raceTitle": "ＧＷ三国ボートフェスタ",
-  "votingDeadline": "14:24",
+  "votingDeadline": "14:18",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

@@ -34,6 +34,28 @@ export type ProgramRow = {
   readonly boats: readonly ProgramBoat[];
 };
 
+/**
+ * 出走表メタ情報 (programs/title CSV) - レース行
+ *
+ * `data/programs/title/YYYY/MM/DD.csv` 由来。
+ * 出走表 (ProgramRow) のうち選手データを持たない軽量版で、
+ * レース名・タイトル・締切時刻などのメタ情報専用。
+ */
+export type TitleRow = {
+  readonly raceCode: string;
+  readonly raceDate: string;
+  readonly stadiumId: string;
+  readonly stadium: string;
+  readonly raceNumber: number;
+  readonly title: string;
+  readonly dayNumber: number;
+  readonly grade: string;
+  readonly isNighter: boolean;
+  readonly raceName: string;
+  readonly votingDeadline: string;
+  readonly cancellationStatus: string;
+};
+
 /** ML展示会予測 - 艇別データ */
 export type PredictionPreviewBoat = {
   readonly boatNumber: number;

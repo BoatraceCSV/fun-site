@@ -4,9 +4,9 @@
   "stadiumId": "11",
   "stadiumName": "びわこ",
   "raceNumber": 11,
-  "raceName": "準優勝戦",
-  "raceTitle": "滋賀県知事杯争奪第２７回ビナちゃんカップ",
-  "votingDeadline": "15:51",
+  "raceName": "特別選抜戦",
+  "raceTitle": "滋賀県知事杯争奪　第２７回ビナちゃんカップ",
+  "votingDeadline": "15:53",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

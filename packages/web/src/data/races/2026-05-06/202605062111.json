@@ -4,9 +4,9 @@
   "stadiumId": "21",
   "stadiumName": "芦屋",
   "raceNumber": 11,
-  "raceName": "",
-  "raceTitle": "",
-  "votingDeadline": "",
+  "raceName": "予選特選",
+  "raceTitle": "日本トーター杯",
+  "votingDeadline": "13:53",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

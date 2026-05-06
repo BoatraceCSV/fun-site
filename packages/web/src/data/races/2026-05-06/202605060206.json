@@ -5,8 +5,8 @@
   "stadiumName": "戸田",
   "raceNumber": 6,
   "raceName": "一般戦",
-  "raceTitle": "１Ｒ  一般戦          Ｈ１８００ｍ  電話投票締切予定１０：４７",
-  "votingDeadline": "13:14",
+  "raceTitle": "第３７回ウインビーカップ",
+  "votingDeadline": "確定",
   "racers": [
     {
       "boatNumber": 1,
@@ -205,5 +205,5 @@
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

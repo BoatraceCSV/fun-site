@@ -5,8 +5,8 @@
   "stadiumName": "尼崎",
   "raceNumber": 7,
   "raceName": "予選",
-  "raceTitle": "１Ｒ  朝からセンプ          Ｈ１８００ｍ  電話投票締切予定１０：３４",
-  "votingDeadline": "13:21",
+  "raceTitle": "第５８回報知金杯争奪　六甲賞競走",
+  "votingDeadline": "13:27",
   "racers": [
     {
       "boatNumber": 1,
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,75 +135,75 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 30.41,
           "racer": 8.85,
-          "motor": 9.24,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 9.82,
+          "weather": 1.28
         },
-        "strengthPt": 59.09
+        "strengthPt": 58.91
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 22.93,
           "racer": 8.85,
-          "motor": 5.31,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 10.26,
+          "weather": 0.97
         },
-        "strengthPt": 47.69
+        "strengthPt": 51.55
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 22.14,
           "racer": 8.85,
-          "motor": 7.57,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 8.65,
+          "weather": 0.76
         },
-        "strengthPt": 49.16
+        "strengthPt": 48.94
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 21.2,
           "racer": 8.85,
-          "motor": 10.1,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 11.16,
+          "weather": 0.96
         },
-        "strengthPt": 50.74
+        "strengthPt": 50.71
       },
       {
         "boatNumber": 5,
         "contribution": {
           "frame": 18.97,
           "racer": 8.85,
-          "motor": 10.42,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 9.88,
+          "weather": 1.18
         },
-        "strengthPt": 48.84
+        "strengthPt": 47.43
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 16.11,
           "racer": 8.85,
-          "motor": 8.7,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.55,
+          "exhibition": 7.74,
+          "weather": 0.97
         },
-        "strengthPt": 44.26
+        "strengthPt": 42.21
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }

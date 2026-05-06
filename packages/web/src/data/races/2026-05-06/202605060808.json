@@ -5,7 +5,7 @@
   "stadiumName": "常滑",
   "raceNumber": 8,
   "raceName": "予選",
-  "raceTitle": "１Ｒ  朝トコ小判Ｒ          Ｈ１８００ｍ  電話投票締切予定１０：２０",
+  "raceTitle": "中日スポーツ杯争奪第４６回チャンピオン大会",
   "votingDeadline": "13:50",
   "racers": [
     {
@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -108,24 +108,24 @@
         "startTiming": 0.2
       },
       {
-        "boatNumber": 2,
+        "boatNumber": 5,
         "courseNumber": 2,
+        "startTiming": 0.15
+      },
+      {
+        "boatNumber": 2,
+        "courseNumber": 3,
         "startTiming": 0.17
       },
       {
         "boatNumber": 3,
-        "courseNumber": 3,
+        "courseNumber": 4,
         "startTiming": 0.2
       },
       {
         "boatNumber": 4,
-        "courseNumber": 4,
-        "startTiming": 0.19
-      },
-      {
-        "boatNumber": 5,
         "courseNumber": 5,
-        "startTiming": 0.15
+        "startTiming": 0.19
       },
       {
         "boatNumber": 6,
@@ -135,75 +135,75 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 28.64,
           "racer": 10.66,
-          "motor": 10.11,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.8,
+          "exhibition": 9.21,
+          "weather": 1.22
         },
-        "strengthPt": 59.75
+        "strengthPt": 58.52
       },
       {
         "boatNumber": 2,
         "contribution": {
-          "frame": 21.16,
+          "frame": 19.95,
           "racer": 10.66,
           "motor": 8.8,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.44,
+          "weather": 1.61
         },
-        "strengthPt": 50.95
+        "strengthPt": 48.44
       },
       {
         "boatNumber": 3,
         "contribution": {
-          "frame": 19.95,
+          "frame": 19.51,
           "racer": 10.66,
-          "motor": 9.92,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.8,
+          "exhibition": 8.48,
+          "weather": 2.56
         },
-        "strengthPt": 50.86
+        "strengthPt": 50.01
       },
       {
         "boatNumber": 4,
         "contribution": {
-          "frame": 19.51,
+          "frame": 17.83,
           "racer": 10.66,
-          "motor": 10.21,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.8,
+          "exhibition": 7.57,
+          "weather": 2.06
         },
-        "strengthPt": 50.71
+        "strengthPt": 46.92
       },
       {
         "boatNumber": 5,
         "contribution": {
-          "frame": 17.83,
+          "frame": 21.16,
           "racer": 10.66,
-          "motor": 6.02,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.8,
+          "exhibition": 7.83,
+          "weather": 2.33
         },
-        "strengthPt": 44.84
+        "strengthPt": 50.78
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 14.2,
           "racer": 10.66,
-          "motor": 10.27,
-          "exhibition": 0,
-          "weather": 0
+          "motor": 8.8,
+          "exhibition": 10,
+          "weather": 1.71
         },
-        "strengthPt": 45.46
+        "strengthPt": 45.37
       }
     ]
   },
-  "generatedAt": "2026-05-06T04:18:37.549Z"
+  "generatedAt": "2026-05-06T04:52:34.635Z"
 }
