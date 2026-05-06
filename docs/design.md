@@ -33,7 +33,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Cloud Scheduler                                │
-│                  (毎日 AM 2:00 JST)                               │
+│                  (毎日 AM 9:00 JST)                               │
 └──────────────────────┬────────────────────────────────────────────┘
                        │ トリガー
                        ▼
@@ -70,14 +70,14 @@
 1. **データ取得レイヤー** (`packages/batch/src/fetcher/`)
    - BoatraceCSV (GitHub Pages) からCSVデータを取得
    - CSVパース + Zodバリデーション
-   - 取得対象: Programs, Prediction Previews, Estimates, Results, Confirmations
+   - 取得対象: `programs/title`, `programs/race_cards`, `previews/stt`, `index`, `results`（前日分）
    - リトライ・エラーハンドリング
 
-2. **予想分析レイヤー** (`packages/batch/src/predictor/`)
-   - Gemini 3 Pro による展開予想テキスト生成
-   - 入力: Programs + Prediction Previews + Estimates
-   - ML予測結果（Estimates）を踏まえた展開シナリオ分析
-   - 構造化された展開予想JSON出力
+   > **注**: 旧 proposal で挙げていた `prediction-preview` / `estimate` / `confirm` CSV は BoatraceCSV 上流での生成停止に伴い廃止済み。
+
+2. **予想分析レイヤー** (`packages/batch/src/predictor/`) ※未実装
+   - Gemini 3 Pro による展開予想テキスト生成（旧 proposal）
+   - Estimates CSV 廃止により ML 予測の入力が無くなったため、現実装ではこのレイヤーは作らず、`index` の強さpt をそのまま AI 総合評価として表示する
 
 3. **画像生成レイヤー** (`packages/batch/src/image-generator/`)
    - Gemini 3 Pro Image による展開予想画像生成
@@ -137,9 +137,9 @@ fun-site/
 │   │   │   ├── components/       # UI コンポーネント
 │   │   │   │   ├── RaceCard.astro          # レース予想カード
 │   │   │   │   ├── StadiumList.astro       # 会場一覧
-│   │   │   │   ├── PredictionImage.astro   # 予想画像表示
-│   │   │   │   ├── RaceTable.astro         # 出走表テーブル
-│   │   │   │   ├── EstimatesBadge.astro    # ML予測バッジ
+│   │   │   │   ├── PredictionImage.astro   # 予想画像表示（OGP 用、現状は SVG）
+│   │   │   │   ├── RacerTable.astro        # 出走表テーブル
+│   │   │   │   ├── StartPredictionDiagram.astro # スタート予想 SVG（俰瞰図）
 │   │   │   │   ├── ConfidenceStars.astro   # 信頼度表示
 │   │   │   │   ├── ShareButton.astro       # SNS共有
 │   │   │   │   ├── Header.astro
@@ -201,26 +201,26 @@ fun-site/
 ### パイプライン全体
 
 ```
-AM 2:00 (JST) - Cloud Scheduler トリガー
+AM 9:00 (JST) - Cloud Scheduler トリガー  (BoatraceCSV daily-sync 完了後)
     │
     ▼
 Step 1: データ取得 (fetchCsvData)
-    ├── GET boatracecsv.github.io/data/programs/YYYY/MM/DD.csv
+    ├── GET boatracecsv.github.io/data/programs/title/YYYY/MM/DD.csv
+    │   → 当日レースメタ情報 (レース名・タイトル・締切時刻)
+    ├── GET boatracecsv.github.io/data/programs/race_cards/YYYY/MM/DD.csv
     │   → 当日出走表 (選手・モーター・成績)
-    ├── GET boatracecsv.github.io/data/prediction-preview/YYYY/MM/DD.csv
-    │   → ML予測展示会データ (予測コース・ST・展示タイム)
-    ├── GET boatracecsv.github.io/data/estimate/YYYY/MM/DD.csv
-    │   → ML予測 (予想着順・決まり手・コース・ST)
+    ├── GET boatracecsv.github.io/data/previews/stt/YYYY/MM/DD.csv
+    │   → 直前情報 (進入コース・スタート展示)
+    ├── GET boatracecsv.github.io/data/index/YYYY/MM/DD.csv
+    │   → 強さpt 寄与 (枠番/選手/モーター/展示/気象)
     ├── GET boatracecsv.github.io/data/results/YYYY/MM/(DD-1).csv
     │   → 前日レース結果
-    ├── GET boatracecsv.github.io/data/confirm/YYYY/MM/(DD-1).csv
-    │   → 前日予想の的中確認
     ├── CSVパース (csv-parse)
     └── Zodバリデーション
     │
     ▼
 Step 2: 予想分析 Agent (Gemini 3 Pro)
-    ├── Programs + Prediction Previews + Estimates を統合
+    ├── programs/title + programs/race_cards + previews/stt + index を統合（Estimates / Prediction Previews は廃止済み）
     ├── レース毎にGemini 3 Proへ分析リクエスト
     │   - ML予測結果を踏まえた展開シナリオ
     │   - スタート隊形・1マーク攻防・決まり手の予想
@@ -248,7 +248,7 @@ Step 4: 品質チェック Agent (Gemini 3 Pro マルチモーダル)
 Step 5: 静的サイト生成 (buildSite)
     ├── 予想データを web/src/content/races/ に JSON 書き出し
     ├── 画像を web/public/images/races/ に配置
-    ├── 前日 Confirmations を stats データとして書き出し
+    ├── 前日 results から的中・配当の集計を stats として書き出し（旧 Confirmations CSV は廃止のため自前計算が必要）
     ├── `astro build` 実行
     └── 生成物を Cloud Storage へ gsutil rsync でデプロイ
 ```
@@ -272,7 +272,7 @@ const results = await pMap(
 | 失敗箇所 | リトライ | フォールバック |
 |---|---|---|
 | CSV取得失敗 | 3回 (指数バックオフ) | その会場をスキップ、他会場は継続 |
-| Gemini 3 Pro 分析失敗 | 2回 | Estimates の ML予測結果のみで簡易表示 |
+| Gemini 3 Pro 分析失敗（再導入時） | 2回 | `index` の強さpt のみで簡易表示 |
 | 画像生成失敗 | 2回 | SVGフォールバック画像を使用 |
 | 品質チェック不合格 | 画像再生成2回 | SVGフォールバックを採用 |
 | Astroビルド失敗 | 1回 | 前回成功時のビルド成果物を維持 |
@@ -318,38 +318,51 @@ type ProgramBoat = {
   currentResults: string[];    // 今節成績 (6レース分)
 };
 
-// === ML展示会予測 Prediction Previews CSV ===
-type PredictionPreviewRow = {
+// === 直前情報 previews/stt CSV (現行) ===
+type SttRow = {
   raceCode: string;
   raceDate: string;
-  stadium: string;
+  stadiumId: string;
   raceNumber: number;
-  boats: PredictionPreviewBoat[];
+  votingDeadline: string;      // 締切時刻
+  fetchedAt: string;           // 取得日時
+  boats: SttBoat[];
 };
 
-type PredictionPreviewBoat = {
+type SttBoat = {
   boatNumber: number;          // 艇番 (1-6)
-  predictedCourse: number;     // 予想コース
-  predictedStartTiming: number; // 予想スタート展示
-  predictedTilt: number;       // 予想チルト調整
-  predictedExhibitionTime: number; // 予想展示タイム
+  courseNumber: number;        // 進入コース
+  exhibitionStartTiming: number; // スタート展示
 };
 
-// === ML着順予想 Estimates CSV ===
-type EstimateRow = {
+// === 強さpt index CSV (現行) ===
+type IndexRow = {
   raceCode: string;
-  predicted1st: number;        // 予想1着（艇番）
-  predicted2nd: number;        // 予想2着
-  predicted3rd: number;        // 予想3着
-  predictedTechnique: string;  // 予想決まり手
-  boats: EstimateBoat[];
+  raceDate: string;
+  stadiumId: string;
+  raceNumber: number;
+  state: "daily" | "realtime"; // 朝バッチ時点 / 直前情報反映後
+  entries: IndexEntry[];
 };
 
-type EstimateBoat = {
+type IndexEntry = {
   boatNumber: number;          // 艇番 (1-6)
-  predictedCourse: number;     // 予想コース
-  predictedST: number;         // 予想ST
+  framePt: number;             // 枠番pt
+  framePtContribution: number; // 寄与_枠番pt
+  racerPt: number;             // 選手pt
+  racerPtContribution: number;
+  motorPt: number;             // モーターpt
+  motorPtContribution: number;
+  exhibitionPt: number;        // 展示pt
+  exhibitionPtContribution: number;
+  weatherPt: number;           // 気象pt
+  weatherPtContribution: number;
+  strengthPt: number;          // 強さpt（5要素の合計）
 };
+
+// === 旧 ML展示会予測 / ML着順予想 CSV は廃止済み ===
+// PredictionPreviewRow / EstimateRow / ConfirmationRow は
+// BoatraceCSV 上流での生成停止により利用不可。
 
 // === レース結果 Results CSV ===
 type ResultRow = {
@@ -398,99 +411,61 @@ type ResultPosition = {
   raceTime: number;            // レースタイム
 };
 
-// === 的中確認 Confirmations CSV ===
-type ConfirmationRow = {
-  raceCode: string;
-  predicted1st: number;
-  actual1st: number;
-  predicted2nd: number;
-  actual2nd: number;
-  predicted3rd: number;
-  actual3rd: number;
-  hit1st: boolean;             // 1着的中
-  hit2nd: boolean;             // 2着的中
-  hit3rd: boolean;             // 3着的中
-  hitAll: boolean;             // 全的中
-  predictedTechnique: string;  // 予想決まり手
-  actualTechnique: string;     // 実際の決まり手
-  hitTechnique: boolean;       // 決まり手的中
-  courseMatchCount: number;     // コース一致数 (0-6)
-  courseExactMatch: boolean;    // 進入完全一致
-  stMAE: number;               // ST平均絶対誤差
-};
+// === 旧 的中確認 Confirmations CSV は廃止済み ===
+// ML予測 vs 実績の対比データは BoatraceCSV から取得不可。
+// 的中実績ページを実装する場合は、自前で過去予想 vs `results` を突合する必要がある。
 ```
 
-### 5.2 アプリケーション独自型（Gemini 3 Pro 分析結果）
+### 5.2 アプリケーション独自型（現行: BoatraceCSV CSV を結合した RacePrediction）
 
 ```typescript
-// === AI展開予想（Gemini 3 Pro の分析結果） ===
+// === レース 1 件分の統合データ（現行実装） ===
+// 全 CSV は raceCode をキーに結合する。
 type RacePrediction = {
-  raceCode: string;              // レースコード（全データの結合キー）
+  raceCode: string;
   raceDate: string;
-  stadium: string;
+  stadiumId: string;
+  stadiumName: string;
   raceNumber: number;
-  // ML予測（Estimates由来）
-  mlPrediction: {
-    first: number;               // ML予想1着
-    second: number;              // ML予想2着
-    third: number;               // ML予想3着
-    technique: string;           // ML予想決まり手
-  };
-  // AI展開予想（Gemini 3 Pro生成）
-  aiPrediction: {
-    startFormation: StartFormation;
-    firstTurnScenario: string;   // 1マーク展開シナリオ
-    predictedTechnique: WinningTechnique;
-    predictedOrder: number[];    // 予想着順 [1着艇番, 2着艇番, ...]
-    confidence: number;          // 信頼度 (0-1)
-    narrative: string;           // 展開解説テキスト
-    suggestedBets: string[];     // 推奨買い目
-  };
-  // 画像情報
-  imageUrl: string;              // 生成画像URL
-  ogImageUrl: string;            // OGP画像URL
-  imageType: "generated" | "svg-fallback";
-  createdAt: string;
+  raceName: string;             // programs/title 由来
+  raceTitle: string;            // programs/title 由来
+  votingDeadline: string;       // programs/title or previews/stt 由来
+  racers: RaceRacer[];          // programs/race_cards 由来
+  startPrediction: StartPrediction; // previews/stt + race_cards
+  aiEvaluation: AiEvaluation;   // index 由来（強さpt 寄与）
+  generatedAt: string;
 };
 
-type StartFormation = {
-  entries: Array<{
-    boatNumber: number;          // 艇番
-    courseNumber: number;         // 進入コース
-    predictedST: number;         // 予想ST
-  }>;
-  pattern: "flat" | "inner-late" | "outer-late";
-  // 横一線 / 内凹み / 外凹み
+type StartPrediction = {
+  fromExhibition: boolean;     // true: previews/stt 由来 / false: 枠番フォールバック
+  entries: StartPredictionEntry[];
 };
 
-type WinningTechnique =
-  | "nige"          // 逃げ
-  | "sashi"         // 差し
-  | "makuri"        // まくり
-  | "makuri-sashi"  // まくり差し
-  | "nuki"          // 抜き
-  | "megumare";     // 恵まれ
+type StartPredictionEntry = {
+  boatNumber: number;
+  courseNumber: number;        // 進入コース（stt が無いと枠番）
+  startTiming: number;         // 全国平均ST（race_cards 由来）
+};
 
-// === 的中実績統計 ===
-type AccuracyStats = {
-  period: string;              // 集計期間
-  totalRaces: number;          // 対象レース数
-  // ML予測の的中率（Confirmations由来）
-  ml: {
-    hit1st: number;            // 1着的中率
-    hitAll: number;            // 3連単的中率
-    hitTechnique: number;      // 決まり手的中率
-    avgCourseMatch: number;    // 平均コース一致数
-    avgSTMAE: number;          // 平均ST誤差
+type AiEvaluation = {
+  state: "daily" | "realtime"; // index CSV の状態
+  entries: AiEvaluationEntry[];
+};
+
+type AiEvaluationEntry = {
+  boatNumber: number;
+  contribution: {
+    frame: number;             // 枠番pt 寄与
+    racer: number;             // 選手pt 寄与
+    motor: number;             // モーターpt 寄与
+    exhibition: number;        // 展示pt 寄与（state=daily の時は 0）
+    weather: number;           // 気象pt 寄与（state=daily の時は 0）
   };
-  // AI予想の的中率（独自集計）
-  ai: {
-    hit1st: number;
-    hitTrifecta: number;
-    hitTechnique: number;
-  };
+  strengthPt: number;          // 5要素の合計
 };
 ```
+
+> **注**: 旧 proposal の「Gemini 3 Pro 分析結果」「ML予測 (Estimates由来)」「画像URL」「的中実績統計 (AccuracyStats)」は、Vertex AI 不採用と Confirmations CSV 廃止に伴い現実装には存在しない。
 
 ---
 
@@ -504,11 +479,13 @@ https://boatracecsv.github.io/data/{type}/YYYY/MM/DD.csv
 
 | type | 例 | 取得タイミング |
 |---|---|---|
-| programs | `data/programs/2026/02/12.csv` | AM2:00（当日分） |
-| prediction-preview | `data/prediction-preview/2026/02/12.csv` | AM2:00（当日分） |
-| estimate | `data/estimate/2026/02/12.csv` | AM2:00（当日分） |
-| results | `data/results/2026/02/11.csv` | AM2:00（前日分） |
-| confirm | `data/confirm/2026/02/11.csv` | AM2:00（前日分） |
+| programs/title | `data/programs/title/2026/02/12.csv` | AM 9:00 JST（当日分） |
+| programs/race_cards | `data/programs/race_cards/2026/02/12.csv` | AM 9:00 JST（当日分） |
+| previews/stt | `data/previews/stt/2026/02/12.csv` | 締切 5 分前以降に順次公開 |
+| index | `data/index/2026/02/12.csv` | AM 9:00 JST（当日分・state=daily） |
+| results | `data/results/2026/02/11.csv` | AM 9:00 JST（前日分） |
+
+> **注**: 旧 `prediction-preview` / `estimate` / `confirm` および旧 `programs/YYYY/MM/DD.csv`（サブディレクトリなし）は BoatraceCSV 上流での生成停止に伴い廃止済み。
 
 ### 6.2 CSVパース方針
 
@@ -533,15 +510,16 @@ const validated = rawRows.map((row) => programRowSchema.parse(row));
 全CSVは `レースコード` をキーとして結合する。
 
 ```typescript
-// レースコードをキーにPrograms + PredictionPreviews + Estimatesを結合
-const mergedData = programs.map((program) => ({
-  program,
-  predictionPreview: predictionPreviews.find(
-    (pp) => pp.raceCode === program.raceCode
-  ),
-  estimate: estimates.find(
-    (e) => e.raceCode === program.raceCode
-  ),
+// レースコードをキーに race_cards を起点として title / stt / index を結合
+const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
+const indexByCode = new Map(indexes.map((i) => [i.raceCode, i]));
+const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
+
+const mergedData = raceCards.map((cards) => ({
+  cards,
+  title: titleByCode.get(cards.raceCode),
+  stt: sttByCode.get(cards.raceCode),     // 未公開なら undefined → 枠番フォールバック
+  index: indexByCode.get(cards.raceCode), // 未公開なら undefined → 中立評価
 }));
 ```
 
@@ -555,9 +533,9 @@ const mergedData = programs.map((program) => ({
 |---|---|---|---|
 | トップ | `ボートレース展開予想 - {日付}` | 当日の全会場予想一覧 | サイト共通OGP |
 | 会場別 | `{会場名} {日付} - 展開予想` | 会場の全12R予想 | 会場アイキャッチ |
-| レース別 | `{会場名} {R}R {レース名} - 展開予想` | 個別レース予想詳細 | **AI生成画像** |
-| アーカイブ | `{日付}の予想結果 - 的中実績` | 過去予想の振り返り | 的中率サマリ画像 |
-| 的中実績 | `的中実績 - ボートレース展開予想` | ML・AI予想の的中率統計 | 統計グラフ画像 |
+| レース別 | `{会場名} {R}R {レース名} - 展開予想` | 個別レース予想詳細 | スタート予想 SVG（将来は PNG 化） |
+| アーカイブ | `{日付}のレース一覧` | 過去日付のレース一覧 | サイト共通OGP |
+| 的中実績 | `的中実績 - ボートレース展開予想` | （未実装。Confirmations CSV 廃止により再設計が必要） | 統計グラフ画像 |
 
 ### URL設計
 
@@ -598,30 +576,28 @@ gs://fun-site-data/
 
 ### 蓄積フロー
 
-1. 毎日 AM 2:00: CSVデータをキャッシュ、AI予想データ + 画像を保存
-2. 毎日 AM 2:00: 前日 Confirmations からML的中実績を集計
-3. 毎日 AM 2:00: 前日 Results と AI予想を対比し、AI的中実績を集計
-4. `stats/accuracy.json` を累計更新
-5. アーカイブページを生成（直近N日分）
+1. 毎日 AM 9:00 JST: CSVデータをキャッシュ、`RacePrediction` JSON を保存
+2. （将来）前日 `results` と過去 `RacePrediction` を突合し、的中実績を自前集計
+3. `stats/accuracy.json` を累計更新
+4. アーカイブページを生成（直近N日分）
+
+> **注**: 旧 proposal にあった「Confirmations CSV からの ML的中実績集計」は CSV 廃止により不可。AI 予想画像も Vertex AI 不採用により現状なし。
 
 ---
 
 ## 9. ハッカソン向け考慮事項
 
-### MVP スコープ（ハッカソン提出版）
+### MVP スコープ（現実装）
 
-1. BoatraceCSV から1会場12レース分のデータ取得 + Zodバリデーション
-2. Gemini 3 Pro による展開予想テキスト生成
-3. Gemini 3 Pro Image による展開予想画像生成
-4. 品質チェックAgent（マルチモーダル検証 + リトライ）
-5. Astro での静的ページ生成
-6. Cloud Storage での配信
-7. Cloud Scheduler + Cloud Run Jobs でAM2:00バッチ
+1. BoatraceCSV から全 24 会場の `programs/title` / `programs/race_cards` / `previews/stt` / `index` / `results`（前日分）を取得 + Zod バリデーション
+2. レースコード結合による `RacePrediction` JSON 生成
+3. スタート予想 SVG（俰瞰図）と AI 総合評価（強さpt 寄与）SVG を Astro コンポーネントで描画
+4. Cloud Storage での配信
+5. Cloud Scheduler + Cloud Run Jobs で AM 9:00 JST バッチ
 
 ### 拡張スコープ（将来）
 
-- 全24会場対応
-- 的中率ダッシュボード（ML予測 vs AI予想の比較）
-- 直前情報反映バッチ（Previews CSV 公開後に差分更新）
-- PWA対応（オフライン閲覧）
-- 過去データ分析ページ
+- `previews/stt` / `index` (`state=realtime`) の後追い差分更新バッチ
+- 的中率ダッシュボード（過去 `RacePrediction` × `results` の自前突合）
+- OGP 画像（SVG → PNG 化）
+- （検討）Vertex AI Gemini による日本語の展開解説テキスト追加

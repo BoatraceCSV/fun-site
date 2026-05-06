@@ -4,7 +4,7 @@
 
 ### アーキテクチャ概要
 
-静的サイト生成（SSG）+ サーバーレスバッチ処理の構成を採用する。毎朝AM2:00にバッチジョブが起動し、BoatraceCSV（GitHub Pages）からレースデータを取得、Vertex AI Gemini 3 Pro / Gemini 3 Pro Image で展開予想画像を生成、静的HTMLを組み立ててCloud Storageにデプロイする。ユーザーはCloud CDN経由で高速に配信された静的ページを閲覧する。
+静的サイト生成（SSG）+ サーバーレスバッチ処理の構成を採用する。毎朝AM 9:00 JSTにバッチジョブが起動し、BoatraceCSV（GitHub Pages）からレースデータを取得、Vertex AI Gemini 3 Pro / Gemini 3 Pro Image で展開予想画像を生成、静的HTMLを組み立ててCloud Storageにデプロイする。ユーザーはCloud CDN経由で高速に配信された静的ページを閲覧する。
 
 ### 構成図（テキストベース）
 
@@ -15,7 +15,7 @@
 │  ┌──────────────┐    ┌──────────────────┐    ┌───────────────┐  │
 │  │   Cloud       │    │  Cloud Run Jobs  │    │  Vertex AI    │  │
 │  │   Scheduler   │───▶│  (バッチ処理)     │───▶│  Gemini 3 Pro │  │
-│  │   AM 2:00     │    │  TypeScript      │    │  (分析+画像)   │  │
+│  │   AM 9:00 JST │    │  TypeScript      │    │  (分析+画像)   │  │
 │  └──────────────┘    └───────┬──────────┘    └───────────────┘  │
 │                              │                                   │
 │                              │ 生成した静的ファイルをアップロード   │
@@ -135,11 +135,13 @@ URL パターン: `https://boatracecsv.github.io/data/{type}/YYYY/MM/DD.csv`
 
 | CSV種別 | パス | 内容 |
 |---|---|---|
-| Programs | `data/programs/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） |
-| Prediction Previews | `data/prediction-preview/YYYY/MM/DD.csv` | ML予測による展示会予測 |
-| Estimates | `data/estimate/YYYY/MM/DD.csv` | ML予測（着順・決まり手・コース・ST） |
-| Results | `data/results/YYYY/MM/DD.csv` | レース結果・配当金 |
-| Confirmations | `data/confirm/YYYY/MM/DD.csv` | 予想と結果の対比 |
+| Programs (Title) | `data/programs/title/YYYY/MM/DD.csv` | レース名・グレード・締切時刻などのメタ情報 |
+| Programs (Race Cards) | `data/programs/race_cards/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） |
+| Previews (STT) | `data/previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） |
+| Index | `data/index/YYYY/MM/DD.csv` | 強さpt（5要素の寄与pt: 枠番/選手/モーター/展示/気象） |
+| Results | `data/results/YYYY/MM/DD.csv` | レース結果・配当金（前日分） |
+
+> **注**: 旧 `prediction-preview` / `estimate` / `confirm` および旧 `programs/YYYY/MM/DD.csv` (サブディレクトリなし) は BoatraceCSV 上流での生成停止に伴い廃止。現在は上記 5 種類のみが利用可能。
 
 外部HTTP取得のためサービスアカウントへの追加権限は不要。
 
@@ -303,7 +305,7 @@ gcloud run jobs create fun-site-batch \
   --region=us-central1 \
   --service-account=cloud-run-batch@$PROJECT_ID.iam.gserviceaccount.com
 
-# 7. Cloud Scheduler設定（毎日AM2:00 JST）
+# 7. Cloud Scheduler設定（毎日AM 9:00 JST JST）
 gcloud scheduler jobs create http fun-site-daily \
   --schedule="0 2 * * *" \
   --time-zone="Asia/Tokyo" \

@@ -15,8 +15,8 @@
 .env.*
 !.env.example
 
-# Temporary files and documentation
-.tmp
+# Documentation
+docs
 *.md
 LICENSE
 

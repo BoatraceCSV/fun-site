@@ -2,9 +2,12 @@
 
 ## 1. レース展開予想に必要なデータ一覧と優先度
 
-### 優先度A（必須・AM2:00バッチで取得可能）
+### 優先度A（必須・AM 9:00 JST バッチで取得可能）
 
-データソース: BoatraceCSV Programs CSV (`data/programs/YYYY/MM/DD.csv`)
+データソース: BoatraceCSV Programs CSV (`data/programs/title/YYYY/MM/DD.csv` + `data/programs/race_cards/YYYY/MM/DD.csv`)
+
+- `programs/title`: レース名・グレード・締切時刻などのメタ情報
+- `programs/race_cards`: 選手・モーター・成績の出走表本体
 
 | データ項目 | 説明 | BoatraceCSV カラム |
 |---|---|---|
@@ -21,46 +24,36 @@
 | レース名 | レースのグレード・種別を判別 | `レース名` |
 | 距離 | 通常1800m | `距離` |
 
-### 優先度A+（ML予測・AM2:00バッチで取得可能）
+### 優先度A+（AI 総合評価・AM 9:00 JST バッチで取得可能）
 
-BoatraceCSV には scikit-learn ベースの ML 予測結果が含まれており、AM2:00 時点で直前情報の代替として活用可能。
+BoatraceCSV の `index` CSV には独自の AI 総合スコア（強さpt と各要素の寄与pt）が含まれており、AM 9:00 JST 時点で `state=daily` として取得できる。
 
-#### Prediction Previews CSV (`data/prediction-preview/YYYY/MM/DD.csv`)
+#### Index CSV (`data/index/YYYY/MM/DD.csv`)
 
-ML による展示会予測。Previews CSV（直前情報）が未公開の AM2:00 時点での代替データ。
-
-| データ項目 | 説明 | BoatraceCSV カラム |
-|---|---|---|
-| 予測コース | 各艇の予測進入コース（ハンガリアンアルゴリズム） | `艇N_コース` |
-| 予測ST | 予測スタートタイミング（回帰モデル） | `艇N_スタート展示` |
-| 予測チルト | 予測チルト調整値 | `艇N_チルト調整` |
-| 予測展示タイム | 予測展示タイム（回帰モデル） | `艇N_展示タイム` |
-
-#### Estimates CSV (`data/estimate/YYYY/MM/DD.csv`)
-
-ML による着順・決まり手予想。
+AI 総合評価スコア。5 要素（枠番 / 選手 / モーター / 展示 / 気象）の寄与pt を合計したものが「強さpt」。
 
 | データ項目 | 説明 | BoatraceCSV カラム |
 |---|---|---|
-| 予想着順 | ML予測の1〜3着 | `予想1着`, `予想2着`, `予想3着` |
-| 予想決まり手 | LightGBM による決まり手分類 | `予想決まり手` |
-| 予想コース | 各艇の予想進入コース | `艇N_予想コース` |
-| 予想ST | 各艇の予想スタートタイミング | `艇N_予想ST` |
+| 状態 | `daily`（朝バッチ）/ `realtime`（直前情報反映後） | `状態` |
+| 枠番pt 寄与 | 枠番要素の寄与スコア | `N枠_寄与_枠番pt` |
+| 選手pt 寄与 | 選手要素の寄与スコア | `N枠_寄与_選手pt` |
+| モーターpt 寄与 | モーター要素の寄与スコア | `N枠_寄与_モーターpt` |
+| 展示pt 寄与 | 展示要素の寄与スコア（state=daily では暫定値） | `N枠_寄与_展示pt` |
+| 気象pt 寄与 | 気象要素の寄与スコア（state=daily では暫定値） | `N枠_寄与_気象pt` |
+| 強さpt | 5 要素の合計（強い艇ほど高い） | `N枠_強さpt` |
 
-### 優先度B（直前情報・AM2:00時点では未取得）
+> **注**: 旧 BoatraceCSV には scikit-learn ベースの ML 予測 (`prediction-preview` / `estimate`) も含まれていたが、上流での生成停止に伴い廃止済み。本サイトでは `index` の強さpt を AI 総合評価として表示する。
 
-データソース: BoatraceCSV Previews CSV — レース当日の展示航走後に公開
+### 優先度B（直前情報・AM 9:00 JST時点では多くが未取得）
+
+データソース: BoatraceCSV `previews/stt` CSV — 締切 5 分前以降に順次公開
 
 | データ項目 | 説明 | 備考 |
 |---|---|---|
-| 展示タイム | 本番前の試走タイム | 当日のモーター調子の直接指標 |
-| スタート展示 | 試走でのスタートタイミング | 実際のスタート力の指標 |
-| チルト角度 | プロペラの角度調整 | 選手のセッティング意図を反映 |
-| 進入コース | 実際のコース取り（枠なり or 前付け） | 枠番と異なる場合がある |
-| 風向・風速 | レース時の風況 | 展開に大きく影響 |
-| 波高 | 水面状態 | 荒れると波乱要因 |
+| 進入コース | 実際のコース取り（枠なり or 前付け） | 枠番と異なる場合がある（`艇N_コース`） |
+| スタート展示 | 試走でのスタートタイミング | 実際のスタート力の指標（`艇N_スタート展示`） |
 
-**注**: AM2:00 バッチでは Previews CSV は未公開だが、Prediction Previews CSV（ML予測）で展示タイム・進入コース・STを予測値として補完可能。
+> **注**: 旧 proposal にあった「展示タイム / チルト / 風向風速 / 波高」を含む Previews CSV や、その代替としての Prediction Previews CSV は廃止。現状の `previews/stt` で取れるのは進入コースとスタート展示の 2 項目のみ。AM 9:00 JST バッチ時点で未取得のレースは枠番をフォールバックとして仮表示する。
 
 ### 優先度C（外部データ・独自集計が必要）
 
@@ -136,16 +129,14 @@ ML による着順・決まり手予想。
 │ 出走表（6艇の主要データ）              │
 │ 艇番 | 選手名 | 級別 | 勝率 | ST | モーター │
 ├─────────────────────────────────────┤
-│ ML予測 (Estimates CSV)               │
-│ 予想着順 | 予想決まり手 | 予想コース      │
-├─────────────────────────────────────┤
-│ AI展開解説テキスト (Gemini 3 Pro)      │
-│ - 注目ポイント                       │
-│ - 推奨買い目（3連単 5〜10点）          │
+│ AI 総合評価 (index 強さpt)            │
+│ 枠ごとに 5 要素の寄与pt を横棒で可視化  │
 ├─────────────────────────────────────┤
 │ SNS共有ボタン                        │
 └─────────────────────────────────────┘
 ```
+
+> **注**: 旧 proposal の「ML予測 (Estimates CSV)」「AI展開解説テキスト (Gemini 3 Pro)」セクションは、CSV 廃止と Gemini 不採用に伴い削除済み。現実装は AI 総合評価セクションで `index` の強さpt 寄与を可視化する。
 
 ---
 
@@ -187,46 +178,47 @@ ML による着順・決まり手予想。
 
 ---
 
-## 4. AM2:00バッチの制約と対策
+## 4. AM 9:00 JST バッチの制約と対策
 
 ### 制約の整理
 
-| 項目 | AM2:00時点の状況 | 影響 |
+| 項目 | AM 9:00 JST時点の状況 | 影響 |
 |---|---|---|
-| Programs CSV（出走表） | ✅ 取得可能（前日夕方〜夜に公開） | 選手・モーターデータは利用可能 |
-| Prediction Previews CSV（ML展示会予測） | ✅ 取得可能 | 展示タイム・進入コース・STの予測値が利用可能 |
-| Estimates CSV（ML着順予想） | ✅ 取得可能 | 着順予測・決まり手予測が利用可能 |
-| Previews CSV（直前情報） | ❌ 未公開（レース当日の展示航走後） | 実測の展示タイム、進入コース、風況は使えない |
+| programs/title CSV（レースメタ） | ✅ 取得可能 | レース名・締切時刻が利用可能 |
+| programs/race_cards CSV（出走表） | ✅ 取得可能 | 選手・モーターデータは利用可能 |
+| index CSV（強さpt） | ✅ 取得可能（state=daily） | AI 総合評価が利用可能。ただし展示・気象は暫定値 |
+| previews/stt CSV（直前情報） | ⚠️ 一部のみ取得可能 | 締切 5 分前以降に順次公開、朝バッチでは多くが未公開 |
+| 旧 Prediction Previews / Estimates / Confirmations CSV | ❌ 廃止済み | ML 予測（着順・決まり手・コース・ST）は利用不可 |
 | オッズ | ❌ 未公開（発売開始後） | 人気度判定はできない |
 
-### AM2:00 バッチで利用可能なデータ
+### AM 9:00 JST バッチで利用可能なデータ
 
 | データ | ソース | 信頼度 |
 |---|---|---|
-| 選手の級別・全国勝率・当地勝率 | Programs CSV | 高 |
-| モーター2連対率・ボート2連対率 | Programs CSV | 高 |
-| 今節成績 | Programs CSV | 高 |
-| ML予測の着順・決まり手 | Estimates CSV | 中〜高 |
-| ML予測の進入コース・ST | Estimates CSV / Prediction Previews CSV | 中 |
-| ML予測の展示タイム | Prediction Previews CSV | 中 |
+| 選手の級別・全国勝率・当地勝率 | programs/race_cards | 高 |
+| モーター2連対率・ボート2連対率 | programs/race_cards | 高 |
+| 全国平均ST | programs/race_cards | 高 |
+| AI 総合評価（強さpt と寄与pt） | index | 中〜高（state=daily 時は展示・気象が暫定） |
+| 進入コース・スタート展示 | previews/stt | 高（取得できたレースのみ） |
 
-### AM2:00 バッチで利用できないデータ
+### AM 9:00 JST バッチで利用できないデータ
 
-- 実測の展示タイム（当日のモーター調子の直接指標）
-- 実際のスタート展示の進入コース（前付け有無）
-- 当日の風向・風速・波高
+- 当日朝時点で未公開の `previews/stt`（締切 5 分前まで取得不可のレースが多い）
+- ML 予測の着順・決まり手・コース・ST（CSV 廃止）
+- 実測の展示タイム・チルト・風向・風速・波高（BoatraceCSV では取得不可）
 - オッズ
 
 ### 対策
 
-**BoatraceCSV の Prediction Previews + Estimates で直前情報を補完**
+**`previews/stt` 未取得レースは枠番をフォールバックとして仮表示する**
 
-AM2:00 時点で Previews CSV（実測直前情報）は未公開だが、BoatraceCSV には ML による予測版が含まれている:
+- 進入コース: `previews/stt` が取得できたレースは実測値、未取得レースは枠番をそのまま表示
+- スタート展示: `previews/stt` が取得できたレースは実測値、未取得レースは `programs/race_cards` の全国平均ST を表示
+- AI 総合評価: `index` の `state=daily` 時は展示・気象セグメントを非表示にして 3 要素のみ表示
 
-- **Prediction Previews CSV**: Programs データから進入コース・ST・展示タイムを回帰モデルで予測
-- **Estimates CSV**: LambdaRank + Random Forest で着順予測、LightGBM で決まり手分類
+将来的に `previews/stt` / `index` (`state=realtime`) が当日中に更新された時点で差分更新バッチを走らせて精度を向上させる。
 
-これにより、AM2:00 バッチのみで十分な予想根拠を確保できる。将来的に Previews CSV が公開された後の差分更新バッチで精度向上も可能。
+> **注**: 旧 proposal で前提としていた ML 予測 (Prediction Previews / Estimates) による補完は CSV 廃止により不可。代替として独自に推論パイプラインを構築するか、別データソースを開拓する必要がある。
 
 ---
 
@@ -235,47 +227,38 @@ AM2:00 時点で Previews CSV（実測直前情報）は未公開だが、Boatra
 ### 日次コンテンツサイクル
 
 ```
-[AM 2:00] メインバッチ
+[AM 9:00 JST] メインバッチ (BoatraceCSV daily-sync 完了直後)
   │
   ├── 1. BoatraceCSV からデータ取得
-  │     ├── Programs CSV → 当日出走表
-  │     ├── Prediction Previews CSV → ML予測による展示会予測
-  │     ├── Estimates CSV → ML予測（着順・決まり手・コース・ST）
-  │     ├── 前日 Results CSV → 前日レース結果
-  │     └── 前日 Confirmations CSV → 前日予想の答え合わせ
+  │     ├── programs/title CSV → レースメタ情報
+  │     ├── programs/race_cards CSV → 当日出走表
+  │     ├── previews/stt CSV → 直前情報（取得できたレースのみ）
+  │     ├── index CSV → AI 総合評価（強さpt 寄与）
+  │     └── 前日 results CSV → 前日レース結果
   │
-  ├── 2. 予想分析 Agent (Gemini 3 Pro)
-  │     ├── 入力: Programs + Prediction Previews + Estimates
-  │     ├── ML予測結果を踏まえた展開シナリオ分析
-  │     └── 出力: 構造化展開予想テキスト (JSON)
+  ├── 2. RacePrediction 統合
+  │     ├── レースコード結合で 4 種類の当日 CSV を統合
+  │     ├── stt があれば進入コースを反映、無ければ枠番フォールバック
+  │     └── レース 1 件ごとに RacePrediction JSON を書き出し
   │
-  ├── 3. 画像生成 Agent (Gemini 3 Pro)
-  │     ├── 展開予想テキスト → レース展開図画像 (PNG)
-  │     └── 同時にSVGフォールバック版を生成
+  ├── 3. 静的ページ生成 (Astro SSG)
+  │     ├── トップページ（当日の全場一覧）
+  │     ├── 場別ページ（会場の全レース）
+  │     ├── 個別レースページ（スタート予想 SVG + AI 総合評価）
+  │     └── アーカイブページ
   │
-  ├── 4. 品質チェック Agent (Gemini 3 Pro)
-  │     ├── 生成画像を検証（6艇・色・テキスト・レイアウト）
-  │     └── 不合格 → リトライ or SVGフォールバック
-  │
-  ├── 5. 静的ページ生成 (Astro SSG)
-  │     ├── トップページ（当日の開催一覧 + 注目レース）
-  │     ├── 場別ページ（対象レースの予想）
-  │     └── 個別レースページ（展開予想詳細）
-  │
-  └── 6. Cloud Storage へデプロイ
+  └── 4. Cloud Storage へデプロイ
 
 [将来拡張] 直前更新バッチ
   │
-  ├── 1. Previews CSV（実測直前情報）取得
-  ├── 2. 展開予想の更新（実測値で精度向上）
+  ├── 1. previews/stt + index (state=realtime) を再取得
+  ├── 2. RacePrediction を更新（実測値で精度向上）
   └── 3. 差分デプロイ
 
 [将来拡張] 結果反映バッチ
   │
-  ├── 1. Results CSV → レース結果取得
-  ├── 2. Confirmations CSV → 予想の答え合わせ
-  │     ├── 的中率の集計
-  │     └── 展開予想 vs 実際の展開の比較
+  ├── 1. 前日 results と過去 RacePrediction を突合
+  ├── 2. 自前で的中率を集計（旧 Confirmations CSV は廃止のため）
   └── 3. 差分デプロイ
 ```
 
@@ -291,13 +274,15 @@ AM2:00 時点で Previews CSV（実測直前情報）は未公開だが、Boatra
 
 ### データソースまとめ
 
-| CSV種別 | URL パターン | AM2:00 | 用途 |
+| CSV種別 | URL パターン | AM 9:00 JST | 用途 |
 |---|---|---|---|
-| Programs | `boatracecsv.github.io/data/programs/YYYY/MM/DD.csv` | ✅ | 出走表 |
-| Prediction Previews | `boatracecsv.github.io/data/prediction-preview/YYYY/MM/DD.csv` | ✅ | ML展示会予測 |
-| Estimates | `boatracecsv.github.io/data/estimate/YYYY/MM/DD.csv` | ✅ | ML着順予想 |
-| Results | `boatracecsv.github.io/data/results/YYYY/MM/DD.csv` | 前日分✅ | レース結果 |
-| Confirmations | `boatracecsv.github.io/data/confirm/YYYY/MM/DD.csv` | 前日分✅ | 的中確認 |
+| Programs (Title) | `boatracecsv.github.io/data/programs/title/YYYY/MM/DD.csv` | ✅ | レースメタ情報（レース名・締切時刻等） |
+| Programs (Race Cards) | `boatracecsv.github.io/data/programs/race_cards/YYYY/MM/DD.csv` | ✅ | 出走表（選手・モーター・成績） |
+| Previews (STT) | `boatracecsv.github.io/data/previews/stt/YYYY/MM/DD.csv` | ⚠️ 一部 | 直前情報（進入コース・スタート展示） |
+| Index | `boatracecsv.github.io/data/index/YYYY/MM/DD.csv` | ✅ | 強さpt（5要素の寄与pt） |
+| Results | `boatracecsv.github.io/data/results/YYYY/MM/DD.csv` | 前日分✅ | レース結果・配当 |
+
+> **注**: 旧 `prediction-preview` / `estimate` / `confirm` および旧 `programs/YYYY/MM/DD.csv` (サブディレクトリなし) は BoatraceCSV 上流での生成停止に伴い廃止済み。
 
 ---
 

@@ -4,7 +4,9 @@
 
 **プロジェクト名**: ボートレース展開予想ファンサイト (fun-site)
 
-**コンセプト**: AIが生成した画像でレース展開予想を視覚化する、ボートレースファン向け静的サイト。毎日AM2:00のバッチ処理で当日の予想ページを自動生成し、GCP上で配信する。
+**コンセプト**: BoatraceCSV が公開する 5 種類の CSV を組み合わせ、スタート予想と AI 総合評価（強さpt）を当日全レース分の静的ページとして配信するファンサイト。毎日 AM 9:00 JST（BoatraceCSV の daily-sync 完了直後）のバッチ処理で当日の予想ページを自動生成し、GCP 上で配信する。
+
+> **本書の位置づけ**: 当初提案 (proposal) として Vertex AI Gemini を中心とした agentic AI パイプラインを記述していたが、現実装は Vertex AI を使わず、BoatraceCSV の `index` CSV が提供する強さpt をそのまま AI 総合評価として可視化するシンプルな構成に統合された。本書には旧構想と現状の双方を残すが、実態は [README.md](../README.md) を参照。
 
 **ターゲット**: ボートレースを楽しむファン（初中級者がメインターゲット）。テキストの買い目羅列ではなく、展開の流れを画像で直感的に理解できることが差別化ポイント。
 
@@ -23,7 +25,7 @@
   ┌────────────┐      │  ┌──────────────┐   ┌──────────────────────────────────────┐ │
   │ Cloud       │──────│─▶│ Cloud Run    │   │    Agentic AI Pipeline               │ │
   │ Scheduler   │      │  │ Jobs         │   │                                      │ │
-  │ AM 2:00 JST │      │  │ (バッチ処理)  │──▶│  ┌────────────┐  ┌──────────────┐  │ │
+  │ AM 9:00 JST │      │  │ (バッチ処理)  │──▶│  ┌────────────┐  ┌──────────────┐  │ │
   └────────────┘      │  └──────────────┘   │  │ 予想分析    │  │ 画像生成      │  │ │
                       │                      │  │ Agent      │─▶│ Agent        │  │ │
   ┌────────────┐      │  ┌──────────────┐   │  │ Gemini 3   │  │ Gemini 3     │  │ │
@@ -62,56 +64,50 @@ GitHub Pages で配信される CSV データを利用する。
 
 **URL パターン**: `https://boatracecsv.github.io/data/{type}/YYYY/MM/DD.csv`
 
-| CSV種別 | パス | 内容 | AM2:00時点 |
+| CSV種別 | パス | 内容 | AM 9:00 JST時点 |
 |---|---|---|---|
-| Programs | `data/programs/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 取得可能 |
-| Prediction Previews | `data/prediction-preview/YYYY/MM/DD.csv` | ML予測による展示会予測データ | 取得可能 |
-| Estimates | `data/estimate/YYYY/MM/DD.csv` | ML予測（着順・決まり手・進入コース・ST） | 取得可能 |
+| Programs (Title) | `data/programs/title/YYYY/MM/DD.csv` | レース名・グレード・締切時刻などのメタ情報 | 取得可能 |
+| Programs (Race Cards) | `data/programs/race_cards/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 取得可能 |
+| Previews (STT) | `data/previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） | 締切 5 分前以降に順次公開 |
+| Index | `data/index/YYYY/MM/DD.csv` | 強さpt（5要素の寄与pt: 枠番/選手/モーター/展示/気象） | 取得可能（state=daily） |
 | Results | `data/results/YYYY/MM/DD.csv` | レース結果・配当金 | 前日分取得可能 |
-| Confirmations | `data/confirm/YYYY/MM/DD.csv` | 予想と結果の対比・的中判定 | 前日分取得可能 |
 
-**BoatraceCSV の ML 予測の特徴**:
-- **Estimates**: LambdaRank + Random Forest アンサンブルで着順予測、LightGBM で決まり手分類。予想1〜3着、予想決まり手、各艇の予想コース・予想STを提供
-- **Prediction Previews**: Programs データから進入コース（ハンガリアンアルゴリズム）・ST・展示タイムを回帰モデルで予測。AM2:00バッチで Previews の代替として利用可能
+> **注**: 旧 `prediction-preview` / `estimate` / `confirm` は BoatraceCSV 上流での生成停止に伴い廃止。現在は上記 5 種類のみで予想・評価データを構成する。
+
+**BoatraceCSV の `index` (強さpt) の特徴**:
+- **強さpt**: 枠番 / 選手 / モーター / 展示 / 気象 の 5 要素ごとに寄与pt を算出し、合計を強さptとする AI 総合評価スコア
+- **state**: `daily`（朝バッチ時点・展示と気象は暫定値）/ `realtime`（直前情報反映後）の 2 状態がある
+- 着順予測 (LambdaRank + Random Forest) や決まり手予測 (LightGBM) を提供する旧 Estimates / Prediction Previews CSV は廃止されたため、本サイトでは強さpt のみを AI 総合評価として表示する
 
 ### 2.3 バッチ処理フロー
 
 ```
-AM 2:00 (JST) Cloud Scheduler トリガー
+AM 9:00 (JST) Cloud Scheduler トリガー  (BoatraceCSV の daily-sync 完了後)
     │
     ▼
 Step 1: データ取得 (BoatraceCSV)
-    ├── Programs CSV → 当日出走表
-    ├── Prediction Previews CSV → ML予測による展示会予測
-    ├── Estimates CSV → ML予測（着順・決まり手・コース・ST）
-    ├── 前日 Results CSV → 前日レース結果
-    ├── 前日 Confirmations CSV → 前日予想の答え合わせ
-    └── Zodバリデーション
+    ├── programs/title CSV → レースメタ情報
+    ├── programs/race_cards CSV → 当日出走表（選手・モーター・成績）
+    ├── previews/stt CSV → 直前情報（進入コース・スタート展示）※未公開時はスキップ
+    ├── index CSV → 強さpt（5要素の寄与pt）
+    ├── 前日 results CSV → 前日レース結果
+    └── csv-parse でパース
     │
     ▼
-Step 2: 予想分析 Agent (Gemini 3 Pro)
-    ├── Programs + Prediction Previews + Estimates を入力
-    ├── ML予測結果を踏まえ、展開シナリオを分析
-    └── 構造化された展開予想テキスト (JSON) を出力
+Step 2: RacePrediction 統合
+    ├── レースコードをキーに 4 種類の当日 CSV を結合
+    ├── stt があれば進入コースを反映、無ければ枠番をフォールバック
+    ├── index の state=daily は展示・気象を 0 に揃える
+    └── レース 1 件ごとに RacePrediction JSON を書き出し
     │
     ▼
-Step 3: 画像生成 Agent (Gemini 3 Pro Image)
-    ├── 展開予想テキスト → プロンプト生成
-    ├── レース展開図を画像生成 (並列処理)
-    └── 同時にSVGフォールバック版も生成 (Gemini 3 Pro)
-    │
-    ▼
-Step 4: 品質チェック Agent (Gemini 3 Pro マルチモーダル)
-    ├── 生成画像を検証 (6艇描画・色・テキスト可読性)
-    ├── 合格 → 画像版を採用
-    └── 不合格 → リトライ or SVGフォールバック採用
-    │
-    ▼
-Step 5: 静的サイト生成 (Astro SSG)
-    ├── 予想データ + 画像をコンテンツとして読み込み
-    ├── astro build → HTML/CSS/画像 生成
+Step 3: 静的サイト生成 (Astro SSG)
+    ├── RacePrediction JSON を読み込んで全レースのページを生成
+    ├── astro build → HTML/CSS/SVG 生成
     └── Cloud Storage へ gsutil rsync でデプロイ
 ```
+
+> **注**: 旧 proposal では Vertex AI Gemini による展開分析・画像生成・品質チェックの 3 エージェント構成を想定していたが、Estimates / Prediction Previews CSV の廃止と方針変更により、現実装は BoatraceCSV の既存スコア (強さpt) を可視化する純粋な静的ダッシュボードに統合された。Gemini パイプラインの再導入は将来検討事項とする。
 
 ### 2.4 Agentic AI構成（ハッカソンの核心）
 
@@ -238,32 +234,35 @@ fun-site/
 
 ### 6.1 BoatraceCSV から取得するデータ
 
-#### Programs CSV（出走表）
+#### programs/title CSV（レースメタ情報）
 
 基本カラム: レースコード, タイトル, 日次, レース日, レース場, レース回, レース名, 距離, 電話投票締切予定
 
-艇別カラム（x6）: 艇番, 登録番号, 選手名, 年齢, 支部, 体重, 級別, 全国勝率, 全国2連対率, 当地勝率, 当地2連対率, モーター番号, モーター2連対率, ボート番号, ボート2連対率, 今節成績(6レース分), 早見
+#### programs/race_cards CSV（出走表）
 
-#### Prediction Previews CSV（ML展示会予測）
+基本カラム: レースコード, レース日, レース場コード, レース回
 
-カラム: レースコード, レース日, レース場, レース回
-艇別（x6）: 艇N_コース, 艇N_スタート展示, 艇N_チルト調整, 艇N_展示タイム
+艇別カラム（x6）: 艇N_登録番号, 艇N_選手名, 艇N_年齢, 艇N_支部, 艇N_出身地, 艇N_級別, 艇N_全国平均ST, 艇N_全国勝率, 艇N_全国2連対率, 艇N_全国3連対率, 艇N_当地勝率, 艇N_当地2連対率, 艇N_当地3連対率, 艇N_モーター番号, 艇N_モーター2連対率, 艇N_モーター3連対率, 艇N_ボート番号, 艇N_ボート2連対率, 艇N_ボート3連対率
 
-#### Estimates CSV（ML着順予想）
+#### previews/stt CSV（直前情報）
 
-カラム: レースコード, 予想1着, 予想2着, 予想3着, 予想決まり手, 艇1〜6_予想コース, 艇1〜6_予想ST
+基本カラム: レースコード, レース日, レース場, レース回, 締切時刻, 取得日時
 
-#### Results CSV（レース結果）
+艇別（x6）: 艇N_コース, 艇N_スタート展示
+
+#### index CSV（強さpt 寄与）
+
+基本カラム: レースコード, レース日, レース場コード, レース回, 状態（daily / realtime）
+
+艇別（x6, "1枠_..." 形式）: 枠番pt, 寄与_枠番pt, 選手pt, 寄与_選手pt, モーターpt, 寄与_モーターpt, 展示pt, 寄与_展示pt, 気象pt, 寄与_気象pt, 強さpt
+
+#### results CSV（レース結果）
 
 基本カラム: レースコード, タイトル, 日次, レース日, レース場, レース回, レース名, 距離, 天候, 風向, 風速, 波の高さ, 決まり手
 配当: 単勝, 複勝, 2連単, 2連複, 拡連複, 3連単, 3連複
 着順別（1着〜6着）: 着順, 艇番, 登録番号, 選手名, モーター番号, ボート番号, 展示タイム, 進入コース, スタートタイミング, レースタイム
 
-#### Confirmations CSV（的中確認）
-
-予想 vs 実績: 予想1〜3着/実際1〜3着, 1〜3着的中, 全的中, 予想決まり手/決まり手/決まり手的中
-コース精度: 艇N_予想コース/実際コース, コース一致数, 進入完全一致
-ST精度: 艇N_予想ST/実際ST, ST_MAE
+> **注**: 旧 Prediction Previews / Estimates / Confirmations CSV は廃止。MLによる着順・決まり手予測や的中判定機能を再導入するには、独自に推論パイプラインを構築するか、別データソースを開拓する必要がある。
 
 ### 6.2 レースコードによる結合
 
@@ -281,7 +280,7 @@ ST精度: 艇N_予想ST/実際ST, ST_MAE
 | 場別 | `/stadium/{stadiumId}/` | 会場の全レース予想一覧 |
 | レース別 | `/race/{date}/{stadiumId}/{raceNum}` | 展開予想画像 + 出走表 + 解説 |
 | アーカイブ | `/archive/{date}` | 過去日付の予想と結果対比 |
-| 的中実績 | `/stats` | 的中率・回収率の統計（Confirmations CSVベース） |
+| 的中実績 | `/stats` | 的中率・回収率の統計（旧 Confirmations CSV ベースを想定。CSV 廃止により再設計が必要） |
 
 ### 7.2 1レースページの構成
 
@@ -296,15 +295,14 @@ ST精度: 艇N_予想ST/実際ST, ST_MAE
 │ 出走表 (6艇の主要データ)               │
 │ 艇番 | 選手名 | 級別 | 勝率 | ST | モーター │
 ├─────────────────────────────────────┤
-│ ML予測 (Estimates)                    │
-│ 予想着順 | 予想決まり手 | 予想コース      │
-├─────────────────────────────────────┤
-│ AI展開解説テキスト (Gemini 3 Pro)       │
-│ + 推奨買い目 (3連単 5〜10点)            │
+│ AI 総合評価 (index 強さpt)             │
+│ 枠ごとに 5 要素の寄与pt を横棒で可視化    │
 ├─────────────────────────────────────┤
 │ SNS共有ボタン                         │
 └─────────────────────────────────────┘
 ```
+
+> **注**: 旧 proposal の「ML予測 (Estimates)」「AI展開解説テキスト (Gemini 3 Pro)」セクションは、CSV 廃止と Gemini 不採用に伴い削除済み。現実装は AI 総合評価セクションで `index` の強さpt 寄与を可視化する。
 
 ### 7.3 対象レースの段階的拡大
 
@@ -314,13 +312,15 @@ ST精度: 艇N_予想ST/実際ST, ST_MAE
 | Phase 2 | 各場10R〜12R + SG/GI全レース | 最大72レース |
 | Phase 3 | 全場全レース | 最大288レース |
 
-### 7.4 AM2:00バッチの制約と対策
+### 7.4 AM 9:00 JSTバッチの制約と対策
 
-AM2:00時点では直前情報（Previews CSV）は未公開。ただし **Prediction Previews CSV**（MLによる展示会予測）は利用可能。これにより、展示タイム・進入コース・STの予測値をAM2:00時点でも取得できる。
+AM 9:00 JST時点では `previews/stt`（直前情報）はまだ多くのレースで未公開（実際には締切 5 分前にしか出ない）。
 
 **データ利用戦略**:
-- AM2:00: Programs + Prediction Previews + Estimates で予想生成
-- 将来拡張: レース当日に Previews CSV が公開された後、差分更新バッチで精度向上
+- AM 9:00 JST: `programs/title` + `programs/race_cards` + `index` + 当日朝までに公開済みの `previews/stt` で予想ページ生成
+- `previews/stt` 未取得レースは **進入コース = 枠番**、ST = 全国平均ST で仮表示
+- `index` の `state=daily` レースは展示・気象の寄与pt が暫定値のため、当該セグメントは非表示
+- 将来拡張: 当日中に `previews/stt` / `index` が `state=realtime` で更新された時点で差分更新バッチを走らせて精度向上
 
 ---
 
@@ -364,7 +364,7 @@ AM2:00時点では直前情報（Previews CSV）は未公開。ただし **Predi
 | ストレージ | Cloud Storage | 静的サイトホスティング + データ保存 |
 | ネットワーク | Cloud CDN + Load Balancer | グローバル配信 + SSL |
 | ドメイン | Cloud Domains + Certificate Manager | ドメイン取得・SSL証明書管理 |
-| スケジューリング | Cloud Scheduler | AM2:00バッチトリガー |
+| スケジューリング | Cloud Scheduler | AM 9:00 JSTバッチトリガー |
 | CI/CD | Cloud Build | 自動ビルド・デプロイ |
 | コンテナ | Artifact Registry | Dockerイメージ管理 |
 | セキュリティ | IAM + Service Account | 最小権限原則 |
@@ -392,35 +392,33 @@ Gemini 3 Pro Image の画像生成コストは ~$0.134/枚。
 
 ## 10. 開発フェーズ
 
-### Phase 1: MVP（ハッカソン提出版）
+### Phase 1: MVP（現実装）
 
-**ゴール**: 1会場の全12レース分のAI展開予想画像を生成し、静的サイトとして配信
+**ゴール**: 全 24 場 × 全 12 レース分のスタート予想と AI 総合評価を静的サイトで配信
 
 - pnpmモノレポ + Astro + Tailwind CSS のプロジェクト初期構築
-- BoatraceCSV データ取得（Programs + Prediction Previews + Estimates）+ Zodバリデーション
-- Gemini 3 Pro による展開予想テキスト生成
-- Gemini 3 Pro Image による画像生成
+- BoatraceCSV データ取得（`programs/title` + `programs/race_cards` + `previews/stt` + `index` + 前日 `results`）+ Zodバリデーション
+- レースコード結合による `RacePrediction` 統合ロジック
+- スタート予想 SVG（俰瞰図）生成
+- AI 総合評価（強さpt 寄与pt 横棒グラフ）SVG 生成
 - Astro SSG でのページ生成
 - Cloud Storage へのデプロイ
-- Cloud Scheduler + Cloud Run Jobs でAM2:00バッチ
+- Cloud Scheduler + Cloud Run Jobs でAM 9:00 JSTバッチ
 
-### Phase 2: Agentic構成強化
+### Phase 2: 直前情報反映（将来）
 
-**ゴール**: 品質チェックAgentによるフィードバックループ実装、対象レース拡大
+**ゴール**: `previews/stt` 後追い反映と Vertex AI 解説の検討
 
-- 品質チェックAgent追加（マルチモーダルによる画像検証）
-- SVGフォールバック生成
-- リトライロジック
-- 注目レース全レース対応（最大72レース/日）
-- 的中実績ページ（Confirmations CSVベース）
-- OGP画像対応
+- `previews/stt` / `index` (`state=realtime`) を当日中に再取得して差分更新
+- レース 1 件の OGP 画像生成（SVG → PNG）
+- （検討）Vertex AI Gemini による日本語の展開解説テキスト追加
 
 ### Phase 3: 本格運用
 
 **ゴール**: 全場全レース対応、直前更新バッチ
 
 - 全場全レース対応（最大288レース/日）
-- 直前情報反映バッチ（Previews CSV公開後に差分更新）
+- 直前情報反映バッチ（`previews/stt` / `index` (state=realtime) 公開後に差分更新）
 - PWA対応（オフライン閲覧）
 - 過去データ分析ダッシュボード
 
@@ -441,7 +439,9 @@ Gemini 3 Pro Image の画像生成コストは ~$0.134/枚。
 
 ### 11.3 実用性
 
-実際のボートレースデータ（BoatraceCSV）に基づく日次更新サイト。ML予測結果（Estimates）とLLM分析（Gemini 3 Pro）を組み合わせた多層的な予想アプローチ。
+実際のボートレースデータ（BoatraceCSV）に基づく日次更新サイト。BoatraceCSV が提供する `index` (強さpt) を AI 総合評価として可視化し、出走表とスタート予想を 1 ページにまとめた構成。
+
+> **注**: 旧 proposal で記述していた ML予測 (Estimates) + LLM分析 (Gemini 3 Pro) の組み合わせは、CSV 廃止と方針変更により現実装には含まれない。
 
 ---
 
@@ -452,7 +452,7 @@ Gemini 3 Pro Image の画像生成コストは ~$0.134/枚。
 | AI画像の品質が不安定 | ユーザー体験低下 | SVGフォールバック + 品質チェックAgent |
 | 6艇の色表現が不正確 | 誤情報 | プロンプトで色を明示指定 + 品質チェック |
 | 日本語テキストの画像内描画不良 | 可読性低下 | テキストはHTML側で表示、画像は図解のみ |
-| AM2:00時点で直前情報なし | 予想精度限定的 | Prediction Previews（ML予測）で補完 |
+| AM 9:00 JST時点で直前情報 (`previews/stt`) なし | 進入コース・スタート展示が未取得 | 枠番をフォールバックとして仮表示し、後追いの差分更新バッチで補完 |
 | Gemini 3 Pro Image のコスト | 月額高騰 | 対象レース数の絞り込みで調整 |
 | BoatraceCSV の更新遅延 | データ未取得 | リトライ + 前日データでのフォールバック |
 | API レート制限 | バッチ処理停止 | 指数バックオフリトライ + 並行度制限 |
@@ -464,7 +464,7 @@ Gemini 3 Pro Image の画像生成コストは ~$0.134/枚。
 
 | エージェント | ドキュメント |
 |---|---|
-| インフラエンジニア | `.tmp/infra-proposal.md` |
-| ソフトウェアエンジニア | `.tmp/design.md` |
-| AIエンジニア | `.tmp/vertex-ai-proposal.md` |
-| ドメインスペシャリスト | `.tmp/domain_knowledge.md` |
+| インフラエンジニア | `docs/infra-proposal.md` |
+| ソフトウェアエンジニア | `docs/design.md` |
+| AIエンジニア | `docs/vertex-ai-proposal.md` |
+| ドメインスペシャリスト | `docs/domain_knowledge.md` |

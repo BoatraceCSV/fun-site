@@ -49,7 +49,7 @@
       "node_modules",
       "dist",
       ".astro",
-      ".tmp",
+      "docs",
       "**/*.astro",
       "packages/web/src/data/",
       ".corepack/",
