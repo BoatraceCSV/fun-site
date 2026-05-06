@@ -1,45 +1,11 @@
 /** BoatraceCSV 由来の型定義 */
 
-/** 出走表 - 艇別データ */
-export type ProgramBoat = {
-  readonly boatNumber: number;
-  readonly registrationNumber: number;
-  readonly racerName: string;
-  readonly age: number;
-  readonly branch: string;
-  readonly weight: number;
-  readonly rank: string;
-  readonly nationalWinRate: number;
-  readonly nationalTop2Rate: number;
-  readonly localWinRate: number;
-  readonly localTop2Rate: number;
-  readonly motorNumber: number;
-  readonly motorTop2Rate: number;
-  readonly boatBodyNumber: number;
-  readonly boatTop2Rate: number;
-  readonly currentResults: readonly string[];
-};
-
-/** 出走表 - レース行 */
-export type ProgramRow = {
-  readonly raceCode: string;
-  readonly title: string;
-  readonly dayNumber: number;
-  readonly raceDate: string;
-  readonly stadium: string;
-  readonly raceNumber: number;
-  readonly raceName: string;
-  readonly distance: number;
-  readonly votingDeadline: string;
-  readonly boats: readonly ProgramBoat[];
-};
-
 /**
  * 出走表メタ情報 (programs/title CSV) - レース行
  *
  * `data/programs/title/YYYY/MM/DD.csv` 由来。
- * 出走表 (ProgramRow) のうち選手データを持たない軽量版で、
- * レース名・タイトル・締切時刻などのメタ情報専用。
+ * レース名・タイトル・締切時刻などのメタ情報専用。出走表本体（選手・モーター）は
+ * race_cards CSV (RaceCardRow) を参照する。
  */
 export type TitleRow = {
   readonly raceCode: string;
@@ -54,41 +20,6 @@ export type TitleRow = {
   readonly raceName: string;
   readonly votingDeadline: string;
   readonly cancellationStatus: string;
-};
-
-/** ML展示会予測 - 艇別データ */
-export type PredictionPreviewBoat = {
-  readonly boatNumber: number;
-  readonly predictedCourse: number;
-  readonly predictedStartTiming: number;
-  readonly predictedTilt: number;
-  readonly predictedExhibitionTime: number;
-};
-
-/** ML展示会予測 - レース行 */
-export type PredictionPreviewRow = {
-  readonly raceCode: string;
-  readonly raceDate: string;
-  readonly stadium: string;
-  readonly raceNumber: number;
-  readonly boats: readonly PredictionPreviewBoat[];
-};
-
-/** ML着順予想 - 艇別データ */
-export type EstimateBoat = {
-  readonly boatNumber: number;
-  readonly predictedCourse: number;
-  readonly predictedST: number;
-};
-
-/** ML着順予想 - レース行 */
-export type EstimateRow = {
-  readonly raceCode: string;
-  readonly predicted1st: number;
-  readonly predicted2nd: number;
-  readonly predicted3rd: number;
-  readonly predictedTechnique: string;
-  readonly boats: readonly EstimateBoat[];
 };
 
 /** レース結果 - 配当情報 */
@@ -141,7 +72,13 @@ export type ResultRow = {
   readonly positions: readonly ResultPosition[];
 };
 
-/** 的中確認 - レース行 */
+/**
+ * 的中確認 - レース行
+ *
+ * 元 CSV (`confirmations/YYYY/MM/DD.csv`) は生成停止済みだが、
+ * web/src/data/confirmations/*.json として書き出された過去分を
+ * web 側で読み込むため型は残置している。
+ */
 export type ConfirmationRow = {
   readonly raceCode: string;
   readonly predicted1st: number;

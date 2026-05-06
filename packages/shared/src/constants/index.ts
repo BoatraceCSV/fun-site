@@ -10,7 +10,3 @@ export {
   getStadiumById,
   getStadiumByName,
 } from "./stadiums.js";
-export {
-  WINNING_TECHNIQUES,
-  toWinningTechnique,
-} from "./winning-techniques.js";

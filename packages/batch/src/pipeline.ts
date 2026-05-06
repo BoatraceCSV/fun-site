@@ -5,7 +5,7 @@ import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js
 /**
  * パイプライン全体のオーケストレーション。
  *
- * 1. BoatraceCSV から programs / race_cards / stt / index を取得
+ * 1. BoatraceCSV から title / race_cards / stt / index / results を取得
  * 2. レース単位の RacePrediction を生成
  * 3. JSON に書き出し → Astro ビルド → デプロイ
  *
@@ -20,7 +20,7 @@ export const runPipeline = async (): Promise<void> => {
   console.info("Step 1: Fetching CSV data...");
   const csvData = await fetchAllCsvData(today);
   console.info(
-    `Fetched: ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index, ${csvData.programs.length} programs, ${csvData.titles.length} titles`,
+    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index, ${csvData.results.length} results`,
   );
 
   if (csvData.raceCards.length === 0) {

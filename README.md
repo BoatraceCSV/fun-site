@@ -49,7 +49,7 @@ Cloud Storage + Cloud CDN ──→ ユーザー
 
 | Step | 処理 | 技術 |
 |------|------|------|
-| 1 | BoatraceCSV から `programs` / `race_cards` / `previews/stt` / `index` を取得・パース | fetch + csv-parse |
+| 1 | BoatraceCSV から `programs/title` / `programs/race_cards` / `previews/stt` / `index` / `results` を取得・パース | fetch + csv-parse |
 | 2 | レースコードで結合し、レース 1 件ごとに `RacePrediction` JSON を書き出す | TypeScript |
 | 3 | Astro でビルド → GCS にデプロイ | Astro SSG + GCS SDK |
 
@@ -80,7 +80,7 @@ fun-site/
 │   ├── batch/           # バッチ処理パイプライン
 │   │   └── src/
 │   │       ├── fetcher/         # BoatraceCSV データ取得 + CSV パース
-│   │       │                    #  (programs / race_cards / stt / index)
+│   │       │                    #  (title / race_cards / stt / index / results)
 │   │       └── site-builder/    # CSV → RacePrediction 統合
 │   │                            #  + Astro ビルド + デプロイ
 │   └── web/             # Astro SSG フロントエンド
@@ -110,10 +110,11 @@ fun-site/
 
 | CSV | 内容 | 利用箇所 |
 |-----|------|---------|
-| `programs/YYYY/MM/DD.csv` | 出走表メタ（レース名・締切時刻 等） | ヘッダ |
+| `programs/title/YYYY/MM/DD.csv` | 出走表メタ（レース名・タイトル・グレード・締切時刻 等） | ヘッダ |
 | `programs/race_cards/YYYY/MM/DD.csv` | 選手プロフィール・全国平均ST 等 | スタート予想の ST / 出走表 |
 | `previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） | スタート予想の進入コース |
 | `index/YYYY/MM/DD.csv` | 強さpt（5 要素の寄与pt） | AI 総合評価 |
+| `results/YYYY/MM/DD.csv` | 前日のレース結果・配当 | 集計用（前日分） |
 
 `previews/stt` は直前情報のため、AM 9:00 バッチ時点ではまだ多くのレースが未公開（実際には締切 5 分前にしか出ない）。その場合は **進入コース = 枠番**、ST = 全国平均ST で仮表示する。`index` の `状態 = daily`（朝バッチ時点）のレースは、展示・気象の寄与pt が暫定値（50, 寄与 0）のため、展示・気象セグメントを非表示にする。
 

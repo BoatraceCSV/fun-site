@@ -1,30 +1,12 @@
 export type {
   ConfirmationRow,
-  EstimateBoat,
-  EstimateRow,
   PayoutEntry,
-  PredictionPreviewBoat,
-  PredictionPreviewRow,
-  ProgramBoat,
-  ProgramRow,
   ResultPayouts,
   ResultPosition,
   ResultRow,
   TitleRow,
 } from "./csv.js";
-export type {
-  AccuracyStats,
-  AiAccuracy,
-  AiPrediction,
-  FormationPattern,
-  ImageType,
-  LegacyRacePrediction,
-  MlAccuracy,
-  MlPrediction,
-  StartFormation,
-  StartFormationEntry,
-  WinningTechnique,
-} from "./legacy-prediction.js";
+export type { AccuracyStats, AiAccuracy, MlAccuracy } from "./legacy-prediction.js";
 export type {
   AiEvaluation,
   AiEvaluationContribution,
