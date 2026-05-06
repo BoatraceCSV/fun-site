@@ -100,7 +100,7 @@
     }
   ],
   "startPrediction": {
-    "fromExhibition": false,
+    "fromExhibition": true,
     "entries": [
       {
         "boatNumber": 1,
@@ -135,75 +135,75 @@
     ]
   },
   "aiEvaluation": {
-    "state": "daily",
+    "state": "realtime",
     "entries": [
       {
         "boatNumber": 1,
         "contribution": {
           "frame": 30.73,
-          "racer": 10.11,
+          "racer": 11.95,
           "motor": 9.73,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 8.59,
+          "weather": 2.29
         },
-        "strengthPt": 60.45
+        "strengthPt": 63.28
       },
       {
         "boatNumber": 2,
         "contribution": {
           "frame": 24.19,
-          "racer": 10.11,
+          "racer": 8.99,
           "motor": 6.88,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 8.34,
+          "weather": 2.72
         },
-        "strengthPt": 51.06
+        "strengthPt": 51.11
       },
       {
         "boatNumber": 3,
         "contribution": {
           "frame": 22.57,
-          "racer": 10.11,
+          "racer": 8.99,
           "motor": 6.33,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.15,
+          "weather": 1.84
         },
-        "strengthPt": 48.89
+        "strengthPt": 45.87
       },
       {
         "boatNumber": 4,
         "contribution": {
           "frame": 21.49,
-          "racer": 10.11,
+          "racer": 8.62,
           "motor": 7.75,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.39,
+          "weather": 2.1
         },
-        "strengthPt": 49.24
+        "strengthPt": 47.36
       },
       {
         "boatNumber": 5,
         "contribution": {
           "frame": 19.53,
-          "racer": 10.11,
+          "racer": 7.51,
           "motor": 8.46,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 7.68,
+          "weather": 3.25
         },
-        "strengthPt": 47.98
+        "strengthPt": 46.42
       },
       {
         "boatNumber": 6,
         "contribution": {
           "frame": 14.89,
-          "racer": 10.11,
+          "racer": 9.73,
           "motor": 9.14,
-          "exhibition": 0,
-          "weather": 0
+          "exhibition": 6.53,
+          "weather": 2.36
         },
-        "strengthPt": 44.03
+        "strengthPt": 42.66
       }
     ]
   },
-  "generatedAt": "2026-05-06T03:07:28.204Z"
+  "generatedAt": "2026-05-06T04:18:37.549Z"
 }

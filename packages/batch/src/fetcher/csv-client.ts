@@ -10,7 +10,7 @@ export type CsvType = "programs" | "results" | "race_cards" | "stt" | "index";
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   programs: "programs",
   results: "results",
-  race_cards: "race_cards",
+  race_cards: "programs/race_cards",
   stt: "previews/stt",
   index: "index",
 };
