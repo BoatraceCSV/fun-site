@@ -49,7 +49,7 @@ ML による着順・決まり手予想。
 
 ### 優先度B（直前情報・AM2:00時点では未取得）
 
-データソース: BoatraceCSV Previews CSV (`data/previews/YYYY/MM/DD.csv`) — レース当日の展示航走後に公開
+データソース: BoatraceCSV Previews CSV — レース当日の展示航走後に公開
 
 | データ項目 | 説明 | 備考 |
 |---|---|---|
@@ -296,7 +296,6 @@ AM2:00 時点で Previews CSV（実測直前情報）は未公開だが、Boatra
 | Programs | `boatracecsv.github.io/data/programs/YYYY/MM/DD.csv` | ✅ | 出走表 |
 | Prediction Previews | `boatracecsv.github.io/data/prediction-preview/YYYY/MM/DD.csv` | ✅ | ML展示会予測 |
 | Estimates | `boatracecsv.github.io/data/estimate/YYYY/MM/DD.csv` | ✅ | ML着順予想 |
-| Previews | `boatracecsv.github.io/data/previews/YYYY/MM/DD.csv` | ❌ | 直前情報（将来拡張） |
 | Results | `boatracecsv.github.io/data/results/YYYY/MM/DD.csv` | 前日分✅ | レース結果 |
 | Confirmations | `boatracecsv.github.io/data/confirm/YYYY/MM/DD.csv` | 前日分✅ | 的中確認 |
 

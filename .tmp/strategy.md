@@ -65,7 +65,6 @@ GitHub Pages で配信される CSV データを利用する。
 | CSV種別 | パス | 内容 | AM2:00時点 |
 |---|---|---|---|
 | Programs | `data/programs/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 取得可能 |
-| Previews | `data/previews/YYYY/MM/DD.csv` | 直前情報（展示タイム・風況等） | 未公開 |
 | Prediction Previews | `data/prediction-preview/YYYY/MM/DD.csv` | ML予測による展示会予測データ | 取得可能 |
 | Estimates | `data/estimate/YYYY/MM/DD.csv` | ML予測（着順・決まり手・進入コース・ST） | 取得可能 |
 | Results | `data/results/YYYY/MM/DD.csv` | レース結果・配当金 | 前日分取得可能 |
