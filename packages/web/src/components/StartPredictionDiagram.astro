@@ -36,6 +36,10 @@ const stToX = (st: number): number => {
 // スタートラインの x 座標（ST=0 の位置）
 const startLineX = stToX(0);
 
+// 全国平均STが 0.00（=実績なし）の場合、描画上は遅め（0.25）として扱う
+const NO_RECORD_ST_FOR_DRAW = 0.25;
+const stForDraw = (st: number): number => (st === 0 ? NO_RECORD_ST_FOR_DRAW : st);
+
 // 進入コースごとに 1〜6 の lane を割り当て
 const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.courseNumber);
 
@@ -131,7 +135,7 @@ const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
       const fill = color?.hex ?? "#cbd5e1";
       const stroke = entry.boatNumber === 1 ? "#94a3b8" : fill;
       const textColor = color?.textHex ?? "#0f172a";
-      const boatX = stToX(entry.startTiming);
+      const boatX = stToX(stForDraw(entry.startTiming));
       return (
         <g>
           {/* コース番号 */}
