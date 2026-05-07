@@ -1,0 +1,202 @@
+---
+import type { AiEvaluation, RaceRacer } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  racers: readonly RaceRacer[];
+  aiEvaluation: AiEvaluation;
+}
+
+const { racers, aiEvaluation } = Astro.props;
+
+// 表示順 (top → bottom 固定)
+const DISPLAY_ORDER = [5, 3, 6, 1, 4, 2] as const;
+
+// 軸スケール: 0〜3.0（distance = (1 - avgST) + (strengthPt / 50)）
+const DIST_MIN = 0;
+const DIST_MAX = 3.0;
+const DIST_SPAN = DIST_MAX - DIST_MIN;
+
+// 図のサイズ（StartPredictionDiagram と同等）
+const VIEWBOX_W = 600;
+const VIEWBOX_H = 360;
+const LEFT_PAD = 60; // コース番号ラベル分
+const RIGHT_PAD = 80; // 距離値ラベル分
+const TOP_PAD = 24;
+const BOTTOM_PAD = 36;
+const LANES = 6;
+const LANE_HEIGHT = (VIEWBOX_H - TOP_PAD - BOTTOM_PAD) / LANES;
+const TRACK_LEFT = LEFT_PAD;
+const TRACK_RIGHT = VIEWBOX_W - RIGHT_PAD;
+const TRACK_W = TRACK_RIGHT - TRACK_LEFT;
+
+// distance → x 座標。distance=0 で 1マーク基準線（右端）。距離が大きいほど左側へ進む。
+const distToX = (d: number): number => {
+  const clamped = Math.min(Math.max(d, DIST_MIN), DIST_MAX);
+  return TRACK_RIGHT - ((clamped - DIST_MIN) / DIST_SPAN) * TRACK_W;
+};
+
+// 1マーク基準線の x 座標（distance=0 の位置）
+const baselineX = distToX(0);
+
+// 各枠番のレーサー / AI 評価エントリをルックアップ
+const racerByBoat = new Map(racers.map((r) => [r.boatNumber, r]));
+const aiByBoat = new Map(aiEvaluation.entries.map((e) => [e.boatNumber, e]));
+
+const rows = DISPLAY_ORDER.map((boatNumber) => {
+  const racer = racerByBoat.get(boatNumber);
+  const ai = aiByBoat.get(boatNumber);
+  const avgST = racer?.nationalAvgST ?? 0;
+  const strengthPt = ai?.strengthPt ?? 0;
+  const distance = 1 - avgST + strengthPt / 50;
+  return { boatNumber, avgST, strengthPt, distance };
+});
+
+// 距離軸の目盛りラベル
+const tickValues = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
+---
+
+<figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
+  <svg
+    viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="1マーク予想図"
+    class="w-full h-auto"
+  >
+    {/* 水面背景 */}
+    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill="#dbeafe" />
+
+    {/* レーン区切り */}
+    {Array.from({ length: LANES + 1 }).map((_, i) => {
+      const y = TOP_PAD + i * LANE_HEIGHT;
+      return (
+        <line
+          x1={TRACK_LEFT}
+          y1={y}
+          x2={TRACK_RIGHT}
+          y2={y}
+          stroke="#bfdbfe"
+          stroke-width="1"
+        />
+      );
+    })}
+
+    {/* 1マーク基準線（赤、太線） */}
+    <line
+      x1={baselineX}
+      y1={TOP_PAD}
+      x2={baselineX}
+      y2={TOP_PAD + LANE_HEIGHT * LANES}
+      stroke="#dc2626"
+      stroke-width="2.5"
+    />
+    <text
+      x={baselineX}
+      y={TOP_PAD - 8}
+      text-anchor="middle"
+      font-size="11"
+      fill="#dc2626"
+      font-weight="600"
+    >
+      1マーク基準線
+    </text>
+
+    {/* 1マーク（ブイ）の目印 */}
+    <circle
+      cx={baselineX}
+      cy={TOP_PAD + LANE_HEIGHT * LANES + 14}
+      r="6"
+      fill="#dc2626"
+      stroke="#ffffff"
+      stroke-width="1.5"
+    />
+
+    {/* 距離目盛り */}
+    {tickValues.map((tv) => {
+      const x = distToX(tv);
+      return (
+        <g>
+          <line
+            x1={x}
+            y1={TOP_PAD + LANE_HEIGHT * LANES}
+            x2={x}
+            y2={TOP_PAD + LANE_HEIGHT * LANES + 4}
+            stroke="#94a3b8"
+            stroke-width="1"
+          />
+          <text
+            x={x}
+            y={TOP_PAD + LANE_HEIGHT * LANES + 16}
+            text-anchor="middle"
+            font-size="10"
+            fill="#64748b"
+          >
+            {tv.toFixed(1)}
+          </text>
+        </g>
+      );
+    })}
+    <text
+      x={(TRACK_LEFT + TRACK_RIGHT) / 2}
+      y={VIEWBOX_H - 6}
+      text-anchor="middle"
+      font-size="10"
+      fill="#64748b"
+    >
+      1マークからの進行距離（(1 - 平均ST) + 強さpt/50）
+    </text>
+
+    {/* レーン行（5,3,6,1,4,2 固定） */}
+    {rows.map((row, i) => {
+      const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
+      const color = isValidBoatNumber(row.boatNumber) ? BOAT_COLORS[row.boatNumber] : undefined;
+      const fill = color?.hex ?? "#cbd5e1";
+      const stroke = row.boatNumber === 1 ? "#94a3b8" : fill;
+      const textColor = color?.textHex ?? "#0f172a";
+      const boatX = distToX(row.distance);
+      return (
+        <g>
+          {/* 枠番ラベル */}
+          <text
+            x={TRACK_LEFT - 14}
+            y={cy + 4}
+            text-anchor="end"
+            font-size="13"
+            fill="#1e3a8a"
+            font-weight="700"
+          >
+            {row.boatNumber}号艇
+          </text>
+
+          {/* 艇本体（円） */}
+          <circle cx={boatX} cy={cy} r="13" fill={fill} stroke={stroke} stroke-width="1.5" />
+          <text
+            x={boatX}
+            y={cy + 4}
+            text-anchor="middle"
+            font-size="12"
+            font-weight="700"
+            fill={textColor}
+          >
+            {row.boatNumber}
+          </text>
+
+          {/* 距離値 */}
+          <text
+            x={TRACK_RIGHT + 8}
+            y={cy + 4}
+            font-size="13"
+            fill="#0f172a"
+            font-family="monospace"
+          >
+            {row.distance.toFixed(2)}
+          </text>
+        </g>
+      );
+    })}
+  </svg>
+  <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
+    各艇の進行距離 = (1 − 全国平均ST) + 強さpt ÷ 50。レーン並びは 5・3・6・1・4・2 で固定表示しています。
+  </figcaption>
+</figure>
