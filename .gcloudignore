@@ -1,0 +1,40 @@
+# gcloud builds submit のアップロード除外。.gitignore のフォールバックを明示化。
+
+# パッケージマネージャ生成物（コンテナ内で再インストール）
+node_modules/
+.pnpm-store/
+.corepack/
+
+# ビルド成果物
+dist/
+.astro/
+*.tsbuildinfo
+
+# Terraform 関連
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/*.tfstate*
+infra/*.tfvars
+!infra/terraform.tfvars.example
+infra/migration.plan
+infra/plan.realtime
+
+# ローカル環境ファイル
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Git 関連（Cloud Build には不要）
+.git/
+.gitignore
+
+# ローカル一時ファイル
+tmp/
+_backup/

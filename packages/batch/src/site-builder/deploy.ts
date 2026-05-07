@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { Storage } from "@google-cloud/storage";
+import { type File, Storage } from "@google-cloud/storage";
 
 const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
 // バケット名は Terraform の `${local.prefix}-web-${var.project_id}` 規則で
@@ -8,6 +10,9 @@ const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
 // GCS_WEB_BUCKET 環境変数経由で渡されるが、ローカル実行用にもデフォルトを
 // 同じ値に揃えておく。別プロジェクトで動かすときは GCS_WEB_BUCKET で上書き。
 const BUCKET_NAME = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web-boatrace-487212";
+
+// 並列アップロード数（asia-northeast1 GCS への HTTP/2 多重化を活かす）
+const UPLOAD_CONCURRENCY = 16;
 
 const storage = new Storage();
 
@@ -48,7 +53,45 @@ const getContentType = (filePath: string): string => {
   return contentTypes[ext ?? ""] ?? "application/octet-stream";
 };
 
-/** Cloud Storage へデプロイ (@google-cloud/storage SDK) */
+/** ファイルの MD5 を base64 文字列で返す（GCS metadata.md5Hash と同形式） */
+const computeMd5Base64 = (filePath: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const hash = createHash("md5");
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("base64")));
+  });
+
+/** 並列度を制限しながら配列を処理 */
+const mapWithConcurrency = async <T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      const item = items[i];
+      if (item === undefined) return;
+      results[i] = await fn(item);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+};
+
+/** Cloud Storage へデプロイ (@google-cloud/storage SDK)。
+ *
+ * 効率化:
+ * - 既存オブジェクトの md5Hash を一括取得し、ローカルの MD5 と一致するものは
+ *   アップロードを skip（毎回 ~330 ページ全部アップロードしていた状態を解消）
+ * - アップロードは並列度 ${UPLOAD_CONCURRENCY} で実行
+ * - 削除も並列化
+ */
 export const deployToStorage = async (): Promise<void> => {
   console.info(`Deploying ${WEB_DIST_DIR} to gs://${BUCKET_NAME}/...`);
 
@@ -63,37 +106,58 @@ export const deployToStorage = async (): Promise<void> => {
     throw new Error("Build output directory is empty");
   }
 
-  console.info(`Found ${localFiles.length} files to upload`);
+  console.info(`Found ${localFiles.length} files locally`);
 
   const bucket = storage.bucket(BUCKET_NAME);
 
-  // 既存ファイル一覧を取得（削除対象の特定用）
+  // 既存ファイル一覧と md5Hash を一括取得
   const [existingFiles] = await bucket.getFiles();
-  const existingNames = new Set(existingFiles.map((f) => f.name));
+  const existingByName = new Map<string, File>(existingFiles.map((f) => [f.name, f]));
 
-  // アップロード
-  const uploadedNames = new Set<string>();
-  for (const filePath of localFiles) {
-    const destination = relative(WEB_DIST_DIR, filePath);
-    uploadedNames.add(destination);
+  // ローカル MD5 を並列計算 + 既存と比較
+  const localEntries = await mapWithConcurrency(
+    localFiles,
+    UPLOAD_CONCURRENCY,
+    async (filePath) => {
+      const destination = relative(WEB_DIST_DIR, filePath);
+      const localMd5 = await computeMd5Base64(filePath);
+      return { filePath, destination, localMd5 };
+    },
+  );
 
+  const toUpload: typeof localEntries = [];
+  let unchanged = 0;
+  for (const entry of localEntries) {
+    const existing = existingByName.get(entry.destination);
+    const remoteMd5 = existing?.metadata.md5Hash;
+    if (remoteMd5 && remoteMd5 === entry.localMd5) {
+      unchanged++;
+      continue;
+    }
+    toUpload.push(entry);
+  }
+
+  // アップロード（差分のみ、並列）
+  await mapWithConcurrency(toUpload, UPLOAD_CONCURRENCY, async ({ filePath, destination }) => {
     await bucket.upload(filePath, {
       destination,
       metadata: { contentType: getContentType(filePath) },
     });
-  }
+  });
 
-  console.info(`Uploaded ${uploadedNames.size} files`);
+  console.info(`Uploaded ${toUpload.length} changed files (skipped ${unchanged} unchanged)`);
 
   // ローカルに存在しないリモートファイルを削除（rsync -d 相当）
   // images/ プレフィックスは画像生成ステップで別途アップロードされるため除外
-  const toDelete = [...existingNames].filter(
-    (name) => !(uploadedNames.has(name) || name.startsWith("images/")),
+  // _meta/ は last-build.json などの内部メタを置く領域なので削除対象から除外
+  const uploadedNames = new Set(localEntries.map((e) => e.destination));
+  const toDelete = [...existingByName.keys()].filter(
+    (name) => !(uploadedNames.has(name) || name.startsWith("images/") || name.startsWith("_meta/")),
   );
   if (toDelete.length > 0) {
-    for (const name of toDelete) {
+    await mapWithConcurrency(toDelete, UPLOAD_CONCURRENCY, async (name) => {
       await bucket.file(name).delete();
-    }
+    });
     console.info(`Deleted ${toDelete.length} stale files`);
   }
 

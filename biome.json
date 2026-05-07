@@ -48,12 +48,17 @@
     "ignore": [
       "node_modules",
       "dist",
+      "**/dist/**",
       ".astro",
+      "**/.astro/**",
       "docs",
       "**/*.astro",
       "packages/web/src/data/",
       ".corepack/",
-      ".pnpm-store/"
+      ".pnpm-store/",
+      "_backup/",
+      "infra/.terraform/",
+      "tmp/"
     ]
   }
 }

@@ -1,5 +1,19 @@
 # ボートレースファンサイト - アプリケーション設計
 
+> **⚡ 2026-05 アーキテクチャ更新**:
+> 直前情報のリアルタイム反映に伴い、JST 09:00 朝バッチは廃止され、preview-realtime →
+> Pub/Sub → Eventarc → fun-site batch のチェーンに移行した。詳細は
+> [`realtime-architecture-proposal.md`](./realtime-architecture-proposal.md) と
+> [`infra/REALTIME_MIGRATION.md`](../infra/REALTIME_MIGRATION.md) を参照。
+>
+> 本書中の以下は legacy 設計の名残であり、現状は新方針が優先する:
+> - 「Cloud Scheduler 1日1回 / AM 9:00 JST」記述
+> - `data/index/...` パス（実体は `data/estimate/index/...`）
+> - `results` CSV 取得処理（廃止済）
+> - `ResultRow` / `ResultPosition` / `ResultPayouts` / `ConfirmationRow` /
+>   `AccuracyStats` などの型定義（コードからは削除済、本書中の例示のみ残置）
+> - 「`/stats` 的中実績ページ」（廃止済）
+
 ## 1. 推奨技術スタック
 
 | カテゴリ | 技術 | 選定理由 |

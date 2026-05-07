@@ -45,4 +45,10 @@ RUN chown -R node:node /app/packages/web/
 
 USER node
 WORKDIR /app/packages/batch
-CMD ["node", "--import", "tsx/esm", "src/main.ts"]
+
+# ENTRYPOINT で固定し、追加引数 (Pub/Sub message の base64 など) は CMD/args 側で渡す。
+# Cloud Run の containerOverrides.args 上書きで argv[2] 以降に Pub/Sub message が乗る前提。
+# 注: Workflow `infra/realtime-pipeline.tf` の `containerOverrides.command` も
+#     ここと一致させること（不一致だと "Cannot find module" になる）。
+ENTRYPOINT ["node", "--import", "tsx/esm", "src/main.ts"]
+CMD []

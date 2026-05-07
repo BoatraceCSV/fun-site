@@ -1,9 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ConfirmationRow, RacePrediction } from "@fun-site/shared";
+import type { RacePrediction } from "@fun-site/shared";
 
 const RACES_DIR = resolve(process.cwd(), "src/data/races");
-const CONFIRMATIONS_DIR = resolve(process.cwd(), "src/data/confirmations");
 
 /** 新スキーマか判定（旧 RacePrediction JSON を読み飛ばすガード） */
 const isNewSchema = (json: unknown): json is RacePrediction => {
@@ -39,16 +38,6 @@ export const loadPredictions = async (date: string): Promise<RacePrediction[]> =
       if (a.stadiumId !== b.stadiumId) return a.stadiumId.localeCompare(b.stadiumId);
       return a.raceNumber - b.raceNumber;
     });
-  } catch {
-    return [];
-  }
-};
-
-/** 指定日付の的中確認データを読み込み */
-export const loadConfirmations = async (date: string): Promise<ConfirmationRow[]> => {
-  try {
-    const content = await readFile(resolve(CONFIRMATIONS_DIR, `${date}.json`), "utf-8");
-    return JSON.parse(content) as ConfirmationRow[];
   } catch {
     return [];
   }

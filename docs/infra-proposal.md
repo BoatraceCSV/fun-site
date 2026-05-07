@@ -1,5 +1,21 @@
 # GCPインフラ構成提案: ボートレースファンサイト
 
+> **⚡ 2026-05 アーキテクチャ更新**:
+> 直前情報のリアルタイム反映に伴い、Cloud Scheduler 朝バッチ (JST 09:00) は廃止され、
+> preview-realtime → Pub/Sub topic `realtime-completed` → Eventarc trigger →
+> fun-site batch Cloud Run Job のチェーンへ移行した。
+> リージョンも `us-central1` から `asia-northeast1` (preview-realtime と統一) へ移行。
+> Vertex AI / 画像生成系は採用しない構成に確定。
+>
+> 詳細・移行手順は
+> [`realtime-architecture-proposal.md`](./realtime-architecture-proposal.md) と
+> [`infra/REALTIME_MIGRATION.md`](../infra/REALTIME_MIGRATION.md) を参照。
+>
+> 以下の本文中で「Cloud Scheduler の AM 9:00 JST トリガー」「`us-central1` リージョン」
+> 「Vertex AI Gemini」「Cloud Domains」「Certificate Manager」「LB + SSL」等の記述は
+> 一部 legacy / 一部現役。実装の真実は `infra/*.tf` と
+> [`infra/REALTIME_MIGRATION.md`](../infra/REALTIME_MIGRATION.md) を見ること。
+
 ## 推奨アーキテクチャ構成
 
 ### アーキテクチャ概要

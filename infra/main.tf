@@ -32,8 +32,8 @@ provider "google-beta" {
 locals {
   prefix = var.project_name
   labels = {
-    project   = var.project_name
-    managed   = "terraform"
+    project = var.project_name
+    managed = "terraform"
   }
 }
 
@@ -41,7 +41,6 @@ resource "google_project_service" "apis" {
   for_each = toset([
     "run.googleapis.com",
     "cloudbuild.googleapis.com",
-    "cloudscheduler.googleapis.com",
     "aiplatform.googleapis.com",
     "storage.googleapis.com",
     "artifactregistry.googleapis.com",
@@ -51,8 +50,16 @@ resource "google_project_service" "apis" {
     "monitoring.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "dns.googleapis.com",
+    "pubsub.googleapis.com",
+    "eventarc.googleapis.com",
+    "workflows.googleapis.com",
+    "workflowexecutions.googleapis.com",
   ])
 
   service            = each.value
   disable_on_destroy = false
 }
+
+# 旧朝バッチ用の Cloud Scheduler API は preview-realtime → Pub/Sub → Eventarc 経路への
+# 移行に伴い fun-site では不要。preview-realtime 側は引き続き使用するため、プロジェクト
+# レベルでは disable しない（boatracecsv.github.io の infra で管理されている）。

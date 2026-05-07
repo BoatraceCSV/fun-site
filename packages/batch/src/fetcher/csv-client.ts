@@ -1,32 +1,68 @@
-const BASE_URL = "https://boatracecsv.github.io/data";
+import { Storage } from "@google-cloud/storage";
+
+const HTTP_BASE_URL = "https://boatracecsv.github.io/data";
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
 
-// BoatraceCSV で現在公開されている CSV のみを列挙する。
-// 旧 programs / prediction-preview / estimate / confirm は生成停止に伴い廃止済み。
-export type CsvType = "title" | "results" | "race_cards" | "stt" | "index";
+// BoatraceCSV で現在 fun-site が利用する CSV のみを列挙する。
+// 旧 programs / prediction-preview / estimate / confirm は上流で生成停止に伴い廃止済み。
+// results は的中実績ページ廃止に伴い fun-site の取得対象から外している。
+export type CsvType = "title" | "race_cards" | "stt" | "index";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
-  results: "results",
   race_cards: "programs/race_cards",
   stt: "previews/stt",
-  index: "index",
+  // 旧 design.md 記載の `data/index/...` は実体不在で 404 → fetchAndParse で空配列に潰れていた既存バグ。
+  // boatracecsv.github.io リポジトリの実体は `data/estimate/index/YYYY/MM/DD.csv`。
+  index: "estimate/index",
 };
 
-const buildCsvUrl = (type: CsvType, date: string): string => {
+/**
+ * CSV のソース。
+ * - `http`: GitHub Pages (https://boatracecsv.github.io/data/...) から取得（旧経路、開発時の fallback）
+ * - `gcs`: Cloud Storage `gs://${BUCKET}/data/...` から取得（preview-realtime が直接書き込む経路、本番）
+ */
+type CsvSource = "http" | "gcs";
+
+const getCsvSource = (): CsvSource => {
+  const v = process.env["CSV_SOURCE"]?.toLowerCase();
+  return v === "gcs" ? "gcs" : "http";
+};
+
+// GCS バケット名。preview-realtime と fun-site が共有する CSV ミラー用。
+// 環境変数 `CSV_GCS_BUCKET` で上書き可能。
+const GCS_BUCKET = process.env["CSV_GCS_BUCKET"] ?? "boatrace-realtime-data";
+
+// GCS バケット内のプレフィックス。GitHub Pages と同じパス構造を採用するため、
+// `data/programs/title/YYYY/MM/DD.csv` のように配置される。
+const GCS_PATH_ROOT = process.env["CSV_GCS_PATH_ROOT"] ?? "data";
+
+// GCS Storage クライアントは初回利用時に lazy 初期化する（http 経路のみで使う場合に
+// ADC が無くても動かせるように）。
+let storage: Storage | undefined;
+const getStorage = (): Storage => {
+  if (!storage) storage = new Storage();
+  return storage;
+};
+
+const buildHttpUrl = (type: CsvType, date: string): string => {
   // date は "YYYY-MM-DD" 形式なので、直接文字列操作でスラッシュ区切りに変換
   // new Date(date) を使うとタイムゾーン依存のバグが発生する
   const dateSlash = date.replaceAll("-", "/");
-  return `${BASE_URL}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
+  return `${HTTP_BASE_URL}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
+};
+
+const buildGcsObjectName = (type: CsvType, date: string): string => {
+  const dateSlash = date.replaceAll("-", "/");
+  return `${GCS_PATH_ROOT}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
 };
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** BoatraceCSV から CSV テキストを取得（指数バックオフリトライ付き） */
-export const fetchCsvText = async (type: CsvType, date: string): Promise<string> => {
-  const url = buildCsvUrl(type, date);
+const fetchHttp = async (type: CsvType, date: string): Promise<string> => {
+  const url = buildHttpUrl(type, date);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -47,4 +83,48 @@ export const fetchCsvText = async (type: CsvType, date: string): Promise<string>
   }
 
   throw new Error(`Failed to fetch ${url} after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+};
+
+const fetchGcs = async (type: CsvType, date: string): Promise<string> => {
+  const objectName = buildGcsObjectName(type, date);
+  const bucket = getStorage().bucket(GCS_BUCKET);
+  const file = bucket.file(objectName);
+
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const [buffer] = await file.download();
+      return buffer.toString("utf-8");
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      // 404 は object 不在＝当該 CSV がまだ書き込まれていない状態。リトライしても無駄なので即時失敗。
+      const status = (error as { code?: number } | undefined)?.code;
+      if (status === 404) {
+        throw new Error(`GCS object not found: gs://${GCS_BUCKET}/${objectName} (status 404)`);
+      }
+      if (attempt < MAX_RETRIES - 1) {
+        const backoffMs = INITIAL_DELAY_MS * 2 ** attempt;
+        console.warn(
+          `Retry ${attempt + 1}/${MAX_RETRIES} for gs://${GCS_BUCKET}/${objectName}: ${lastError.message}`,
+        );
+        await delay(backoffMs);
+      }
+    }
+  }
+
+  throw new Error(
+    `Failed to fetch gs://${GCS_BUCKET}/${objectName} after ${MAX_RETRIES} attempts: ${lastError?.message}`,
+  );
+};
+
+/**
+ * CSV テキストを取得（指数バックオフリトライ付き）。
+ *
+ * `CSV_SOURCE` 環境変数でソースを切り替える:
+ * - `gcs` → Cloud Storage `gs://${CSV_GCS_BUCKET}/${CSV_GCS_PATH_ROOT}/...` (既定本番)
+ * - `http` (default) → GitHub Pages `https://boatracecsv.github.io/data/...`
+ */
+export const fetchCsvText = async (type: CsvType, date: string): Promise<string> => {
+  const source = getCsvSource();
+  return source === "gcs" ? fetchGcs(type, date) : fetchHttp(type, date);
 };

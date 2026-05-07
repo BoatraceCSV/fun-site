@@ -1,25 +1,7 @@
-resource "google_cloud_scheduler_job" "daily_batch" {
-  name        = "${local.prefix}-daily-batch"
-  description = "Triggers the daily batch job at AM 9:00 JST (after BoatraceCSV daily-sync.yml completes around AM 8:40 JST)"
-  schedule    = var.batch_schedule
-  time_zone   = var.batch_timezone
-  region      = var.region
-
-  http_target {
-    http_method = "POST"
-    uri         = "https://${var.region}-run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.batch.name}:run"
-
-    oauth_token {
-      service_account_email = google_service_account.scheduler.email
-      scope                 = "https://www.googleapis.com/auth/cloud-platform"
-    }
-  }
-
-  retry_config {
-    retry_count          = 3
-    min_backoff_duration = "10s"
-    max_backoff_duration = "300s"
-  }
-
-  depends_on = [google_project_service.apis["cloudscheduler.googleapis.com"]]
-}
+# 旧朝バッチ用 Cloud Scheduler は preview-realtime → Pub/Sub → Eventarc 経路への
+# 移行に伴い廃止。当日初回ビルドは preview-realtime の 08:30 JST 系列の Scheduler
+# 発火で programs/title・race_cards も含めて GCS にミラーされ、Pub/Sub 経由で
+# fun-site の Cloud Run Job が起動する。
+#
+# このファイルは意図的に空。`terraform apply` で `google_cloud_scheduler_job.daily_batch`
+# が destroy される。新規 PR でファイル自体を削除しても良い。

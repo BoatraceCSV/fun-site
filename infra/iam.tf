@@ -32,22 +32,8 @@ resource "google_project_iam_member" "batch_logging" {
   member  = "serviceAccount:${google_service_account.batch.email}"
 }
 
-# -----------------------------------------------------------------------------
-# Cloud Scheduler service account (to invoke Cloud Run Jobs)
-# -----------------------------------------------------------------------------
-resource "google_service_account" "scheduler" {
-  account_id   = "${local.prefix}-scheduler"
-  display_name = "Cloud Scheduler Service Account"
-  description  = "Service account for Cloud Scheduler to invoke Cloud Run Jobs"
-}
-
-# Scoped: Scheduler SA can only invoke the batch job (not all Cloud Run resources)
-resource "google_cloud_run_v2_job_iam_member" "scheduler_run_invoker" {
-  name     = google_cloud_run_v2_job.batch.name
-  location = var.region
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.scheduler.email}"
-}
+# 旧 Cloud Scheduler SA は朝バッチ廃止に伴い不要。
+# Eventarc trigger 用の SA は infra/realtime-pipeline.tf で定義している。
 
 # -----------------------------------------------------------------------------
 # Cloud Build service account

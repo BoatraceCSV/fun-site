@@ -1,7 +1,7 @@
 resource "google_cloud_run_v2_job" "batch" {
-  name     = "${local.prefix}-batch"
-  location = var.region
-  labels   = local.labels
+  name                = "${local.prefix}-batch"
+  location            = var.region
+  labels              = local.labels
   deletion_protection = false
 
   template {
@@ -36,6 +36,22 @@ resource "google_cloud_run_v2_job" "batch" {
         env {
           name  = "GCS_DATA_BUCKET"
           value = google_storage_bucket.data.name
+        }
+
+        # CSV のソースを GCS ミラーバケットに切替。
+        env {
+          name  = "CSV_SOURCE"
+          value = "gcs"
+        }
+
+        env {
+          name  = "CSV_GCS_BUCKET"
+          value = google_storage_bucket.csv_mirror.name
+        }
+
+        env {
+          name  = "CSV_GCS_PATH_ROOT"
+          value = "data"
         }
 
         env {

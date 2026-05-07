@@ -4,9 +4,9 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "GCP region for all resources"
+  description = "GCP region for all resources. preview-realtime と統一するため asia-northeast1 を採用。"
   type        = string
-  default     = "us-central1"
+  default     = "asia-northeast1"
 }
 
 variable "project_name" {
@@ -20,17 +20,9 @@ variable "domain_name" {
   type        = string
 }
 
-variable "batch_schedule" {
-  description = "Cron schedule for daily batch job (in Asia/Tokyo timezone). BoatraceCSV daily-sync.yml が 08:30 JST から ~10 分実行されるため、当日分の race_cards / index が出揃うのを待って 09:00 JST に走らせる。"
-  type        = string
-  default     = "0 9 * * *"
-}
-
-variable "batch_timezone" {
-  description = "Timezone for Cloud Scheduler"
-  type        = string
-  default     = "Asia/Tokyo"
-}
+# 旧朝バッチ用の batch_schedule / batch_timezone 変数は、preview-realtime → Pub/Sub →
+# Eventarc 駆動への移行に伴い廃止。当日初回ビルドは preview-realtime の 08:30 JST 発火で
+# 自動的に走る。
 
 variable "batch_cpu" {
   description = "CPU allocation for Cloud Run Jobs batch"
@@ -87,4 +79,16 @@ variable "github_owner" {
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
+}
+
+variable "preview_realtime_sa_email" {
+  description = "Service account email of the preview-realtime Cloud Run Job (defined in boatracecsv.github.io/infra). Granted publisher / object-writer access in this project."
+  type        = string
+  default     = "preview-realtime-runner@boatrace-487212.iam.gserviceaccount.com"
+}
+
+variable "csv_mirror_bucket_name" {
+  description = "GCS bucket name for the daily CSV mirror written by preview-realtime and read by fun-site."
+  type        = string
+  default     = "boatrace-realtime-data"
 }

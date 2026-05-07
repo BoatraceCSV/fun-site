@@ -1,12 +1,4 @@
-export type {
-  ConfirmationRow,
-  PayoutEntry,
-  ResultPayouts,
-  ResultPosition,
-  ResultRow,
-  TitleRow,
-} from "./csv.js";
-export type { AccuracyStats, AiAccuracy, MlAccuracy } from "./legacy-prediction.js";
+export type { TitleRow } from "./csv.js";
 export type {
   AiEvaluation,
   AiEvaluationContribution,

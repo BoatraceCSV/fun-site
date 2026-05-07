@@ -8,6 +8,7 @@ steps:
       - "corepack enable && pnpm install --frozen-lockfile"
     env:
       - "COREPACK_HOME=/workspace/.corepack"
+      - "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
 
   # 2. Lint (Biome) - runs in parallel with typecheck and test
   - id: "lint"
@@ -18,6 +19,7 @@ steps:
       - "corepack enable && pnpm lint"
     env:
       - "COREPACK_HOME=/workspace/.corepack"
+      - "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
     waitFor: ["install"]
 
   # 3. Typecheck - runs in parallel with lint and test
@@ -29,6 +31,7 @@ steps:
       - "corepack enable && pnpm typecheck"
     env:
       - "COREPACK_HOME=/workspace/.corepack"
+      - "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
     waitFor: ["install"]
 
   # 4. Test - runs in parallel with lint and typecheck
@@ -40,6 +43,7 @@ steps:
       - "corepack enable && pnpm test"
     env:
       - "COREPACK_HOME=/workspace/.corepack"
+      - "COREPACK_ENABLE_DOWNLOAD_PROMPT=0"
     waitFor: ["install"]
 
   # 5. Docker build (batch container) - waits for all checks to pass
@@ -65,19 +69,20 @@ steps:
       - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch"
     waitFor: ["docker-build"]
 
-  # 7. Update Cloud Run Job
+  # 7. Deploy / Update Cloud Run Job (create-if-missing で初回ブートストラップにも対応)
   - id: "deploy"
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
     args:
-      - "gcloud"
-      - "run"
-      - "jobs"
-      - "update"
-      - "${_JOB_NAME}"
-      - "--image"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch:$COMMIT_SHA"
-      - "--region"
-      - "${_REGION}"
+      - "-c"
+      - |
+        if gcloud run jobs describe "${_JOB_NAME}" --region "${_REGION}" >/dev/null 2>&1; then
+          gcloud run jobs update "${_JOB_NAME}" \
+            --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY_NAME}/batch:$COMMIT_SHA" \
+            --region "${_REGION}"
+        else
+          echo "Job ${_JOB_NAME} not found in ${_REGION}; build+push only (Terraform で Job を作成すること)"
+        fi
     waitFor: ["docker-push"]
 
 options:

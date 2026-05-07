@@ -42,3 +42,23 @@ output "dns_name_servers" {
   description = "Name servers for the DNS zone (configure at your registrar)"
   value       = google_dns_managed_zone.default.name_servers
 }
+
+output "csv_mirror_bucket_name" {
+  description = "Name of the CSV mirror bucket consumed by fun-site (written by preview-realtime)"
+  value       = google_storage_bucket.csv_mirror.name
+}
+
+output "realtime_completed_topic" {
+  description = "Pub/Sub topic id for the realtime-completed events from preview-realtime"
+  value       = google_pubsub_topic.realtime_completed.id
+}
+
+output "eventarc_trigger_name" {
+  description = "Name of the Eventarc trigger that dispatches realtime-completed events to the dispatcher workflow"
+  value       = google_eventarc_trigger.realtime_completed_to_workflow.name
+}
+
+output "realtime_dispatcher_workflow" {
+  description = "Workflow that executes the fun-site batch Cloud Run Job in response to realtime-completed events"
+  value       = google_workflows_workflow.realtime_dispatcher.id
+}

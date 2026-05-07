@@ -1,12 +1,21 @@
 # ボートレースファンサイト 総合方針書
 
+> **⚡ 2026-05 アーキテクチャ更新**:
+> 直前情報のリアルタイム反映に伴い、JST 09:00 の朝バッチは廃止され、
+> preview-realtime → Pub/Sub → Eventarc → fun-site batch のチェーンに移行した。
+> 詳細は [`realtime-architecture-proposal.md`](./realtime-architecture-proposal.md) を参照。
+> 本書中の「AM 9:00 JST 朝バッチ」「`data/index/...` パス」「`results` CSV 取得」
+> 「`/stats` 的中実績ページ」等の記述は legacy 設計の名残であり、現状は新方針が優先する。
+> 取得対象 CSV は `programs/title` / `programs/race_cards` / `previews/stt` /
+> `estimate/index` の 4 種類のみ（results は対象外化済）。
+
 ## 1. プロジェクト概要
 
 **プロジェクト名**: ボートレース展開予想ファンサイト (fun-site)
 
-**コンセプト**: BoatraceCSV が公開する 5 種類の CSV を組み合わせ、スタート予想と AI 総合評価（強さpt）を当日全レース分の静的ページとして配信するファンサイト。毎日 AM 9:00 JST（BoatraceCSV の daily-sync 完了直後）のバッチ処理で当日の予想ページを自動生成し、GCP 上で配信する。
+**コンセプト**: BoatraceCSV が公開する 4 種類の CSV (programs/title, programs/race_cards, previews/stt, estimate/index) を組み合わせ、スタート予想と AI 総合評価（強さpt）を当日全レース分の静的ページとして配信するファンサイト。preview-realtime の 5 分間隔バッチ (JST 08:30〜22:59) で更新された CSV を Pub/Sub 経由で受け取り、変更があり次第 fun-site の Cloud Run Job が当日全ページを再ビルドし、GCP 上で配信する。
 
-> **本書の位置づけ**: 当初提案 (proposal) として Vertex AI Gemini を中心とした agentic AI パイプラインを記述していたが、現実装は Vertex AI を使わず、BoatraceCSV の `index` CSV が提供する強さpt をそのまま AI 総合評価として可視化するシンプルな構成に統合された。本書には旧構想と現状の双方を残すが、実態は [README.md](../README.md) を参照。
+> **本書の位置づけ**: 当初提案 (proposal) として Vertex AI Gemini を中心とした agentic AI パイプラインを記述していたが、現実装は Vertex AI を使わず、BoatraceCSV の `estimate/index` CSV が提供する強さpt をそのまま AI 総合評価として可視化するシンプルな構成に統合された。本書には旧構想と現状の双方を残すが、実態は [README.md](../README.md) と [realtime-architecture-proposal.md](./realtime-architecture-proposal.md) を参照。
 
 **ターゲット**: ボートレースを楽しむファン（初中級者がメインターゲット）。テキストの買い目羅列ではなく、展開の流れを画像で直感的に理解できることが差別化ポイント。
 
@@ -64,15 +73,16 @@ GitHub Pages で配信される CSV データを利用する。
 
 **URL パターン**: `https://boatracecsv.github.io/data/{type}/YYYY/MM/DD.csv`
 
-| CSV種別 | パス | 内容 | AM 9:00 JST時点 |
+| CSV種別 | パス | 内容 | 取得タイミング |
 |---|---|---|---|
-| Programs (Title) | `data/programs/title/YYYY/MM/DD.csv` | レース名・グレード・締切時刻などのメタ情報 | 取得可能 |
-| Programs (Race Cards) | `data/programs/race_cards/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 取得可能 |
-| Previews (STT) | `data/previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） | 締切 5 分前以降に順次公開 |
-| Index | `data/index/YYYY/MM/DD.csv` | 強さpt（5要素の寄与pt: 枠番/選手/モーター/展示/気象） | 取得可能（state=daily） |
-| Results | `data/results/YYYY/MM/DD.csv` | レース結果・配当金 | 前日分取得可能 |
+| Programs (Title) | `data/programs/title/YYYY/MM/DD.csv` | レース名・グレード・締切時刻などのメタ情報 | 当日 GitHub Actions daily-sync で生成 → preview-realtime が 08:30 以降に GCS ミラー |
+| Programs (Race Cards) | `data/programs/race_cards/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 同上 |
+| Previews (STT) | `data/previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） | preview-realtime が締切 5 分前から 5 分間隔で追記 |
+| Index | `data/estimate/index/YYYY/MM/DD.csv` | 強さpt（5要素の寄与pt: 枠番/選手/モーター/展示/気象） | daily-sync で `state=daily` 生成 → preview-realtime が `state=realtime` に上書き |
 
-> **注**: 旧 `prediction-preview` / `estimate` / `confirm` は BoatraceCSV 上流での生成停止に伴い廃止。現在は上記 5 種類のみで予想・評価データを構成する。
+> **注 1**: 旧 `prediction-preview` / `estimate` / `confirm` は BoatraceCSV 上流での生成停止に伴い廃止。
+> **注 2**: `results` CSV は的中実績ページ廃止に伴い fun-site の取得対象から除外済（旧 strategy.md の 5 種類記述は legacy）。
+> **注 3**: 旧 strategy.md に `data/index/...` と記載していたが実体は `data/estimate/index/...` であり、旧 fetcher は 404 で空配列に潰れていた既存バグ。本移行で修正済み。
 
 **BoatraceCSV の `index` (強さpt) の特徴**:
 - **強さpt**: 枠番 / 選手 / モーター / 展示 / 気象 の 5 要素ごとに寄与pt を算出し、合計を強さptとする AI 総合評価スコア
@@ -280,7 +290,8 @@ fun-site/
 | 場別 | `/stadium/{stadiumId}/` | 会場の全レース予想一覧 |
 | レース別 | `/race/{date}/{stadiumId}/{raceNum}` | 展開予想画像 + 出走表 + 解説 |
 | アーカイブ | `/archive/{date}` | 過去日付の予想と結果対比 |
-| 的中実績 | `/stats` | 的中率・回収率の統計（旧 Confirmations CSV ベースを想定。CSV 廃止により再設計が必要） |
+
+> **注**: 旧 `/stats` 的中実績ページは 2026-05 移行で対象外化。results CSV 取得処理とともに削除済み。
 
 ### 7.2 1レースページの構成
 
