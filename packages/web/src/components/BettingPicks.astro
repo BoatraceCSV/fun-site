@@ -1,0 +1,65 @@
+---
+import type { AiEvaluation, RaceRacer } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  computeBettingPicks,
+  computeOneMarkDistances,
+  isValidBoatNumber,
+} from "@fun-site/shared";
+
+interface Props {
+  racers: readonly RaceRacer[];
+  aiEvaluation: AiEvaluation;
+}
+
+const { racers, aiEvaluation } = Astro.props;
+
+const distanceEntries = computeOneMarkDistances(racers, aiEvaluation);
+const picks = computeBettingPicks(distanceEntries);
+
+const groups: { readonly label: string; readonly boats: readonly number[] }[] = [
+  { label: "1着", boats: picks.first },
+  { label: "2着", boats: picks.second },
+  { label: "3着", boats: picks.third },
+];
+
+const boatBoxStyle = (boatNumber: number): string => {
+  const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
+  const bg = color?.hex ?? "#999";
+  const fg = color?.textHex ?? "#fff";
+  // 1号艇 (白) は視認性確保のため細いボーダーを付ける
+  const border = boatNumber === 1 ? " border: 1px solid #cbd5e1;" : "";
+  return `background-color: ${bg}; color: ${fg};${border}`;
+};
+---
+
+<div class="flex flex-wrap items-center gap-2">
+  {groups.map((group, gi) => (
+    <>
+      {gi > 0 && (
+        <span class="text-gray-500 text-xl font-bold mx-0.5" aria-hidden="true">−</span>
+      )}
+      <div
+        class="flex items-center gap-1.5"
+        aria-label={`${group.label}候補`}
+      >
+        {group.boats.length === 0 ? (
+          <span class="text-xs text-gray-400">該当なし</span>
+        ) : (
+          group.boats.map((bn) => (
+            <span
+              class="inline-flex items-center justify-center w-8 h-8 rounded-md text-base font-bold"
+              style={boatBoxStyle(bn)}
+              title={`${group.label}候補: ${bn}号艇`}
+            >
+              {bn}
+            </span>
+          ))
+        )}
+      </div>
+    </>
+  ))}
+</div>
+<p class="text-xs text-gray-500 mt-2">
+  1マーク予想の走行距離を基準に、各着順の上位艇から ±0.10 以内の艇を候補としています（三連単フォーメーションの目安）。
+</p>

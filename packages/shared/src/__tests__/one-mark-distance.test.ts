@@ -1,0 +1,112 @@
+import { describe, expect, it } from "vitest";
+import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
+import {
+  type OneMarkDistanceEntry,
+  computeBettingPicks,
+  computeOneMarkDistances,
+} from "../utils/one-mark-distance.js";
+
+const makeRacer = (boatNumber: number, avgST: number): RaceRacer => ({
+  boatNumber,
+  registrationNumber: 1000 + boatNumber,
+  racerName: `R${boatNumber}`,
+  classGrade: "B1",
+  age: 30,
+  branch: "東京",
+  nationalAvgST: avgST,
+  nationalWinRate: 5,
+  nationalTop2Rate: 30,
+  localWinRate: 5,
+  localTop2Rate: 30,
+  motorNumber: 10 + boatNumber,
+  motorTop2Rate: 35,
+});
+
+const makeAi = (entries: { boatNumber: number; strengthPt: number }[]): AiEvaluation => ({
+  state: "exhibition",
+  entries: entries.map((e) => ({
+    boatNumber: e.boatNumber,
+    contribution: { frame: 0, racer: 0, motor: 0, exhibition: 0, weather: 0 },
+    strengthPt: e.strengthPt,
+  })),
+});
+
+describe("computeOneMarkDistances", () => {
+  it("計算式 (1 - avgST) + strengthPt/50 - 1.6 で距離を出す", () => {
+    const racers: RaceRacer[] = [makeRacer(1, 0.15), makeRacer(2, 0.2)];
+    const ai = makeAi([
+      { boatNumber: 1, strengthPt: 50 },
+      { boatNumber: 2, strengthPt: 25 },
+    ]);
+    const result = computeOneMarkDistances(racers, ai);
+    // 艇1: (1-0.15) + 50/50 - 1.6 = 0.85 + 1.0 - 1.6 = 0.25
+    // 艇2: (1-0.20) + 25/50 - 1.6 = 0.80 + 0.5 - 1.6 = -0.30
+    expect(result[0]?.distance).toBeCloseTo(0.25, 5);
+    expect(result[1]?.distance).toBeCloseTo(-0.3, 5);
+  });
+});
+
+describe("computeBettingPicks", () => {
+  const entry = (boatNumber: number, distance: number): OneMarkDistanceEntry => ({
+    boatNumber,
+    avgST: 0,
+    strengthPt: 0,
+    distance,
+  });
+
+  it("各着の基準艇 ±0.10 以内の艇を艇番昇順で返す", () => {
+    // 距離: 1=0.40, 2=0.39, 3=0.20, 4=0.35, 5=0.10, 6=0.05
+    // 降順: 1(0.40), 2(0.39), 4(0.35), 3(0.20), 5(0.10), 6(0.05)
+    const entries = [
+      entry(1, 0.4),
+      entry(2, 0.39),
+      entry(3, 0.2),
+      entry(4, 0.35),
+      entry(5, 0.1),
+      entry(6, 0.05),
+    ];
+    const picks = computeBettingPicks(entries);
+    // 1着基準=0.40 → ±0.10: 1,2,4 (3=0.20差0.20不可)
+    expect(picks.first).toEqual([1, 2, 4]);
+    // 2着基準=0.39 → ±0.10: 1,2,4
+    expect(picks.second).toEqual([1, 2, 4]);
+    // 3着基準=0.35 → ±0.10: 1,2,3(差0.15不可),4
+    // 1=差0.05 OK, 2=差0.04 OK, 3=差0.15 NG, 4=差0.00 OK
+    expect(picks.third).toEqual([1, 2, 4]);
+  });
+
+  it("距離差がちょうど 0.10 の艇は候補に含む", () => {
+    const entries = [
+      entry(1, 0.5),
+      entry(2, 0.4),
+      entry(3, 0.3),
+      entry(4, 0.2),
+      entry(5, 0.1),
+      entry(6, 0.0),
+    ];
+    const picks = computeBettingPicks(entries);
+    // 1着基準=0.5: ±0.10で0.4まで → 1,2
+    expect(picks.first).toEqual([1, 2]);
+    // 2着基準=0.4: ±0.10で0.3〜0.5 → 1,2,3
+    expect(picks.second).toEqual([1, 2, 3]);
+    // 3着基準=0.3: ±0.10で0.2〜0.4 → 2,3,4
+    expect(picks.third).toEqual([2, 3, 4]);
+  });
+
+  it("同値があっても降順N番目の艇の距離を基準にする", () => {
+    // 1=0.40, 2=0.40, 3=0.35, 4=0.20, 5=0.10, 6=0.05
+    // 降順上位3: 0.40, 0.40, 0.35
+    const entries = [
+      entry(1, 0.4),
+      entry(2, 0.4),
+      entry(3, 0.35),
+      entry(4, 0.2),
+      entry(5, 0.1),
+      entry(6, 0.05),
+    ];
+    const picks = computeBettingPicks(entries);
+    expect(picks.first).toEqual([1, 2, 3]); // 0.4 ±0.1
+    expect(picks.second).toEqual([1, 2, 3]); // 0.4 ±0.1
+    expect(picks.third).toEqual([1, 2, 3]); // 0.35 ±0.1
+  });
+});

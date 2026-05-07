@@ -11,3 +11,9 @@ export {
   parseRaceCode,
   type ParsedRaceCode,
 } from "./race-code.js";
+export {
+  computeOneMarkDistances,
+  computeBettingPicks,
+  type OneMarkDistanceEntry,
+  type BettingPicks,
+} from "./one-mark-distance.js";

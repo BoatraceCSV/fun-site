@@ -1,6 +1,6 @@
 ---
 import type { AiEvaluation, RaceRacer } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import { BOAT_COLORS, computeOneMarkDistances, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   racers: readonly RaceRacer[];
@@ -12,9 +12,9 @@ const { racers, aiEvaluation } = Astro.props;
 // 表示順 (top → bottom 固定)
 const DISPLAY_ORDER = [5, 3, 6, 1, 4, 2] as const;
 
-// 軸スケール: 0〜3.0（distance = (1 - avgST) + (strengthPt / 50)）
+// 軸スケール: 0〜0.5（distance = (1 - avgST) + (strengthPt / 50) - 1.6）
 const DIST_MIN = 0;
-const DIST_MAX = 3.0;
+const DIST_MAX = 0.5;
 const DIST_SPAN = DIST_MAX - DIST_MIN;
 
 // 図のサイズ（StartPredictionDiagram と同等）
@@ -39,21 +39,21 @@ const distToX = (d: number): number => {
 // 1マーク基準線の x 座標（distance=0 の位置）
 const baselineX = distToX(0);
 
-// 各枠番のレーサー / AI 評価エントリをルックアップ
-const racerByBoat = new Map(racers.map((r) => [r.boatNumber, r]));
-const aiByBoat = new Map(aiEvaluation.entries.map((e) => [e.boatNumber, e]));
-
+// 走行距離を共通関数で算出し、表示順 (5,3,6,1,4,2) に並べ替える
+const distanceEntries = computeOneMarkDistances(racers, aiEvaluation);
+const distanceByBoat = new Map(distanceEntries.map((e) => [e.boatNumber, e]));
 const rows = DISPLAY_ORDER.map((boatNumber) => {
-  const racer = racerByBoat.get(boatNumber);
-  const ai = aiByBoat.get(boatNumber);
-  const avgST = racer?.nationalAvgST ?? 0;
-  const strengthPt = ai?.strengthPt ?? 0;
-  const distance = 1 - avgST + strengthPt / 50;
-  return { boatNumber, avgST, strengthPt, distance };
+  const e = distanceByBoat.get(boatNumber);
+  return {
+    boatNumber,
+    avgST: e?.avgST ?? 0,
+    strengthPt: e?.strengthPt ?? 0,
+    distance: e?.distance ?? 0,
+  };
 });
 
 // 距離軸の目盛りラベル
-const tickValues = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
+const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
 ---
 
 <figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
@@ -132,7 +132,7 @@ const tickValues = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
             font-size="10"
             fill="#64748b"
           >
-            {tv.toFixed(1)}
+            {tv.toFixed(2)}
           </text>
         </g>
       );
@@ -144,7 +144,7 @@ const tickValues = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
       font-size="10"
       fill="#64748b"
     >
-      1マークからの進行距離（(1 - 平均ST) + 強さpt/50）
+      1マークからの進行距離（(1 - 平均ST) + 強さpt/50 - 1.6）
     </text>
 
     {/* レーン行（5,3,6,1,4,2 固定） */}
@@ -197,6 +197,6 @@ const tickValues = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0];
     })}
   </svg>
   <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
-    各艇の進行距離 = (1 − 全国平均ST) + 強さpt ÷ 50。レーン並びは 5・3・6・1・4・2 で固定表示しています。
+    各艇の進行距離 = (1 − 全国平均ST) + 強さpt ÷ 50 − 1.6（表示範囲 0.00〜0.50）。レーン並びは 5・3・6・1・4・2 で固定表示しています。
   </figcaption>
 </figure>

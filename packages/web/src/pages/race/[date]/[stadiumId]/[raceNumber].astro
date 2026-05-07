@@ -2,6 +2,7 @@
 import type { RacePrediction } from "@fun-site/shared";
 import { getStadiumById, parseRaceCode } from "@fun-site/shared";
 import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
+import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import StartPredictionDiagram from "../../../../components/StartPredictionDiagram.astro";
@@ -67,6 +68,15 @@ const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName 
       )}
     </p>
   </header>
+
+  {/* 買い目 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">買い目</h2>
+    <BettingPicks
+      racers={prediction.racers}
+      aiEvaluation={prediction.aiEvaluation}
+    />
+  </section>
 
   {/* スタート予想 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
