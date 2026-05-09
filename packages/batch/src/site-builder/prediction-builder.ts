@@ -6,6 +6,7 @@ import type {
   RaceCardRow,
   RacePrediction,
   RaceRacer,
+  RaceResultRow,
   StartPrediction,
   StartPredictionEntry,
   SttRow,
@@ -99,12 +100,13 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     motorTop2Rate: r.motorTop2Rate,
   }));
 
-/** race_cards / stt / index / programs/title を 1 レース分の RacePrediction に統合 */
+/** race_cards / stt / index / programs/title / results を 1 レース分の RacePrediction に統合 */
 export const buildRacePrediction = (
   cards: RaceCardRow,
   stt: SttRow | undefined,
   idx: IndexRow | undefined,
   title: TitleRow | undefined,
+  result: RaceResultRow | undefined,
   generatedAt: string,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
@@ -125,6 +127,7 @@ export const buildRacePrediction = (
     racers: toRaceRacers(cards),
     startPrediction: buildStartPrediction(cards, stt),
     aiEvaluation: idx ? buildAiEvaluation(idx) : buildEmptyAiEvaluation(),
+    raceResult: result,
     generatedAt,
   };
 };
@@ -135,11 +138,13 @@ export const buildAllRacePredictions = (
   stt: readonly SttRow[],
   indexes: readonly IndexRow[],
   titles: readonly TitleRow[],
+  results: readonly RaceResultRow[],
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const indexByCode = new Map(indexes.map((i) => [i.raceCode, i]));
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
+  const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
 
   return raceCards.map((cards) =>
     buildRacePrediction(
@@ -147,6 +152,7 @@ export const buildAllRacePredictions = (
       sttByCode.get(cards.raceCode),
       indexByCode.get(cards.raceCode),
       titleByCode.get(cards.raceCode),
+      resultByCode.get(cards.raceCode),
       generatedAt,
     ),
   );

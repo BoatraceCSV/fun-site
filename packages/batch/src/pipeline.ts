@@ -67,7 +67,7 @@ export const runPipeline = async (): Promise<void> => {
   console.info("Step 1: Fetching CSV data...");
   const csvData = await fetchAllCsvData(raceDate);
   console.info(
-    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index`,
+    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index, ${csvData.results.length} results`,
   );
 
   if (csvData.raceCards.length === 0) {
@@ -83,6 +83,7 @@ export const runPipeline = async (): Promise<void> => {
     csvData.stt,
     csvData.indexes,
     csvData.titles,
+    csvData.results,
     generatedAt,
   );
   console.info(`Built ${predictions.length} predictions`);

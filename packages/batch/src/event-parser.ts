@@ -16,7 +16,7 @@ export type UpdatedRace = {
   readonly raceCode: string;
   readonly stadiumId: string;
   readonly raceNumber: number;
-  /** 更新があった CSV 種別（"stt" | "index" | "title" | "race_cards"） */
+  /** 更新があった CSV 種別（"stt" | "index" | "title" | "race_cards" | "results"） */
   readonly csvTypes: readonly string[];
   /** index CSV の state（"daily" | "realtime"）。index 更新時のみ含まれる */
   readonly indexState?: "daily" | "realtime";

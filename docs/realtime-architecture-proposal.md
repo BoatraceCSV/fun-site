@@ -6,7 +6,8 @@
 
 **推奨案**: Pub/Sub を介した「preview-realtime 完了 → fun-site 再ビルド」のイベント駆動チェーン。データソースは GitHub Pages を経由せず GCS を一次ソースとし、CDN ラグと git 経路のレイテンシを排除する。Astro SSG モデルは維持し、毎回フルリビルドする。**朝バッチ (JST 09:00) は廃止し、当日 08:30 の preview-realtime 初回発火を起点に fun-site の初回ビルドを行う。** Pub/Sub message には変更があったレース単位の `updatedRaces` を載せ、fun-site 側で差分判定と早期 return に活用する。
 
-**スコープ外**: results CSV を用いる的中実績ページ (`/stats`) は本提案の対象外とし、関連する取得経路・ビルド処理を fun-site から削除する。将来再開する場合は別途設計する。
+**スコープ外**: K-file 由来の翌日確定 results CSV (`data/results/daily/...`) を用いる的中実績ページ (`/stats`) は本提案の対象外。
+ただし 2026-05 以降、preview-realtime が当日確定直後に bc_rs1_2 をパースして書き出す realtime 結果 CSV (`data/results/realtime/YYYY/MM/DD.csv`) は対象に含める。レース詳細ページの「レース結果」セクション表示にのみ使用し、`/stats` 復活は別途設計とする。
 
 ---
 

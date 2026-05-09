@@ -1,0 +1,139 @@
+---
+import type { RaceResultRow } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  result: RaceResultRow;
+}
+
+const { result } = Astro.props;
+
+const sortedFinishes = [...result.finishes].sort((a, b) => a.rank - b.rank);
+const sortedCourses = [...result.courses].sort((a, b) => a.courseNumber - b.courseNumber);
+
+const formatRecordedAt = (raw: string): string => {
+  // bc_rs1_2 weather 行の HHMM (例: "1522") を "15:22" に整形する
+  if (!raw) return "";
+  const m = raw.match(/^(\d{2})(\d{2})$/);
+  return m ? `${m[1]}:${m[2]}` : raw;
+};
+
+const recordedAtLabel = formatRecordedAt(result.recordedAt);
+---
+
+<div>
+  <div class="flex items-baseline justify-between mb-3">
+    <p class="text-xs text-gray-500">
+      {result.kimarite && <span class="mr-2 font-semibold text-gray-700">{result.kimarite}</span>}
+      {recordedAtLabel && <span>確定 {recordedAtLabel}</span>}
+    </p>
+  </div>
+
+  {sortedFinishes.length > 0 && (
+    <div class="overflow-x-auto mb-4">
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-gray-600">
+            <th scope="col" class="px-2 py-2 text-left">着</th>
+            <th scope="col" class="px-2 py-2 text-left">艇</th>
+            <th scope="col" class="px-2 py-2 text-left">選手</th>
+            <th scope="col" class="px-2 py-2 text-right">レースタイム</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedFinishes.map((f) => {
+            const color = isValidBoatNumber(f.boatNumber) ? BOAT_COLORS[f.boatNumber] : undefined;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="px-2 py-2 font-bold">{f.rank}</td>
+                <td class="px-2 py-2">
+                  <span
+                    class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${f.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {f.boatNumber}
+                  </span>
+                </td>
+                <td class="px-2 py-2">{f.racerName}</td>
+                <td class="px-2 py-2 text-right font-mono text-xs">{f.raceTime || "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  {sortedCourses.length > 0 && (
+    <div class="overflow-x-auto mb-4">
+      <p class="text-xs text-gray-500 mb-1">スタート（進入順）</p>
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="bg-gray-50 text-gray-600 text-xs">
+            <th scope="col" class="px-2 py-1 text-left">コース</th>
+            <th scope="col" class="px-2 py-1 text-left">艇</th>
+            <th scope="col" class="px-2 py-1 text-right">ST</th>
+            <th scope="col" class="px-2 py-1 text-center">F</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedCourses.map((c) => {
+            const color = isValidBoatNumber(c.boatNumber) ? BOAT_COLORS[c.boatNumber] : undefined;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="px-2 py-1">{c.courseNumber}</td>
+                <td class="px-2 py-1">
+                  <span
+                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};`}
+                  >
+                    {c.boatNumber}
+                  </span>
+                </td>
+                <td class="px-2 py-1 text-right font-mono text-xs">
+                  {c.startTiming ? c.startTiming.toFixed(2) : "—"}
+                </td>
+                <td class="px-2 py-1 text-center">
+                  {c.flying && <span class="text-red-600 font-bold">F</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-gray-600">
+    {result.weather.windDirection && (
+      <div>
+        <span class="text-gray-400">風向</span>
+        <span class="ml-1">{result.weather.windDirection}</span>
+      </div>
+    )}
+    {result.weather.windSpeed > 0 && (
+      <div>
+        <span class="text-gray-400">風速</span>
+        <span class="ml-1 font-mono">{result.weather.windSpeed}m</span>
+      </div>
+    )}
+    {result.weather.waveHeight > 0 && (
+      <div>
+        <span class="text-gray-400">波</span>
+        <span class="ml-1 font-mono">{result.weather.waveHeight}cm</span>
+      </div>
+    )}
+    {result.weather.airTemperature !== 0 && (
+      <div>
+        <span class="text-gray-400">気温</span>
+        <span class="ml-1 font-mono">{result.weather.airTemperature}℃</span>
+      </div>
+    )}
+    {result.weather.waterTemperature !== 0 && (
+      <div>
+        <span class="text-gray-400">水温</span>
+        <span class="ml-1 font-mono">{result.weather.waterTemperature}℃</span>
+      </div>
+    )}
+  </div>
+</div>

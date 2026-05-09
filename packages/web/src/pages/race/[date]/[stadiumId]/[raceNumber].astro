@@ -5,6 +5,7 @@ import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
 import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
+import RaceResultSection from "../../../../components/RaceResultSection.astro";
 import StartPredictionDiagram from "../../../../components/StartPredictionDiagram.astro";
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions } from "../../../../lib/data";
@@ -68,6 +69,14 @@ const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName 
       )}
     </p>
   </header>
+
+  {/* レース結果（確定済みのみ表示） */}
+  {prediction.raceResult && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6 border-l-4 border-blue-500">
+      <h2 class="font-bold text-lg mb-3">レース結果</h2>
+      <RaceResultSection result={prediction.raceResult} />
+    </section>
+  )}
 
   {/* 買い目 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">

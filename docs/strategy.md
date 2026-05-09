@@ -4,10 +4,14 @@
 > 直前情報のリアルタイム反映に伴い、JST 09:00 の朝バッチは廃止され、
 > preview-realtime → Pub/Sub → Eventarc → fun-site batch のチェーンに移行した。
 > 詳細は [`realtime-architecture-proposal.md`](./realtime-architecture-proposal.md) を参照。
-> 本書中の「AM 9:00 JST 朝バッチ」「`data/index/...` パス」「`results` CSV 取得」
-> 「`/stats` 的中実績ページ」等の記述は legacy 設計の名残であり、現状は新方針が優先する。
+> 本書中の「AM 9:00 JST 朝バッチ」「`data/index/...` パス」「`/stats` 的中実績ページ」
+> 等の記述は legacy 設計の名残であり、現状は新方針が優先する。
 > 取得対象 CSV は `programs/title` / `programs/race_cards` / `previews/stt` /
-> `estimate/index` の 4 種類のみ（results は対象外化済）。
+> `estimate/index` / `results/realtime` の 5 種類。
+> `results/realtime` は preview-realtime が当日確定直後に bc_rs1_2 をパースして
+> 追記する realtime 結果 CSV で、レース詳細ページの「レース結果」セクション表示に
+> 使う（K-file 由来の翌日確定 `data/results/daily/...` および `/stats` 的中実績
+> ページは引き続き対象外）。
 
 ## 1. プロジェクト概要
 
@@ -79,9 +83,10 @@ GitHub Pages で配信される CSV データを利用する。
 | Programs (Race Cards) | `data/programs/race_cards/YYYY/MM/DD.csv` | 出走表（選手・モーター・成績） | 同上 |
 | Previews (STT) | `data/previews/stt/YYYY/MM/DD.csv` | 直前情報（進入コース・スタート展示） | preview-realtime が締切 5 分前から 5 分間隔で追記 |
 | Index | `data/estimate/index/YYYY/MM/DD.csv` | 強さpt（5要素の寄与pt: 枠番/選手/モーター/展示/気象） | daily-sync で `state=daily` 生成 → preview-realtime が `state=realtime` に上書き |
+| Results (Realtime) | `data/results/realtime/YYYY/MM/DD.csv` | 当日確定したレースの着順・ST・天候・決まり手（bc_rs1_2 由来） | preview-realtime が締切後の確定タイミングで 1 レース 1 行ずつ追記 |
 
 > **注 1**: 旧 `prediction-preview` / `estimate` / `confirm` は BoatraceCSV 上流での生成停止に伴い廃止。
-> **注 2**: `results` CSV は的中実績ページ廃止に伴い fun-site の取得対象から除外済（旧 strategy.md の 5 種類記述は legacy）。
+> **注 2**: K-file 由来の翌日確定 CSV (`data/results/daily/...`) と `/stats` 的中実績ページは引き続き対象外。realtime 結果は当日中の確定情報表示にのみ使用する。
 > **注 3**: 旧 strategy.md に `data/index/...` と記載していたが実体は `data/estimate/index/...` であり、旧 fetcher は 404 で空配列に潰れていた既存バグ。本移行で修正済み。
 
 **BoatraceCSV の `index` (強さpt) の特徴**:

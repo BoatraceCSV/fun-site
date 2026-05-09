@@ -1,4 +1,5 @@
 import type { IndexState } from "./race-card.js";
+import type { RaceResultRow } from "./race-result.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
 export type RaceRacer = {
@@ -73,5 +74,10 @@ export type RacePrediction = {
   readonly racers: readonly RaceRacer[];
   readonly startPrediction: StartPrediction;
   readonly aiEvaluation: AiEvaluation;
+  /**
+   * realtime 結果。当該レースが確定し results/realtime CSV に行が存在する
+   * 場合のみセットされる。未確定 / CSV 未取得時は undefined。
+   */
+  readonly raceResult?: RaceResultRow;
   readonly generatedAt: string;
 };

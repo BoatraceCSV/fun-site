@@ -5,10 +5,12 @@ const HTTP_BASE_URL = "https://boatracecsv.github.io/data";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
 
-// BoatraceCSV で現在 fun-site が利用する CSV のみを列挙する。
+// BoatraceCSV で現在 fun-site が利用する CSV を列挙する。
 // 旧 programs / prediction-preview / estimate / confirm は上流で生成停止に伴い廃止済み。
-// results は的中実績ページ廃止に伴い fun-site の取得対象から外している。
-export type CsvType = "title" | "race_cards" | "stt" | "index";
+// `results` は preview-realtime が当日確定直後に追記する realtime 結果 CSV
+// (`data/results/realtime/YYYY/MM/DD.csv`)。K-file 由来の翌日確定
+// (`data/results/daily/...`) は対象外。
+export type CsvType = "title" | "race_cards" | "stt" | "index" | "results";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
@@ -17,6 +19,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   // 旧 design.md 記載の `data/index/...` は実体不在で 404 → fetchAndParse で空配列に潰れていた既存バグ。
   // boatracecsv.github.io リポジトリの実体は `data/estimate/index/YYYY/MM/DD.csv`。
   index: "estimate/index",
+  results: "results/realtime",
 };
 
 /**

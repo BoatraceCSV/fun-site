@@ -17,4 +17,10 @@ export type {
   SttBoat,
   SttRow,
 } from "./race-card.js";
+export type {
+  RaceResultCourse,
+  RaceResultFinish,
+  RaceResultRow,
+  RaceResultWeather,
+} from "./race-result.js";
 export type { Stadium } from "./stadium.js";
