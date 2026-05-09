@@ -100,11 +100,18 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     motorTop2Rate: r.motorTop2Rate,
   }));
 
-/** race_cards / stt / index / programs/title / results を 1 レース分の RacePrediction に統合 */
+/** race_cards / stt / index / programs/title / results を 1 レース分の RacePrediction に統合
+ *
+ * `dailyIdx` は朝バッチの index 行（直前情報反映前）、`realtimeIdx` は直前情報反映後の
+ * index 行。両方が同一レースに存在する場合があり、`aiEvaluationDaily` /
+ * `aiEvaluationRealtime` にそれぞれ格納する。`aiEvaluation` は後方互換用に realtime を
+ * 優先し、無ければ daily を、それも無ければ空評価を採用する。
+ */
 export const buildRacePrediction = (
   cards: RaceCardRow,
   stt: SttRow | undefined,
-  idx: IndexRow | undefined,
+  dailyIdx: IndexRow | undefined,
+  realtimeIdx: IndexRow | undefined,
   title: TitleRow | undefined,
   result: RaceResultRow | undefined,
   generatedAt: string,
@@ -114,6 +121,10 @@ export const buildRacePrediction = (
   // title CSV の "ボートレース桐生" 形式は prefix を取り除き正規名に揃える
   const stadiumName =
     stadium?.name ?? title?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
+
+  const aiEvaluationDaily = dailyIdx ? buildAiEvaluation(dailyIdx) : undefined;
+  const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
+  const aiEvaluation = aiEvaluationRealtime ?? aiEvaluationDaily ?? buildEmptyAiEvaluation();
 
   return {
     raceCode: cards.raceCode,
@@ -126,13 +137,19 @@ export const buildRacePrediction = (
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers: toRaceRacers(cards),
     startPrediction: buildStartPrediction(cards, stt),
-    aiEvaluation: idx ? buildAiEvaluation(idx) : buildEmptyAiEvaluation(),
+    aiEvaluation,
+    aiEvaluationDaily,
+    aiEvaluationRealtime,
     raceResult: result,
     generatedAt,
   };
 };
 
-/** 当日分の全 race_cards を起点に RacePrediction を組み立てる */
+/** 当日分の全 race_cards を起点に RacePrediction を組み立てる
+ *
+ * `indexes` には同一 raceCode で state="daily" / "realtime" の 2 行が混在し得る。
+ * 状態ごとに Map を分けることで両方の AI 評価を保持する。
+ */
 export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
@@ -142,7 +159,12 @@ export const buildAllRacePredictions = (
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
-  const indexByCode = new Map(indexes.map((i) => [i.raceCode, i]));
+  const dailyIndexByCode = new Map(
+    indexes.filter((i) => i.state === "daily").map((i) => [i.raceCode, i]),
+  );
+  const realtimeIndexByCode = new Map(
+    indexes.filter((i) => i.state === "realtime").map((i) => [i.raceCode, i]),
+  );
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
 
@@ -150,7 +172,8 @@ export const buildAllRacePredictions = (
     buildRacePrediction(
       cards,
       sttByCode.get(cards.raceCode),
-      indexByCode.get(cards.raceCode),
+      dailyIndexByCode.get(cards.raceCode),
+      realtimeIndexByCode.get(cards.raceCode),
       titleByCode.get(cards.raceCode),
       resultByCode.get(cards.raceCode),
       generatedAt,

@@ -78,11 +78,13 @@ const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName 
     </section>
   )}
 
-  {/* 買い目 */}
+  {/* 買い目（当日・直前を併記） */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <h2 class="font-bold text-lg mb-3">買い目</h2>
     <BettingPicks
       racers={prediction.racers}
+      aiEvaluationDaily={prediction.aiEvaluationDaily}
+      aiEvaluationRealtime={prediction.aiEvaluationRealtime}
       aiEvaluation={prediction.aiEvaluation}
     />
   </section>

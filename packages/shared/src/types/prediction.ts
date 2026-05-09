@@ -73,7 +73,21 @@ export type RacePrediction = {
   readonly votingDeadline: string;
   readonly racers: readonly RaceRacer[];
   readonly startPrediction: StartPrediction;
+  /**
+   * AI 総合評価（後方互換用）。realtime が利用可能ならそちらを、無ければ daily を採用する。
+   * 1マーク予想や AI 評価チャートの既存表示はこの値を参照する。
+   */
   readonly aiEvaluation: AiEvaluation;
+  /**
+   * 朝バッチ時点の AI 評価（直前情報反映前）。買い目「当日買い目」表示に利用する。
+   * index CSV に daily 行が存在しない場合は undefined。
+   */
+  readonly aiEvaluationDaily?: AiEvaluation;
+  /**
+   * 直前情報反映後の AI 評価。買い目「直前買い目」表示に利用する。
+   * index CSV に realtime 行が存在しない場合（直前情報未反映時）は undefined。
+   */
+  readonly aiEvaluationRealtime?: AiEvaluation;
   /**
    * realtime 結果。当該レースが確定し results/realtime CSV に行が存在する
    * 場合のみセットされる。未確定 / CSV 未取得時は undefined。

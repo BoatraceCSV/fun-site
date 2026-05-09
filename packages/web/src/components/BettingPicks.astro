@@ -9,18 +9,51 @@ import {
 
 interface Props {
   racers: readonly RaceRacer[];
-  aiEvaluation: AiEvaluation;
+  /** 朝バッチ時点の AI 評価 (= 当日買い目の根拠)。無ければ当日買い目は表示されない。 */
+  aiEvaluationDaily?: AiEvaluation;
+  /** 直前情報反映後の AI 評価 (= 直前買い目の根拠)。無ければ直前買い目は「未取得」と表示する。 */
+  aiEvaluationRealtime?: AiEvaluation;
+  /** 後方互換: いずれの個別評価も渡されていない場合のフォールバック。
+   *  state によって当日買い目 / 直前買い目を切り替える。 */
+  aiEvaluation?: AiEvaluation;
 }
 
-const { racers, aiEvaluation } = Astro.props;
+const {
+  racers,
+  aiEvaluationDaily,
+  aiEvaluationRealtime,
+  aiEvaluation,
+} = Astro.props;
 
-const distanceEntries = computeOneMarkDistances(racers, aiEvaluation);
-const picks = computeBettingPicks(distanceEntries);
+// 後方互換: aiEvaluation 単体が渡された場合は state を見て daily / realtime のどちらかに振り分ける
+const dailyEval =
+  aiEvaluationDaily ??
+  (aiEvaluation && aiEvaluation.state === "daily" ? aiEvaluation : undefined);
+const realtimeEval =
+  aiEvaluationRealtime ??
+  (aiEvaluation && aiEvaluation.state === "realtime" ? aiEvaluation : undefined);
 
-const groups: { readonly label: string; readonly boats: readonly number[] }[] = [
-  { label: "1着", boats: picks.first },
-  { label: "2着", boats: picks.second },
-  { label: "3着", boats: picks.third },
+type Group = { readonly label: string; readonly boats: readonly number[] };
+
+const buildGroups = (evaluation: AiEvaluation): Group[] => {
+  const distanceEntries = computeOneMarkDistances(racers, evaluation);
+  const picks = computeBettingPicks(distanceEntries);
+  return [
+    { label: "1着", boats: picks.first },
+    { label: "2着", boats: picks.second },
+    { label: "3着", boats: picks.third },
+  ];
+};
+
+const sections: { readonly heading: string; readonly groups: Group[] | null }[] = [
+  {
+    heading: "当日買い目",
+    groups: dailyEval ? buildGroups(dailyEval) : null,
+  },
+  {
+    heading: "直前買い目",
+    groups: realtimeEval ? buildGroups(realtimeEval) : null,
+  },
 ];
 
 const boatBoxStyle = (boatNumber: number): string => {
@@ -33,33 +66,49 @@ const boatBoxStyle = (boatNumber: number): string => {
 };
 ---
 
-<div class="flex flex-wrap items-center gap-2">
-  {groups.map((group, gi) => (
-    <>
-      {gi > 0 && (
-        <span class="text-gray-500 text-xl font-bold mx-0.5" aria-hidden="true">−</span>
+<div class="space-y-4">
+  {sections.map((section) => (
+    <div>
+      <h3 class="text-sm font-semibold text-gray-700 mb-2">{section.heading}</h3>
+      {section.groups === null ? (
+        <p class="text-xs text-gray-400">
+          {section.heading === "直前買い目"
+            ? "直前情報がまだ反映されていません。"
+            : "当日の AI 評価が取得できていません。"}
+        </p>
+      ) : (
+        <div class="flex flex-wrap items-center gap-2">
+          {section.groups.map((group, gi) => (
+            <>
+              {gi > 0 && (
+                <span class="text-gray-500 text-xl font-bold mx-0.5" aria-hidden="true">−</span>
+              )}
+              <div
+                class="flex items-center gap-1.5"
+                aria-label={`${section.heading} ${group.label}候補`}
+              >
+                {group.boats.length === 0 ? (
+                  <span class="text-xs text-gray-400">該当なし</span>
+                ) : (
+                  group.boats.map((bn) => (
+                    <span
+                      class="inline-flex items-center justify-center w-8 h-8 rounded-md text-base font-bold"
+                      style={boatBoxStyle(bn)}
+                      title={`${section.heading} ${group.label}候補: ${bn}号艇`}
+                    >
+                      {bn}
+                    </span>
+                  ))
+                )}
+              </div>
+            </>
+          ))}
+        </div>
       )}
-      <div
-        class="flex items-center gap-1.5"
-        aria-label={`${group.label}候補`}
-      >
-        {group.boats.length === 0 ? (
-          <span class="text-xs text-gray-400">該当なし</span>
-        ) : (
-          group.boats.map((bn) => (
-            <span
-              class="inline-flex items-center justify-center w-8 h-8 rounded-md text-base font-bold"
-              style={boatBoxStyle(bn)}
-              title={`${group.label}候補: ${bn}号艇`}
-            >
-              {bn}
-            </span>
-          ))
-        )}
-      </div>
-    </>
+    </div>
   ))}
 </div>
-<p class="text-xs text-gray-500 mt-2">
+<p class="text-xs text-gray-500 mt-3">
   1マーク予想の走行距離を基準に、各着順の上位艇から ±0.10 以内の艇を候補としています（三連単フォーメーションの目安）。
+  「当日買い目」は朝バッチ時点（直前情報反映前）、「直前買い目」は直前情報反映後の AI 評価に基づきます。
 </p>
