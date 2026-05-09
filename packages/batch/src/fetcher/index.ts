@@ -1,10 +1,4 @@
-import type {
-  IndexRow,
-  RaceCardRow,
-  RaceResultRow,
-  SttRow,
-  TitleRow,
-} from "@fun-site/shared";
+import type { IndexRow, RaceCardRow, RaceResultRow, SttRow, TitleRow } from "@fun-site/shared";
 import { fetchCsvText } from "./csv-client.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 import { parseResults } from "./result-schemas.js";
