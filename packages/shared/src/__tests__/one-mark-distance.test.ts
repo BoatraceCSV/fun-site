@@ -23,7 +23,7 @@ const makeRacer = (boatNumber: number, avgST: number): RaceRacer => ({
 });
 
 const makeAi = (entries: { boatNumber: number; strengthPt: number }[]): AiEvaluation => ({
-  state: "exhibition",
+  state: "realtime",
   entries: entries.map((e) => ({
     boatNumber: e.boatNumber,
     contribution: { frame: 0, racer: 0, motor: 0, exhibition: 0, weather: 0 },
