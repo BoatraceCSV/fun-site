@@ -1,6 +1,6 @@
 ---
 import type { RacePrediction } from "@fun-site/shared";
-import { getStadiumById, parseRaceCode } from "@fun-site/shared";
+import { getRaceGradeBadge, getStadiumById, parseRaceCode } from "@fun-site/shared";
 import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
 import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
@@ -10,21 +10,50 @@ import StartPredictionDiagram from "../../../../components/StartPredictionDiagra
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions } from "../../../../lib/data";
 
+/** レース番号リンクバー用の各レースのメタ情報 */
+type RaceNavItem = {
+  raceNumber: number;
+  raceName: string;
+  votingDeadline: string;
+  isConfirmed: boolean;
+};
+
 export async function getStaticPaths() {
   const dates = await loadAvailableDates();
   const paths = [];
 
   for (const date of dates) {
     const predictions = await loadPredictions(date);
+    // (date, stadiumId) ごとにレースメタ情報を集約
+    const racesByStadium = new Map<string, RaceNavItem[]>();
     for (const prediction of predictions) {
       const parsed = parseRaceCode(prediction.raceCode);
+      const list = racesByStadium.get(parsed.stadiumId) ?? [];
+      // 確定判定: realtime 結果がセットされていれば確定。
+      // ただし結果 CSV が未取得でも votingDeadline が "確定" になっているケースがあるため、
+      // 文字列も併用判定する (上流 CSV の `電話投票締切予定` 列は確定後に "確定" に置き換わる)。
+      const isConfirmed =
+        prediction.raceResult !== undefined || prediction.votingDeadline === "確定";
+      list.push({
+        raceNumber: prediction.raceNumber,
+        raceName: prediction.raceName ?? "",
+        votingDeadline: prediction.votingDeadline ?? "",
+        isConfirmed,
+      });
+      racesByStadium.set(parsed.stadiumId, list);
+    }
+    for (const prediction of predictions) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      const stadiumRaces = [
+        ...(racesByStadium.get(parsed.stadiumId) ?? []),
+      ].sort((a, b) => a.raceNumber - b.raceNumber);
       paths.push({
         params: {
           date: parsed.date,
           stadiumId: parsed.stadiumId,
           raceNumber: String(prediction.raceNumber),
         },
-        props: { prediction },
+        props: { prediction, stadiumRaces },
       });
     }
   }
@@ -34,12 +63,15 @@ export async function getStaticPaths() {
 
 interface Props {
   prediction: RacePrediction;
+  stadiumRaces: RaceNavItem[];
 }
 
-const { prediction } = Astro.props;
+const { prediction, stadiumRaces } = Astro.props;
 const stadium = getStadiumById(prediction.stadiumId);
 const stadiumName = stadium?.name ?? prediction.stadiumName;
 const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName || "スタート予想"}`;
+const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
+const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 ---
 
 <BaseLayout title={title}>
@@ -47,9 +79,102 @@ const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName 
   <nav class="text-sm text-gray-500 mb-4">
     <a href="/" class="hover:text-blue-600">トップ</a>
     <span class="mx-1">/</span>
-    <span>{stadiumName}</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
     <span class="mx-1">/</span>
     <span>{prediction.raceNumber}R</span>
+  </nav>
+
+  {/* レース番号リンク (1R-12R) */}
+  <nav class="bg-white rounded-lg shadow-sm p-2 mb-4 overflow-x-auto" aria-label="レース番号">
+    <ul class="flex gap-1 min-w-max">
+      {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
+        const isCurrent = n === prediction.raceNumber;
+        const meta = raceByNumber.get(n);
+        const isAvailable = meta !== undefined;
+        const isConfirmed = meta?.isConfirmed ?? false;
+
+        // 状態別のスタイル: 背景色そのもので識別
+        // 現在     → 青ベタ (白文字)
+        // 開催予定 → 青系 (薄青背景 + 青ボーダー + 青文字)
+        // 確定済み → 緑系 (薄緑背景 + 緑ボーダー + 緑文字)
+        // 非開催   → 灰色ベタ (淡色文字)
+        const tileBase =
+          "flex flex-col items-center justify-between w-[4.75rem] min-h-[4.75rem] px-1 py-1.5 rounded-md select-none border-2";
+        let tileClass = "";
+        if (isCurrent) {
+          tileClass = `${tileBase} bg-blue-600 text-white border-blue-700 shadow-sm`;
+        } else if (!isAvailable) {
+          tileClass = `${tileBase} bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed`;
+        } else if (isConfirmed) {
+          tileClass = `${tileBase} bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100`;
+        } else {
+          tileClass = `${tileBase} bg-sky-50 text-sky-900 border-sky-300 hover:bg-sky-100`;
+        }
+
+        // 中身: レース番号 / レース名 / 締切 or 確定
+        const inner = (
+          <>
+            <span class="text-sm font-bold leading-none tabular-nums">{n}R</span>
+            <span class={`block text-[10px] leading-tight text-center mt-1 truncate max-w-full ${
+              isCurrent
+                ? "text-blue-100"
+                : !isAvailable
+                  ? "text-gray-400"
+                  : isConfirmed
+                    ? "text-emerald-700"
+                    : "text-sky-700"
+            }`}>
+              {meta?.raceName || (isAvailable ? "—" : "未開催")}
+            </span>
+            {isAvailable ? (
+              isConfirmed ? (
+                <span class={`mt-1 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
+                  isCurrent ? "bg-white/25 text-white" : "bg-emerald-600 text-white"
+                }`}>
+                  確定
+                </span>
+              ) : (
+                <span class={`mt-1 inline-block px-1 py-0.5 rounded text-[10px] font-mono leading-none tabular-nums ${
+                  isCurrent ? "bg-white/15 text-white" : "bg-white text-sky-800 border border-sky-200"
+                }`}>
+                  {meta?.votingDeadline ? meta.votingDeadline : "—"}
+                </span>
+              )
+            ) : (
+              <span class="mt-1 text-[10px] leading-none">—</span>
+            )}
+          </>
+        );
+
+        if (isCurrent) {
+          return (
+            <li>
+              <span class={tileClass} aria-current="page">
+                {inner}
+              </span>
+            </li>
+          );
+        }
+        if (isAvailable) {
+          return (
+            <li>
+              <a
+                href={`/race/${prediction.raceDate}/${prediction.stadiumId}/${n}/`}
+                class={tileClass}
+                aria-label={`${n}R ${meta?.raceName ?? ""}${isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""}`}
+              >
+                {inner}
+              </a>
+            </li>
+          );
+        }
+        return (
+          <li>
+            <span class={tileClass}>{inner}</span>
+          </li>
+        );
+      })}
+    </ul>
   </nav>
 
   {/* ヘッダ */}
@@ -61,11 +186,20 @@ const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName 
         <span class="text-base text-gray-700 font-normal">{prediction.raceName}</span>
       )}
     </h1>
-    <p class="text-sm text-gray-500 mt-1">
+    <p class="text-sm text-gray-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>{prediction.raceDate}</span>
-      {prediction.raceTitle && <span class="ml-2">{prediction.raceTitle}</span>}
+      {headerGradeBadge && (
+        <span
+          class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${headerGradeBadge.tailwindClass}`}
+          aria-label={`グレード ${headerGradeBadge.label}`}
+        >
+          {headerGradeBadge.label}
+        </span>
+      )}
+      {prediction.raceTitle && <span>{prediction.raceTitle}</span>}
+      {prediction.dayLabel && <span>{prediction.dayLabel}</span>}
       {prediction.votingDeadline && (
-        <span class="ml-2">締切 {prediction.votingDeadline}</span>
+        <span>{prediction.votingDeadline === "確定" ? "確定" : `締切 ${prediction.votingDeadline}`}</span>
       )}
     </p>
   </header>

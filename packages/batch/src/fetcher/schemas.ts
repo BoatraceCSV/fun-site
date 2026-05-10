@@ -17,6 +17,7 @@ const parseTitleRow = (row: Record<string, string>): TitleRow => ({
   raceNumber: toNumber(row["レース回"]?.replace(/[^0-9]/g, "")),
   title: row["タイトル"] ?? "",
   dayNumber: toNumber(row["日次"]?.replace(/[^0-9]/g, "")),
+  dayLabel: row["日次"] ?? "",
   grade: row["グレード"] ?? "",
   isNighter: (row["ナイター"] ?? "").trim() === "Y",
   raceName: row["レース名"] ?? "",

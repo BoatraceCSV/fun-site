@@ -34,7 +34,13 @@ export const loadPredictions = async (date: string): Promise<RacePrediction[]> =
       }),
     );
     const predictions = parsed.filter(isNewSchema);
-    return predictions.sort((a, b) => {
+    // 古い JSON 互換: dayLabel / grade が未設定の場合は空文字で埋める
+    const normalized = predictions.map((p) => ({
+      ...p,
+      dayLabel: typeof p.dayLabel === "string" ? p.dayLabel : "",
+      grade: typeof p.grade === "string" ? p.grade : "",
+    }));
+    return normalized.sort((a, b) => {
       if (a.stadiumId !== b.stadiumId) return a.stadiumId.localeCompare(b.stadiumId);
       return a.raceNumber - b.raceNumber;
     });

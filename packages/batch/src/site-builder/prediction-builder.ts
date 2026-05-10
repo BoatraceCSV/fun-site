@@ -134,6 +134,8 @@ export const buildRacePrediction = (
     raceNumber: parsed.raceNumber,
     raceName: title?.raceName ?? "",
     raceTitle: title?.title ?? "",
+    dayLabel: title?.dayLabel ?? "",
+    grade: title?.grade ?? "",
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers: toRaceRacers(cards),
     startPrediction: buildStartPrediction(cards, stt),

@@ -20,6 +20,7 @@ describe("parseTitles", () => {
     expect(first?.raceNumber).toBe(1);
     expect(first?.title).toBe("第５３回上毛新聞社杯");
     expect(first?.dayNumber).toBe(0); // "最終日" は数字を含まないので 0
+    expect(first?.dayLabel).toBe("最終日");
     expect(first?.grade).toBe("IP");
     expect(first?.isNighter).toBe(false);
     expect(first?.raceName).toBe("一般");
@@ -31,6 +32,7 @@ describe("parseTitles", () => {
     expect(second?.grade).toBe("SG");
     expect(second?.isNighter).toBe(true);
     expect(second?.raceName).toBe("ドリーム戦");
+    expect(second?.dayLabel).toBe("初日");
     expect(second?.cancellationStatus).toBe("中止");
   });
 

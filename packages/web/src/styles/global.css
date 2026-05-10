@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/*
+ * shared パッケージ内の TypeScript ファイルにある Tailwind class 文字列
+ * (例: race-grades.ts の `bg-purple-600 text-white`) も検出対象に含める。
+ * pnpm workspace 経由のシンボリックリンクは node_modules 扱いになり、
+ * Tailwind v4 のデフォルトコンテンツスキャンから外れてしまうため明示する。
+ */
+@source "../../../shared/src/**/*.ts";

@@ -70,6 +70,17 @@ export type RacePrediction = {
   readonly raceNumber: number;
   readonly raceName: string;
   readonly raceTitle: string;
+  /**
+   * 開催日次の表示用ラベル。"最終日" / "初日" / "1日目" など、上流 CSV の生文字列。
+   * 古い JSON では未設定の場合があるため、UI 側では空文字フォールバックすること。
+   */
+  readonly dayLabel: string;
+  /**
+   * レースグレードの上流コード。"SG" / "PG1" / "G1" / "G2" / "G3" / "IP" など。
+   * "IP" は一般戦相当。バッジ表示判定の対象外として UI 側で扱う。
+   * 古い JSON では未設定の場合があるため、UI 側では空文字フォールバックすること。
+   */
+  readonly grade: string;
   readonly votingDeadline: string;
   readonly racers: readonly RaceRacer[];
   readonly startPrediction: StartPrediction;

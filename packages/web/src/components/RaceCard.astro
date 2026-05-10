@@ -1,6 +1,13 @@
 ---
 import type { RacePrediction } from "@fun-site/shared";
-import { BOAT_COLORS, getStadiumById, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  computeBettingPicks,
+  computeOneMarkDistances,
+  getRaceGradeBadge,
+  getStadiumById,
+  isValidBoatNumber,
+} from "@fun-site/shared";
 
 interface Props {
   prediction: RacePrediction;
@@ -11,41 +18,110 @@ const stadium = getStadiumById(prediction.stadiumId);
 const stadiumName = stadium?.name ?? prediction.stadiumName;
 const raceUrl = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}`;
 
-// AI 評価で強さptが最も高い艇を「本命」として表示
-const topEntry = [...prediction.aiEvaluation.entries].sort(
-  (a, b) => b.strengthPt - a.strengthPt,
-)[0];
-const topColor =
-  topEntry && isValidBoatNumber(topEntry.boatNumber)
-    ? BOAT_COLORS[topEntry.boatNumber]
-    : undefined;
+// 確定済み判定 (詳細ページの判定と揃える)
+const isConfirmed =
+  prediction.raceResult !== undefined || prediction.votingDeadline === "確定";
+
+// 2 行目に並べるサブタイトル: 節タイトル / 日次 / レース名 を空文字を除いて連結
+const subtitleParts = [
+  prediction.raceTitle,
+  prediction.dayLabel,
+  prediction.raceName,
+].filter((s) => typeof s === "string" && s.length > 0);
+const subtitle = subtitleParts.join(" ");
+
+// 2 行目先頭のグレードバッジ。一般戦 (IP) や未設定の場合は null。
+const gradeBadge = getRaceGradeBadge(prediction.grade ?? "");
+
+// 買い目: AI 評価から走行距離 → フォーメーション 1着・2着・3着候補を導出
+const distances = computeOneMarkDistances(prediction.racers, prediction.aiEvaluation);
+const picks = computeBettingPicks(distances);
+// AI 評価が空 (全 strengthPt = 0) のときは買い目は無意味なので非表示
+const hasAiEvaluation = prediction.aiEvaluation.entries.some((e) => e.strengthPt > 0);
+const pickGroups = hasAiEvaluation
+  ? [
+      { label: "1着", boats: picks.first },
+      { label: "2着", boats: picks.second },
+      { label: "3着", boats: picks.third },
+    ]
+  : [];
+
+const boatBoxStyle = (boatNumber: number): string => {
+  const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
+  const bg = color?.hex ?? "#999";
+  const fg = color?.textHex ?? "#fff";
+  // 1号艇 (白) は視認性確保のため細いボーダーを付ける
+  const border = boatNumber === 1 ? " border: 1px solid #cbd5e1;" : "";
+  return `background-color: ${bg}; color: ${fg};${border}`;
+};
 ---
 
 <a
   href={raceUrl}
   class="block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100 p-4"
 >
-  <div class="flex items-center justify-between mb-2">
+  {/* 1行目: 会場 + レース番号 / 締切 or 確定 */}
+  <div class="flex items-center justify-between mb-1.5">
     <h3 class="font-bold text-base">
       {stadiumName} <span class="text-blue-600">{prediction.raceNumber}R</span>
     </h3>
-    {prediction.votingDeadline && (
-      <span class="text-xs text-gray-500">締切 {prediction.votingDeadline}</span>
-    )}
-  </div>
-  {prediction.raceName && (
-    <p class="text-xs text-gray-600 mb-2 truncate">{prediction.raceName}</p>
-  )}
-  {topEntry && (
-    <div class="flex items-center gap-2 text-sm">
-      <span class="text-xs text-gray-500">本命</span>
-      <span
-        class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
-        style={`background-color: ${topColor?.hex ?? "#999"}; color: ${topColor?.textHex ?? "#fff"};${topEntry.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
-      >
-        {topEntry.boatNumber}
+    {isConfirmed ? (
+      <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none bg-emerald-600 text-white">
+        確定
       </span>
-      <span class="font-mono text-gray-700">{topEntry.strengthPt.toFixed(1)}pt</span>
+    ) : prediction.votingDeadline ? (
+      <span class="text-xs text-gray-500">締切 {prediction.votingDeadline}</span>
+    ) : null}
+  </div>
+
+  {/* 2行目: [グレード] 節タイトル 何日目 レース名 */}
+  {(subtitle || gradeBadge) && (
+    <p
+      class="text-xs text-gray-600 mb-2 truncate flex items-center gap-1.5"
+      title={`${gradeBadge ? `${gradeBadge.label} ` : ""}${subtitle}`}
+    >
+      {gradeBadge && (
+        <span
+          class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none shrink-0 ${gradeBadge.tailwindClass}`}
+          aria-label={`グレード ${gradeBadge.label}`}
+        >
+          {gradeBadge.label}
+        </span>
+      )}
+      {subtitle && <span class="truncate">{subtitle}</span>}
+    </p>
+  )}
+
+  {/* 3行目: 買い目 (1着 - 2着 - 3着 のフォーメーション) */}
+  {pickGroups.length > 0 ? (
+    <div class="flex flex-wrap items-center gap-1 text-xs" aria-label="買い目">
+      {pickGroups.map((group, gi) => (
+        <>
+          {gi > 0 && (
+            <span class="text-gray-400 font-bold mx-0.5" aria-hidden="true">−</span>
+          )}
+          <div
+            class="flex items-center gap-1"
+            aria-label={`${group.label}候補`}
+          >
+            {group.boats.length === 0 ? (
+              <span class="text-gray-400">該当なし</span>
+            ) : (
+              group.boats.map((bn) => (
+                <span
+                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold tabular-nums"
+                  style={boatBoxStyle(bn)}
+                  title={`${group.label}候補: ${bn}号艇`}
+                >
+                  {bn}
+                </span>
+              ))
+            )}
+          </div>
+        </>
+      ))}
     </div>
+  ) : (
+    <p class="text-xs text-gray-400">買い目: AI 評価未取得</p>
   )}
 </a>

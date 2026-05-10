@@ -1,5 +1,5 @@
 ---
-import { getStadiumById, toJSTDateString } from "@fun-site/shared";
+import { STADIUMS, toJSTDateString } from "@fun-site/shared";
 import RaceCard from "../components/RaceCard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions } from "../lib/data";
@@ -16,37 +16,84 @@ for (const prediction of predictions) {
   group.push(prediction);
   stadiumGroups.set(key, group);
 }
+
+// 開催中の会場ID集合
+const activeStadiumIds = new Set(stadiumGroups.keys());
+
+// 現在の JST 時刻 (HH:MM)
+const nowJSTHHMM = new Date().toLocaleTimeString("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const isViewingToday = latestDate === today;
+
+// 各会場で「締切が一番近いレース」を選定
+// - 表示日が今日の場合: 締切が現時刻以降で最も早いもの。全締切が過ぎていれば最終レース。
+// - 表示日が過去/未来の場合: レース番号 1 のレース (= 一番最初のレース)。
+type Prediction = (typeof predictions)[number];
+const nextRaceByStadium = new Map<string, Prediction>();
+for (const [stadiumId, races] of stadiumGroups.entries()) {
+  // 締切時刻 → レース番号 の昇順でソート
+  const sorted = [...races].sort((a, b) => {
+    const aDl = a.votingDeadline || "99:99";
+    const bDl = b.votingDeadline || "99:99";
+    if (aDl !== bDl) return aDl.localeCompare(bDl);
+    return a.raceNumber - b.raceNumber;
+  });
+  let pick: Prediction | undefined;
+  if (isViewingToday) {
+    pick = sorted.find((r) => (r.votingDeadline || "99:99") >= nowJSTHHMM);
+    if (!pick) pick = sorted[sorted.length - 1];
+  } else {
+    pick = sorted[0];
+  }
+  if (pick) nextRaceByStadium.set(stadiumId, pick);
+}
 ---
 
 <BaseLayout title={`ボートレース予想 - ${latestDate}`}>
-  <h1 class="text-2xl font-bold mb-6">{latestDate} の予想</h1>
+  <h1 class="text-2xl font-bold mb-2">{latestDate} の予想</h1>
+  <p class="text-sm text-gray-500 mb-6">
+    本日開催 {activeStadiumIds.size} 場 / 全 {STADIUMS.length} 場
+    {isViewingToday && nowJSTHHMM && (
+      <span class="ml-2">(現在 {nowJSTHHMM} JST)</span>
+    )}
+  </p>
 
   {predictions.length === 0 ? (
-    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500 mb-6">
       <p class="text-lg mb-2">本日の予想データはまだありません</p>
       <p class="text-sm">AM 9:00 のバッチ処理後に更新されます</p>
     </div>
-  ) : (
-    <div class="space-y-8">
-      {[...stadiumGroups.entries()].map(([stadiumId, races]) => {
-        const stadium = getStadiumById(stadiumId);
+  ) : null}
+
+  {/* レース場一覧 - 開催中: 締切が一番近いレースの RaceCard / 非開催: レース場名のみ */}
+  <section>
+    <h2 class="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+      <span class="w-1 h-4 bg-blue-600 rounded-full" />
+      レース場一覧
+    </h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {STADIUMS.map((s) => {
+        const next = nextRaceByStadium.get(s.id);
+        if (next) {
+          return <RaceCard prediction={next} />;
+        }
         return (
-          <section>
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
-              <span class="w-1 h-6 bg-blue-600 rounded-full" />
-              {stadium?.name ?? stadiumId}
-              {stadium && (
-                <span class="text-sm text-gray-400 font-normal">{stadium.prefecture}</span>
-              )}
-            </h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {races.map((prediction) => (
-                <RaceCard prediction={prediction} />
-              ))}
+          <div
+            class="bg-gray-50 rounded-lg border border-gray-200 p-4 text-gray-400 select-none"
+            aria-label={`${s.name} は本日開催なし`}
+          >
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-base">{s.name}</span>
+              <span class="text-xs">本日開催なし</span>
             </div>
-          </section>
+            <p class="text-xs mt-1">{s.prefecture}</p>
+          </div>
         );
       })}
     </div>
-  )}
+  </section>
 </BaseLayout>
