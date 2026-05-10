@@ -1,6 +1,7 @@
 import type {
   AiEvaluation,
   AiEvaluationEntry,
+  BetHitStatus,
   IndexRow,
   RaceCardRacer,
   RaceCardRow,
@@ -12,7 +13,13 @@ import type {
   SttRow,
   TitleRow,
 } from "@fun-site/shared";
-import { getStadiumById, parseRaceCode } from "@fun-site/shared";
+import {
+  checkBettingHit,
+  computeBettingPicks,
+  computeOneMarkDistances,
+  getStadiumById,
+  parseRaceCode,
+} from "@fun-site/shared";
 
 const BOAT_COUNT = 6;
 
@@ -126,6 +133,18 @@ export const buildRacePrediction = (
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
   const aiEvaluation = aiEvaluationRealtime ?? aiEvaluationDaily ?? buildEmptyAiEvaluation();
 
+  // 当日 / 直前それぞれの買い目フォーメーションを 1 度だけ算出し、
+  // 結果が確定していれば的中状態を計算する。BettingPicks コンポーネントと
+  // 同じ計算式 (computeOneMarkDistances → computeBettingPicks) を使う。
+  const racers = toRaceRacers(cards);
+  const dailyPicks = aiEvaluationDaily
+    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily))
+    : undefined;
+  const realtimePicks = aiEvaluationRealtime
+    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationRealtime))
+    : undefined;
+  const betHitStatus: BetHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
+
   return {
     raceCode: cards.raceCode,
     raceDate: cards.raceDate,
@@ -137,12 +156,13 @@ export const buildRacePrediction = (
     dayLabel: title?.dayLabel ?? "",
     grade: title?.grade ?? "",
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
-    racers: toRaceRacers(cards),
+    racers,
     startPrediction: buildStartPrediction(cards, stt),
     aiEvaluation,
     aiEvaluationDaily,
     aiEvaluationRealtime,
     raceResult: result,
+    betHitStatus,
     generatedAt,
   };
 };

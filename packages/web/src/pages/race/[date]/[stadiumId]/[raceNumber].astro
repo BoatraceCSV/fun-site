@@ -16,6 +16,10 @@ type RaceNavItem = {
   raceName: string;
   votingDeadline: string;
   isConfirmed: boolean;
+  /** 当日買い目が的中したか（確定済みかつ当日買い目フォーメーションが結果と一致） */
+  dailyHit: boolean;
+  /** 直前買い目が的中したか（確定済みかつ直前買い目フォーメーションが結果と一致） */
+  realtimeHit: boolean;
 };
 
 export async function getStaticPaths() {
@@ -39,6 +43,8 @@ export async function getStaticPaths() {
         raceName: prediction.raceName ?? "",
         votingDeadline: prediction.votingDeadline ?? "",
         isConfirmed,
+        dailyHit: prediction.betHitStatus?.dailyHit ?? false,
+        realtimeHit: prediction.betHitStatus?.realtimeHit ?? false,
       });
       racesByStadium.set(parsed.stadiumId, list);
     }
@@ -92,6 +98,9 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         const meta = raceByNumber.get(n);
         const isAvailable = meta !== undefined;
         const isConfirmed = meta?.isConfirmed ?? false;
+        const dailyHit = meta?.dailyHit ?? false;
+        const realtimeHit = meta?.realtimeHit ?? false;
+        const hasAnyHit = dailyHit || realtimeHit;
 
         // 状態別のスタイル: 背景色そのもので識別
         // 現在     → 青ベタ (白文字)
@@ -128,10 +137,31 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
             </span>
             {isAvailable ? (
               isConfirmed ? (
-                <span class={`mt-1 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
-                  isCurrent ? "bg-white/25 text-white" : "bg-emerald-600 text-white"
-                }`}>
-                  確定
+                <span class="mt-1 inline-flex items-center gap-0.5">
+                  <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
+                    isCurrent ? "bg-white/25 text-white" : "bg-emerald-600 text-white"
+                  }`}>
+                    確定
+                  </span>
+                  {/* 当日買い目的中 → 🎯 (amber)、直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
+                  {dailyHit && (
+                    <span
+                      class="inline-block text-[12px] leading-none"
+                      title="当日買い目が的中"
+                      aria-label="当日買い目が的中"
+                    >
+                      🎯
+                    </span>
+                  )}
+                  {realtimeHit && (
+                    <span
+                      class="inline-block text-[12px] leading-none"
+                      title="直前買い目が的中"
+                      aria-label="直前買い目が的中"
+                    >
+                      🔥
+                    </span>
+                  )}
                 </span>
               ) : (
                 <span class={`mt-1 inline-block px-1 py-0.5 rounded text-[10px] font-mono leading-none tabular-nums ${
@@ -161,7 +191,9 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
               <a
                 href={`/race/${prediction.raceDate}/${prediction.stadiumId}/${n}/`}
                 class={tileClass}
-                aria-label={`${n}R ${meta?.raceName ?? ""}${isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""}`}
+                aria-label={`${n}R ${meta?.raceName ?? ""}${
+                  isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
+                }${hasAnyHit ? ` (${[dailyHit ? "当日買い目的中" : "", realtimeHit ? "直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -208,7 +240,10 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
   {prediction.raceResult && (
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6 border-l-4 border-blue-500">
       <h2 class="font-bold text-lg mb-3">レース結果</h2>
-      <RaceResultSection result={prediction.raceResult} />
+      <RaceResultSection
+        result={prediction.raceResult}
+        hitStatus={prediction.betHitStatus}
+      />
     </section>
   )}
 
@@ -220,6 +255,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       aiEvaluationDaily={prediction.aiEvaluationDaily}
       aiEvaluationRealtime={prediction.aiEvaluationRealtime}
       aiEvaluation={prediction.aiEvaluation}
+      hitStatus={prediction.betHitStatus}
     />
   </section>
 

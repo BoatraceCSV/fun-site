@@ -1,3 +1,4 @@
+import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { IndexState } from "./race-card.js";
 import type { RaceResultRow } from "./race-result.js";
 
@@ -104,5 +105,11 @@ export type RacePrediction = {
    * 場合のみセットされる。未確定 / CSV 未取得時は undefined。
    */
   readonly raceResult?: RaceResultRow;
+  /**
+   * 当日買い目 / 直前買い目それぞれが結果に対して的中したか。
+   * `raceResult` が無い、または 1〜3 着が揃っていない場合は両方 false。
+   * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
+   */
+  readonly betHitStatus?: BetHitStatus;
   readonly generatedAt: string;
 };

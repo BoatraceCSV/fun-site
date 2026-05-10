@@ -1,5 +1,5 @@
 ---
-import type { AiEvaluation, RaceRacer } from "@fun-site/shared";
+import type { AiEvaluation, BetHitStatus, RaceRacer } from "@fun-site/shared";
 import {
   BOAT_COLORS,
   computeBettingPicks,
@@ -16,6 +16,8 @@ interface Props {
   /** 後方互換: いずれの個別評価も渡されていない場合のフォールバック。
    *  state によって当日買い目 / 直前買い目を切り替える。 */
   aiEvaluation?: AiEvaluation;
+  /** 結果確定後の的中状況。未指定なら的中バッジは表示しない。 */
+  hitStatus?: BetHitStatus;
 }
 
 const {
@@ -23,6 +25,7 @@ const {
   aiEvaluationDaily,
   aiEvaluationRealtime,
   aiEvaluation,
+  hitStatus,
 } = Astro.props;
 
 // 後方互換: aiEvaluation 単体が渡された場合は state を見て daily / realtime のどちらかに振り分ける
@@ -45,16 +48,37 @@ const buildGroups = (evaluation: AiEvaluation): Group[] => {
   ];
 };
 
-const sections: { readonly heading: string; readonly groups: Group[] | null }[] = [
+type SectionKind = "daily" | "realtime";
+
+const sections: {
+  readonly kind: SectionKind;
+  readonly heading: string;
+  readonly groups: Group[] | null;
+}[] = [
   {
+    kind: "daily",
     heading: "当日買い目",
     groups: dailyEval ? buildGroups(dailyEval) : null,
   },
   {
+    kind: "realtime",
     heading: "直前買い目",
     groups: realtimeEval ? buildGroups(realtimeEval) : null,
   },
 ];
+
+const isSectionHit = (kind: SectionKind): boolean => {
+  if (!hitStatus) return false;
+  return kind === "daily" ? hitStatus.dailyHit : hitStatus.realtimeHit;
+};
+
+/** 当日 = 🎯 + amber, 直前 = 🔥 + cyan で識別する */
+const hitBadgeClass = (kind: SectionKind): string =>
+  kind === "daily"
+    ? "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+    : "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300";
+
+const hitBadgeIcon = (kind: SectionKind): string => (kind === "daily" ? "🎯" : "🔥");
 
 const boatBoxStyle = (boatNumber: number): string => {
   const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
@@ -69,7 +93,15 @@ const boatBoxStyle = (boatNumber: number): string => {
 <div class="space-y-4">
   {sections.map((section) => (
     <div>
-      <h3 class="text-sm font-semibold text-gray-700 mb-2">{section.heading}</h3>
+      <h3 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+        <span>{section.heading}</span>
+        {isSectionHit(section.kind) && (
+          <span class={hitBadgeClass(section.kind)} aria-label={`${section.heading}が的中`}>
+            <span aria-hidden="true">{hitBadgeIcon(section.kind)}</span>
+            <span>的中</span>
+          </span>
+        )}
+      </h3>
       {section.groups === null ? (
         <p class="text-xs text-gray-400">
           {section.heading === "直前買い目"

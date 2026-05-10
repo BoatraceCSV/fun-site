@@ -8,6 +8,7 @@ export type {
   StartPrediction,
   StartPredictionEntry,
 } from "./prediction.js";
+export type { BetHitStatus } from "../utils/bet-hit.js";
 export type {
   IndexEntry,
   IndexRow,

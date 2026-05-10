@@ -17,3 +17,4 @@ export {
   type OneMarkDistanceEntry,
   type BettingPicks,
 } from "./one-mark-distance.js";
+export { checkBettingHit, type BetHitStatus } from "./bet-hit.js";
