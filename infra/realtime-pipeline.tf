@@ -3,8 +3,9 @@
 #                    Workflows → fun-site batch (Cloud Run Job)
 #
 # 旧 Cloud Scheduler 経由の朝バッチは廃止。当日初回ビルドは preview-realtime の
-# 08:30 JST 系列の Scheduler 発火で programs/title・race_cards も含めて GCS に
-# ミラーされ、Pub/Sub → Workflows 経由で fun-site の Cloud Run Job が起動する。
+# JST 08:00 (Scheduler `preview-realtime-daytime`, cron `*/5 8-22 * * *`) 発火で
+# programs/title・race_cards も含めて GCS にミラーされ、Pub/Sub → Workflows
+# 経由で fun-site の Cloud Run Job が起動する。
 #
 # Workflows を中継する理由:
 #   Terraform google / google-beta provider 6.x の `google_eventarc_trigger` の

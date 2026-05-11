@@ -21,8 +21,8 @@ variable "domain_name" {
 }
 
 # 旧朝バッチ用の batch_schedule / batch_timezone 変数は、preview-realtime → Pub/Sub →
-# Eventarc 駆動への移行に伴い廃止。当日初回ビルドは preview-realtime の 08:30 JST 発火で
-# 自動的に走る。
+# Eventarc 駆動への移行に伴い廃止。当日初回ビルドは preview-realtime の JST 08:00
+# (Scheduler `preview-realtime-daytime`) 発火で自動的に走る。
 
 variable "batch_cpu" {
   description = "CPU allocation for Cloud Run Jobs batch"

@@ -19,7 +19,7 @@ import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js
  * 4. last-build.json を GCS に保存
  *
  * stt は直前情報。preview-realtime 経由で 5 分毎に更新される CSV を読み込むため、
- * 当日 08:30 以降は順次 stt が埋まり、進入コースとスタート展示が反映されていく。
+ * 当日 08:00 以降は順次 stt が埋まり、進入コースとスタート展示が反映されていく。
  * stt が未公開のレースは枠番をフォールバックとして表示する。
  */
 export const runPipeline = async (): Promise<void> => {

@@ -2,9 +2,9 @@
 
 ## 0. サマリー
 
-`boatracecsv.github.io` の `preview-realtime` Cloud Run Job が JST 08:30〜22:59 の 5 分間隔で `previews/stt` / `index (state=realtime)` を更新するようになったため、fun-site も同じ粒度で当日ページを更新する。本書では同一 GCP project (`boatrace-487212`) 内で完結する 5 分以内ラグの再デプロイ構成を提案する。
+`boatracecsv.github.io` の `preview-realtime` Cloud Run Job が JST 08:00〜22:59 の 5 分間隔で `previews/stt` / `index (state=realtime)` を更新するようになったため、fun-site も同じ粒度で当日ページを更新する。本書では同一 GCP project (`boatrace-487212`) 内で完結する 5 分以内ラグの再デプロイ構成を提案する。
 
-**推奨案**: Pub/Sub を介した「preview-realtime 完了 → fun-site 再ビルド」のイベント駆動チェーン。データソースは GitHub Pages を経由せず GCS を一次ソースとし、CDN ラグと git 経路のレイテンシを排除する。Astro SSG モデルは維持し、毎回フルリビルドする。**朝バッチ (JST 09:00) は廃止し、当日 08:30 の preview-realtime 初回発火を起点に fun-site の初回ビルドを行う。** Pub/Sub message には変更があったレース単位の `updatedRaces` を載せ、fun-site 側で差分判定と早期 return に活用する。
+**推奨案**: Pub/Sub を介した「preview-realtime 完了 → fun-site 再ビルド」のイベント駆動チェーン。データソースは GitHub Pages を経由せず GCS を一次ソースとし、CDN ラグと git 経路のレイテンシを排除する。Astro SSG モデルは維持し、毎回フルリビルドする。**朝バッチ (JST 09:00) は廃止し、当日 08:00 の preview-realtime 初回発火を起点に fun-site の初回ビルドを行う。** Pub/Sub message には変更があったレース単位の `updatedRaces` を載せ、fun-site 側で差分判定と早期 return に活用する。
 
 **スコープ外**: K-file 由来の翌日確定 results CSV (`data/results/daily/...`) を用いる的中実績ページ (`/stats`) は本提案の対象外。
 ただし 2026-05 以降、preview-realtime が当日確定直後に bc_rs1_2 をパースして書き出す realtime 結果 CSV (`data/results/realtime/YYYY/MM/DD.csv`) は対象に含める。レース詳細ページの「レース結果」セクション表示にのみ使用し、`/stats` 復活は別途設計とする。
@@ -19,7 +19,7 @@
 | --- | --- |
 | GCP Project | `boatrace-487212` |
 | Region | `asia-northeast1` |
-| 起動 | Cloud Scheduler 2 本 (`preview-realtime-morning` / `-daytime`)、JST 08:30〜22:59 を 5 分間隔 |
+| 起動 | Cloud Scheduler 1 本 (`preview-realtime-daytime`、cron `*/5 8-22 * * *` Asia/Tokyo)、JST 08:00〜22:59 を 5 分間隔 |
 | 実体 | Cloud Run Job `preview-realtime` (Python 3.11) |
 | 動作 | `git clone --depth 1 --sparse` → `python scripts/preview-realtime.py` → `git commit && git push origin main` |
 | アウトプット | GitHub repo `BoatraceCSV/boatracecsv.github.io` の `data/previews/{stt,tkz,sui,...}/...csv` と `data/estimate/index/...csv` (state=realtime 行) を上書き |
@@ -69,7 +69,7 @@ GitHub repo (main) ──▶ GitHub Pages (Jekyll build) ──▶ Fastly CDN
 
 - 全 24 場 × 12R = 最大 288 ページ + 会場別/トップ/アーカイブで合計 ~330 ページ規模
 - Astro SSG の素のビルドで 15〜30 秒、`pnpm install` 込みなら 60〜120 秒
-- 1 日あたり最大 174 回 (08:30〜22:59 を 5 分毎) × 平均 90 秒 ≒ 4.4 時間/日 の Cloud Run Job 実行
+- 1 日あたり最大 180 回 (08:00〜22:59 を 5 分毎) × 平均 90 秒 ≒ 4.5 時間/日 の Cloud Run Job 実行
 
 → ビルドコストは vCPU 秒換算で月 ~470 vCPU 時間。Cloud Run Jobs 無料枠 (180,000 vCPU 秒/月 ≒ 50 vCPU 時間) を超えるため、軽量化と無駄ビルド抑制が必要。
 
@@ -91,7 +91,7 @@ fun-site が `us-central1` に残っているとデータソース (asia-northea
                  ┌────────────────── GCP boatrace-487212 (asia-northeast1) ───────────────────┐
                  │                                                                              │
    Cloud Scheduler                                                                              │
-   (JST 08:30-22:59, */5)                                                                       │
+   (JST 08:00-22:59, */5)                                                                       │
         │                                                                                       │
         ▼                                                                                       │
    ┌──────────────────────┐    [改修1] CSV を二重書き込み                                       │
@@ -131,7 +131,7 @@ fun-site が `us-central1` に残っているとデータソース (asia-northea
 
 `preview-realtime` の最後で `git push` に加えて **同じ CSV を `gs://boatrace-realtime-data/data/...` にも書き込む**。fun-site はこの GCS バケットから読む。
 
-朝バッチを廃止する代わりに、`preview-realtime` は **realtime 系 CSV (`previews/stt`, `index (state=realtime)` など) に加えて、当日朝に必要な `programs/title`, `programs/race_cards`, `index (state=daily)` も毎回 GCS にミラー upload する。** これらはローカル sparse-checkout 内に既に存在するため、追加の HTTPS fetch は不要。08:30 の初回発火で当日の全 CSV が GCS に揃い、fun-site の初回ビルドが走る。
+朝バッチを廃止する代わりに、`preview-realtime` は **realtime 系 CSV (`previews/stt`, `index (state=realtime)` など) に加えて、当日朝に必要な `programs/title`, `programs/race_cards`, `index (state=daily)` も毎回 GCS にミラー upload する。** これらはローカル sparse-checkout 内に既に存在するため、追加の HTTPS fetch は不要。08:00 の初回発火で当日の全 CSV が GCS に揃い、fun-site の初回ビルドが走る。
 
 | 比較項目 | GitHub Pages 経由 | GCS 直読み |
 | --- | --- | --- |
@@ -169,12 +169,12 @@ fun-site が `us-central1` に残っているとデータソース (asia-northea
 
 **`updatedRaces` の粒度**: 「当日変更があったレース 1 件 = 配列 1 要素」。preview-realtime の処理ループ内で、ある レースコードについて 1 つでも CSV が新規追加 / 上書きされたらそのレースをエントリ化する。`csvTypes` には変更があった CSV 種別を列挙し、`indexState` で `daily` か `realtime` かを示す。
 
-**朝の初回発火**: 08:30 の最初のサイクルでは `programs/title`, `programs/race_cards`, `index (state=daily)` が全レース分初出となるため、当日開催の全レースが `updatedRaces` に列挙される。fun-site は当日初回ビルドとして全 ~330 ページを生成する。
+**朝の初回発火**: 08:00 の最初のサイクルでは `programs/title`, `programs/race_cards`, `index (state=daily)` が全レース分初出となるため、当日開催の全レースが `updatedRaces` に列挙される。fun-site は当日初回ビルドとして全 ~330 ページを生成する。
 
 **メリット**:
 - preview-realtime が遅延しても fun-site は古いデータを参照しない（必ず完了後に走る）
 - Cloud Scheduler を fun-site 側に追加する必要がない（運用設定 1 つ削減）
-- 朝バッチを別建てしなくても、08:30 の初回発火で当日初回ビルドが自動的に走る
+- 朝バッチを別建てしなくても、08:00 の初回発火で当日初回ビルドが自動的に走る
 - `updatedRaces` 配列が空（= 全レース締切後の空回り）ならビルドをスキップ可能
 - 将来「変更があったレース単位での差分ビルド」へ拡張する余地がメッセージ仕様に内包されている
 
@@ -289,7 +289,7 @@ HTML は朝 1 回だけビルドし、進入コース・展示・強さpt 寄与
 ### Phase 3: 切替 & 朝バッチ廃止（1 日）
 
 1. fun-site の `CSV_SOURCE=gcs` に切替
-2. **JST 09:00 の Cloud Scheduler を廃止**。当日初回ビルドは preview-realtime の 08:30 発火で自動的に走る
+2. **JST 09:00 の Cloud Scheduler を廃止**。当日初回ビルドは preview-realtime の 08:00 発火で自動的に走る
 3. リージョンを asia-northeast1 に統一（`gcloud run jobs deploy --region=asia-northeast1` で再作成）
 4. デプロイ先 GCS バケットも asia-northeast1 で再作成し、Cloud CDN backend を切替
 
@@ -303,16 +303,16 @@ HTML は朝 1 回だけビルドし、進入コース・展示・強さpt 寄与
 
 ## 6. コスト見積もり（月額・JPY 換算）
 
-前提: 営業日 30 日、08:30〜22:59 を 5 分毎 (174 回/日)、平均 30s ビルド + 5s deploy。
+前提: 営業日 30 日、08:00〜22:59 を 5 分毎 (180 回/日)、平均 30s ビルド + 5s deploy。
 
 | サービス | 想定使用量 | 月額 |
 | --- | --- | --- |
-| fun-site Cloud Run Job | 174 回/日 × 30 日 × 35s × 2 vCPU × 1 GiB = ~10 vCPU 時間 + ~5 GiB-時間 | ~¥250 |
+| fun-site Cloud Run Job | 180 回/日 × 30 日 × 35s × 2 vCPU × 1 GiB = ~10 vCPU 時間 + ~5 GiB-時間 | ~¥250 |
 | preview-realtime Cloud Run Job (既存) | 既存 | 変更なし |
-| Pub/Sub (publish + Eventarc) | ~5,000 メッセージ/月 | ~¥0 (10 GB/月まで無料) |
-| Cloud Storage (`boatrace-realtime-data`) | ~50 MB × 174 回/日 × 30 日 = ~260 GB-月 (Standard) | ~¥600 |
-| Cloud Storage (`fun-site-web-...`) | 既存 + アップロード回数増 (174 × 30 × 330 ファイル ≒ 170 万 op) | ~¥800 |
-| Cloud Scheduler | 既存 2 本 + (任意) 朝バッチ 1 本 | ~¥0 (3 ジョブ無料枠) |
+| Pub/Sub (publish + Eventarc) | ~5,400 メッセージ/月 | ~¥0 (10 GB/月まで無料) |
+| Cloud Storage (`boatrace-realtime-data`) | ~50 MB × 180 回/日 × 30 日 = ~270 GB-月 (Standard) | ~¥600 |
+| Cloud Storage (`fun-site-web-...`) | 既存 + アップロード回数増 (180 × 30 × 330 ファイル ≒ 180 万 op) | ~¥800 |
+| Cloud Scheduler | 既存 1 本 (`preview-realtime-daytime`) | ~¥0 (3 ジョブ無料枠) |
 | Cloud CDN | 既存 | 変更なし |
 | **追加分合計** | | **~¥1,650/月** |
 
@@ -325,7 +325,7 @@ HTML は朝 1 回だけビルドし、進入コース・展示・強さpt 寄与
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
 | Pub/Sub publish が失敗 → fun-site が走らない | 当該回 (5 分間) のビルドが skip | Pub/Sub の at-least-once 配信 + Eventarc のリトライで通常は自動回復。最終手段として 5 分後の次サイクルで自然回復するため、欠落は最大 1 サイクル分（5 分）に限定される |
-| 08:30 の preview-realtime 発火が遅延 → 当日初回ビルドが遅れる | 朝の表示が数分〜十数分遅れる | preview-realtime の 08:30〜08:55 系 Scheduler が 5 分毎に走るため、最初の発火が失敗しても次の発火で自動回復。深夜帯の手動公開のための `workflow_dispatch` 経路も既存維持 |
+| 08:00 の preview-realtime 発火が遅延 → 当日初回ビルドが遅れる | 朝の表示が数分〜十数分遅れる | preview-realtime の `*/5 8-22 * * *` Scheduler が 5 分毎に走るため、最初の発火が失敗しても次の発火で自動回復。深夜帯の手動公開のための `workflow_dispatch` 経路も既存維持 |
 | preview-realtime 実行が 5 分超過 → 重複起動 | fun-site も二重起動 | Cloud Run Job の `parallelism=1, max-retries=0` 維持 + `last-build.json` の `generation` チェックで二重ビルドを no-op 化 |
 | GCS 書き込み失敗 → fun-site が古い CSV を取得 | 表示データが 1 回分古い | preview-realtime 内で GCS upload を git push より前に実行し、GCS 失敗時は exit 1 で Job を失敗させる（次回 Scheduler が再実行） |
 | GCS と GitHub Pages の整合性ズレ | 公開 CSV と内部用 CSV の差異 | 両方とも同一バイト列を書く（Python 内で同じ buffer から書き込む） |
@@ -341,7 +341,7 @@ HTML は朝 1 回だけビルドし、進入コース・展示・強さpt 寄与
 | # | 項目 | 決定 |
 | --- | --- | --- |
 | 1 | Pub/Sub `updatedRaces` の粒度 | **レース単位**。`{raceCode, stadiumId, raceNumber, csvTypes, indexState}` を要素として配列に列挙。将来の差分ビルド対応への拡張余地を確保する |
-| 2 | 朝バッチ (JST 09:00 Scheduler) | **廃止**。preview-realtime 08:30 系列の初回発火で当日 `programs/title` / `race_cards` / `index (state=daily)` を含む全 CSV を GCS にミラーし、Pub/Sub チェーンで fun-site の初回ビルドを駆動する |
+| 2 | 朝バッチ (JST 09:00 Scheduler) | **廃止**。preview-realtime の JST 08:00 初回発火で当日 `programs/title` / `race_cards` / `index (state=daily)` を含む全 CSV を GCS にミラーし、Pub/Sub チェーンで fun-site の初回ビルドを駆動する |
 | 3 | OGP 画像の更新タイミング | **realtime 反映**。realtime ビルドの度に OGP も最新値で再生成する（現状 SVG インラインのため追加コストなし） |
 | 4 | 的中実績ページ (`/stats`) | **対象外**。fun-site から results CSV 取得処理と関連ビルド処理を削除。将来再開する際は別経路で設計する |
 | 5 | Cloud Run Job のコールドスタート | **Docker イメージ最適化で対応**。`pnpm fetch` ベースの Dockerfile で `node_modules` を焼き込み、起動を 5〜10 秒に抑制（Phase 4） |

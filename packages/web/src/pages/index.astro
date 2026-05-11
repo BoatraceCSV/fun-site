@@ -32,22 +32,38 @@ const isViewingToday = latestDate === today;
 // 各会場で「締切が一番近いレース」を選定
 // - 表示日が今日の場合: 締切が現時刻以降で最も早いもの。全締切が過ぎていれば最終レース。
 // - 表示日が過去/未来の場合: レース番号 1 のレース (= 一番最初のレース)。
+//
+// 注意: 上流 CSV では締切時刻が "確定" 等の文字列に置き換わるケースがある
+// (例: 朝場の鳴門・唐津 1R は締切時刻が 08:32 と早く、当日バッチ起動時には既に
+// 確定済みのため `電話投票締切予定` が "確定" になる)。
+// 比較では HH:MM 形式のみを締切時刻として扱い、それ以外の値を持つレースは
+// 「未来の締切」とも「最終レース」とも見なさないよう除外する。
+const HHMM_RE = /^\d{2}:\d{2}$/;
+const hasHHMMDeadline = (r: { votingDeadline: string }): boolean =>
+  HHMM_RE.test(r.votingDeadline);
 type Prediction = (typeof predictions)[number];
 const nextRaceByStadium = new Map<string, Prediction>();
 for (const [stadiumId, races] of stadiumGroups.entries()) {
-  // 締切時刻 → レース番号 の昇順でソート
-  const sorted = [...races].sort((a, b) => {
-    const aDl = a.votingDeadline || "99:99";
-    const bDl = b.votingDeadline || "99:99";
-    if (aDl !== bDl) return aDl.localeCompare(bDl);
-    return a.raceNumber - b.raceNumber;
-  });
+  // 締切時刻 → レース番号 の昇順でソート (HH:MM 以外は除外)
+  const sorted = races
+    .filter(hasHHMMDeadline)
+    .toSorted((a, b) => {
+      if (a.votingDeadline !== b.votingDeadline) {
+        return a.votingDeadline.localeCompare(b.votingDeadline);
+      }
+      return a.raceNumber - b.raceNumber;
+    });
   let pick: Prediction | undefined;
   if (isViewingToday) {
-    pick = sorted.find((r) => (r.votingDeadline || "99:99") >= nowJSTHHMM);
+    pick = sorted.find((r) => r.votingDeadline >= nowJSTHHMM);
+    // 全締切が過去 → 最終レース (= sorted の末尾)
     if (!pick) pick = sorted[sorted.length - 1];
   } else {
     pick = sorted[0];
+  }
+  // HH:MM を持つレースが 1 件も無い場合は raceNumber 最小のレースを表示する
+  if (!pick) {
+    pick = [...races].sort((a, b) => a.raceNumber - b.raceNumber)[0];
   }
   if (pick) nextRaceByStadium.set(stadiumId, pick);
 }
