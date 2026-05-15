@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { type File, Storage } from "@google-cloud/storage";
 import { toJSTDateString } from "@fun-site/shared";
+import { type File, Storage } from "@google-cloud/storage";
 
 const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
 // バケット名は Terraform の `${local.prefix}-web-${var.project_id}` 規則で

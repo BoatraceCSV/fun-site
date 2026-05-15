@@ -13,9 +13,7 @@ const RACES_DIR = resolve(process.cwd(), "src/data/races");
  */
 const getBuildTargetDate = (): string => {
   const override = process.env["BUILD_TARGET_DATE"];
-  return override && /^\d{4}-\d{2}-\d{2}$/.test(override)
-    ? override
-    : toJSTDateString(new Date());
+  return override && /^\d{4}-\d{2}-\d{2}$/.test(override) ? override : toJSTDateString(new Date());
 };
 
 /** 新スキーマか判定（旧 RacePrediction JSON を読み飛ばすガード） */
