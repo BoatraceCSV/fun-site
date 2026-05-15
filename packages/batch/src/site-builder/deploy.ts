@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { type File, Storage } from "@google-cloud/storage";
+import { toJSTDateString } from "@fun-site/shared";
 
 const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
 // バケット名は Terraform の `${local.prefix}-web-${var.project_id}` 規則で
@@ -150,10 +151,22 @@ export const deployToStorage = async (): Promise<void> => {
   // ローカルに存在しないリモートファイルを削除（rsync -d 相当）
   // images/ プレフィックスは画像生成ステップで別途アップロードされるため除外
   // _meta/ は last-build.json などの内部メタを置く領域なので削除対象から除外
+  //
+  // 5 分サイクルでの再ビルドは当日分のみを対象とする (lib/data.ts) ため、
+  // 過去日付の race / archive ページはローカルに存在せず、素朴な削除フィルタだと
+  // GCS から消えてしまう。過去日付のページは既にデプロイ済みでそのまま公開可能なので、
+  // `race/YYYY-MM-DD/...` / `archive/YYYY-MM-DD/...` のうち日付が当日以外のものは
+  // 削除対象から除外する。
   const uploadedNames = new Set(localEntries.map((e) => e.destination));
-  const toDelete = [...existingByName.keys()].filter(
-    (name) => !(uploadedNames.has(name) || name.startsWith("images/") || name.startsWith("_meta/")),
-  );
+  const todayJST = process.env["BUILD_TARGET_DATE"] ?? toJSTDateString(new Date());
+  const DATE_PREFIX_RE = /^(race|archive)\/(\d{4}-\d{2}-\d{2})\//;
+  const toDelete = [...existingByName.keys()].filter((name) => {
+    if (uploadedNames.has(name)) return false;
+    if (name.startsWith("images/") || name.startsWith("_meta/")) return false;
+    const m = name.match(DATE_PREFIX_RE);
+    if (m && m[2] !== todayJST) return false;
+    return true;
+  });
   if (toDelete.length > 0) {
     await mapWithConcurrency(toDelete, UPLOAD_CONCURRENCY, async (name) => {
       await bucket.file(name).delete();

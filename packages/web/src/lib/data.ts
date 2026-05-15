@@ -1,8 +1,22 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { RacePrediction } from "@fun-site/shared";
+import { type RacePrediction, toJSTDateString } from "@fun-site/shared";
 
 const RACES_DIR = resolve(process.cwd(), "src/data/races");
+
+/**
+ * ビルド対象日（JST 当日）。
+ *
+ * `BUILD_TARGET_DATE` で明示指定可能（CI / バックフィル用）。
+ * `BUILD_ALL_DATES=1` のときは過去日付も巻き込んでビルドする
+ *  (`loadAvailableDates` 側で参照される)。
+ */
+const getBuildTargetDate = (): string => {
+  const override = process.env["BUILD_TARGET_DATE"];
+  return override && /^\d{4}-\d{2}-\d{2}$/.test(override)
+    ? override
+    : toJSTDateString(new Date());
+};
 
 /** 新スキーマか判定（旧 RacePrediction JSON を読み飛ばすガード） */
 const isNewSchema = (json: unknown): json is RacePrediction => {
@@ -49,14 +63,28 @@ export const loadPredictions = async (date: string): Promise<RacePrediction[]> =
   }
 };
 
-/** 利用可能な日付一覧を取得 */
+/**
+ * ビルド対象の日付一覧を取得する。
+ *
+ * 既定では JST 当日 1 件のみを返す（preview-realtime 5 分サイクルでの再ビルドを
+ * 当日分に絞り、Astro の getStaticPaths が過去日付の JSON まで読み込んで
+ * ページ数が線形に肥大化するのを防ぐ）。
+ *
+ * 過去日付の HTML / アセットは `deploy.ts` 側で削除フィルタに引っかからない
+ * ため GCS 上に残置され、ユーザは引き続き URL で参照可能。
+ *
+ * `BUILD_ALL_DATES=1` を設定するとローカル / 開発用に全日付を返す。
+ */
 export const loadAvailableDates = async (): Promise<string[]> => {
   try {
     const entries = await readdir(RACES_DIR);
-    return entries
+    const all = entries
       .filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e))
       .sort()
       .reverse();
+    if (process.env["BUILD_ALL_DATES"] === "1") return all;
+    const target = getBuildTargetDate();
+    return all.filter((d) => d === target);
   } catch {
     return [];
   }
