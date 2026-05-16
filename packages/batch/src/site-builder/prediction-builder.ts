@@ -3,8 +3,10 @@ import type {
   AiEvaluationEntry,
   BetHitStatus,
   IndexRow,
+  RaceBetPayoutSummary,
   RaceCardRacer,
   RaceCardRow,
+  RacePayoutRow,
   RacePrediction,
   RaceRacer,
   RaceResultRow,
@@ -17,6 +19,7 @@ import {
   checkBettingHit,
   computeBettingPicks,
   computeOneMarkDistances,
+  computeRaceBetPayoutSummary,
   getStadiumById,
   parseRaceCode,
 } from "@fun-site/shared";
@@ -107,12 +110,15 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     motorTop2Rate: r.motorTop2Rate,
   }));
 
-/** race_cards / stt / index / programs/title / results を 1 レース分の RacePrediction に統合
+/** race_cards / stt / index / programs/title / results / payouts を 1 レース分の RacePrediction に統合
  *
  * `dailyIdx` は朝バッチの index 行（直前情報反映前）、`realtimeIdx` は直前情報反映後の
  * index 行。両方が同一レースに存在する場合があり、`aiEvaluationDaily` /
  * `aiEvaluationRealtime` にそれぞれ格納する。`aiEvaluation` は後方互換用に realtime を
  * 優先し、無ければ daily を、それも無ければ空評価を採用する。
+ *
+ * `payout` は results/payouts CSV 由来の払戻情報。`result` と独立に追記される
+ * ため、片方だけが揃うサイクルがある（最終的には数分以内に揃う）。
  */
 export const buildRacePrediction = (
   cards: RaceCardRow,
@@ -121,6 +127,7 @@ export const buildRacePrediction = (
   realtimeIdx: IndexRow | undefined,
   title: TitleRow | undefined,
   result: RaceResultRow | undefined,
+  payout: RacePayoutRow | undefined,
   generatedAt: string,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
@@ -134,8 +141,9 @@ export const buildRacePrediction = (
   const aiEvaluation = aiEvaluationRealtime ?? aiEvaluationDaily ?? buildEmptyAiEvaluation();
 
   // 当日 / 直前それぞれの買い目フォーメーションを 1 度だけ算出し、
-  // 結果が確定していれば的中状態を計算する。BettingPicks コンポーネントと
-  // 同じ計算式 (computeOneMarkDistances → computeBettingPicks) を使う。
+  // 結果が確定していれば的中状態と 3連単 払戻 (回収率) を計算する。
+  // BettingPicks コンポーネントと同じ計算式
+  // (computeOneMarkDistances → computeBettingPicks) を使う。
   const racers = toRaceRacers(cards);
   const dailyPicks = aiEvaluationDaily
     ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily))
@@ -144,6 +152,12 @@ export const buildRacePrediction = (
     ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationRealtime))
     : undefined;
   const betHitStatus: BetHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
+  const betPayout: RaceBetPayoutSummary = computeRaceBetPayoutSummary(
+    dailyPicks,
+    realtimePicks,
+    result,
+    payout,
+  );
 
   return {
     raceCode: cards.raceCode,
@@ -162,7 +176,9 @@ export const buildRacePrediction = (
     aiEvaluationDaily,
     aiEvaluationRealtime,
     raceResult: result,
+    racePayout: payout,
     betHitStatus,
+    betPayout,
     generatedAt,
   };
 };
@@ -178,6 +194,7 @@ export const buildAllRacePredictions = (
   indexes: readonly IndexRow[],
   titles: readonly TitleRow[],
   results: readonly RaceResultRow[],
+  payouts: readonly RacePayoutRow[],
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
@@ -189,6 +206,7 @@ export const buildAllRacePredictions = (
   );
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
+  const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
 
   return raceCards.map((cards) =>
     buildRacePrediction(
@@ -198,6 +216,7 @@ export const buildAllRacePredictions = (
       realtimeIndexByCode.get(cards.raceCode),
       titleByCode.get(cards.raceCode),
       resultByCode.get(cards.raceCode),
+      payoutByCode.get(cards.raceCode),
       generatedAt,
     ),
   );

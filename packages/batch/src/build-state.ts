@@ -63,6 +63,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   // boatracecsv.github.io リポジトリの実体パスに合わせて `data/estimate/index/...` を使う。
   index: "estimate/index",
   results: "results/realtime",
+  payouts: "results/payouts",
 };
 
 const buildCsvObjectName = (type: CsvType, date: string): string => {
@@ -74,7 +75,7 @@ const buildCsvObjectName = (type: CsvType, date: string): string => {
 export const fetchCurrentCsvGenerations = async (
   date: string,
 ): Promise<Partial<Record<CsvType, string>>> => {
-  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results"];
+  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results", "payouts"];
   const bucket = getStorage().bucket(CSV_GCS_BUCKET);
 
   const entries = await Promise.all(
@@ -112,7 +113,7 @@ export const isUpToDate = (
 ): boolean => {
   if (!previous) return false;
   if (previous.raceDate !== date) return false;
-  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results"];
+  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results", "payouts"];
   for (const type of types) {
     const cur = current[type];
     const prev = previous.csvGenerations[type];

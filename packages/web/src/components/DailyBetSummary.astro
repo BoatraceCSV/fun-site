@@ -1,0 +1,99 @@
+---
+import type { DailyBetPayoutAggregate, RacePrediction } from "@fun-site/shared";
+import { aggregateDailyBetPayout } from "@fun-site/shared";
+
+interface Props {
+  /** 当日の全レース予想。確定済みかつフォーメーションが計算できたレースだけが集計対象に入る。 */
+  predictions: readonly RacePrediction[];
+}
+
+const { predictions } = Astro.props;
+
+// 当日 / 直前 それぞれの BetPayoutResult を集めて集計。
+const dailyResults = predictions
+  .map((p) => p.betPayout?.daily)
+  .filter((r): r is NonNullable<typeof r> => r !== undefined);
+const realtimeResults = predictions
+  .map((p) => p.betPayout?.realtime)
+  .filter((r): r is NonNullable<typeof r> => r !== undefined);
+
+const dailyAgg: DailyBetPayoutAggregate = aggregateDailyBetPayout(dailyResults);
+const realtimeAgg: DailyBetPayoutAggregate = aggregateDailyBetPayout(realtimeResults);
+
+const hasAny = dailyAgg.settledRaceCount > 0 || realtimeAgg.settledRaceCount > 0;
+
+const formatYen = (n: number): string => `¥${n.toLocaleString("ja-JP")}`;
+const formatPercent = (n: number): string => `${(n * 100).toFixed(1)}%`;
+
+type Card = {
+  readonly kind: "daily" | "realtime";
+  readonly heading: string;
+  readonly accentClass: string;
+  readonly agg: DailyBetPayoutAggregate;
+};
+
+const cards: readonly Card[] = [
+  {
+    kind: "daily",
+    heading: "当日買い目（朝バッチ時点）",
+    accentClass: "border-amber-400 bg-amber-50",
+    agg: dailyAgg,
+  },
+  {
+    kind: "realtime",
+    heading: "直前買い目（直前情報反映後）",
+    accentClass: "border-cyan-400 bg-cyan-50",
+    agg: realtimeAgg,
+  },
+];
+---
+
+{hasAny && (
+  <section class="mb-6">
+    <h2 class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+      <span class="w-1 h-4 bg-blue-600 rounded-full" />
+      本日の AI 3連単 成績
+    </h2>
+    <p class="text-xs text-gray-500 mb-3">
+      買い目フォーメーションの全組合せを 1 点 ¥100 で 3連単 として買った場合の集計（締切済みレースのみ）。
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {cards.map((c) => {
+        const { agg } = c;
+        if (agg.settledRaceCount === 0) return null;
+        return (
+          <div class={`rounded-lg border-l-4 p-4 ${c.accentClass}`}>
+            <p class="text-sm font-bold text-gray-800 mb-2">{c.heading}</p>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <p class="text-xs text-gray-500">的中率</p>
+                <p class="text-lg font-bold text-gray-900">
+                  {formatPercent(agg.hitRate)}
+                  <span class="text-xs font-normal text-gray-500 ml-1">
+                    ({agg.hitCount}/{agg.settledRaceCount})
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">回収率</p>
+                <p class={`text-lg font-bold ${agg.recoveryRate >= 1 ? "text-green-700" : "text-gray-900"}`}>
+                  {formatPercent(agg.recoveryRate)}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">賭け金合計</p>
+                <p class="text-sm text-gray-700">{formatYen(agg.totalBetCostYen)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">払戻合計</p>
+                <p class={`text-sm font-medium ${agg.totalPayoutYen > 0 ? "text-green-700" : "text-gray-500"}`}>
+                  {formatYen(agg.totalPayoutYen)}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  </section>
+)}

@@ -1,4 +1,6 @@
 import type { BetHitStatus } from "../utils/bet-hit.js";
+import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
+import type { RacePayoutRow } from "./race-payout.js";
 import type { IndexState } from "./race-card.js";
 import type { RaceResultRow } from "./race-result.js";
 
@@ -111,5 +113,16 @@ export type RacePrediction = {
    * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
    */
   readonly betHitStatus?: BetHitStatus;
+  /**
+   * realtime 払戻。当該レースが確定し results/payouts CSV に行が存在する
+   * 場合のみセットされる。未確定 / CSV 未取得時は undefined。
+   */
+  readonly racePayout?: RacePayoutRow;
+  /**
+   * 当日買い目 / 直前買い目それぞれの 3連単 ベット結果（点数・賭け金・払戻）。
+   * `raceResult` または `racePayout` が無い場合は payoutYen=0 / hit=false。
+   * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
+   */
+  readonly betPayout?: RaceBetPayoutSummary;
   readonly generatedAt: string;
 };

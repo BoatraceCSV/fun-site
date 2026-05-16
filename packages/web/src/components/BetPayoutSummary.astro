@@ -1,0 +1,81 @@
+---
+import type { RaceBetPayoutSummary } from "@fun-site/shared";
+
+interface Props {
+  /** 3連単 戦略の払戻結果。当日 / 直前 それぞれの計算結果を持つ。 */
+  summary?: RaceBetPayoutSummary;
+}
+
+const { summary } = Astro.props;
+
+type SectionKind = "daily" | "realtime";
+
+type Section = {
+  readonly kind: SectionKind;
+  readonly label: string;
+  readonly result: NonNullable<Props["summary"]>["daily"] | undefined;
+};
+
+const sections: readonly Section[] = [
+  { kind: "daily", label: "当日買い目", result: summary?.daily },
+  { kind: "realtime", label: "直前買い目", result: summary?.realtime },
+];
+
+const hasAny = sections.some((s) => s.result && s.result.betCount > 0);
+
+const formatYen = (n: number): string => `¥${n.toLocaleString("ja-JP")}`;
+
+const formatPercent = (n: number): string => {
+  if (!Number.isFinite(n)) return "—";
+  return `${(n * 100).toFixed(1)}%`;
+};
+
+const badgeClass = (kind: SectionKind): string =>
+  kind === "daily"
+    ? "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
+    : "inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300";
+---
+
+{hasAny && (
+  <div class="space-y-3">
+    {sections.map((s) => {
+      const r = s.result;
+      if (!r || r.betCount === 0) return null;
+      const recovery = r.betCostYen > 0 ? r.payoutYen / r.betCostYen : 0;
+      return (
+        <div class="flex flex-col gap-1 border-l-4 pl-3 py-1 rounded-sm" style={`border-color: ${s.kind === "daily" ? "#d97706" : "#0891b2"}`}>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class={badgeClass(s.kind)}>{s.label}</span>
+            <span class="text-xs text-gray-500">{r.betCount} 点 × ¥100 = {formatYen(r.betCostYen)}</span>
+            {r.hit ? (
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800 border border-green-300">
+                🎯 的中
+              </span>
+            ) : (
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                外れ
+              </span>
+            )}
+          </div>
+          <div class="flex items-center gap-3 text-sm">
+            <span class="text-gray-700">
+              払戻: <span class={r.payoutYen > 0 ? "font-bold text-green-700" : "text-gray-400"}>{formatYen(r.payoutYen)}</span>
+            </span>
+            <span class="text-gray-700">
+              回収率: <span class={recovery >= 1 ? "font-bold text-green-700" : "text-gray-500"}>{formatPercent(recovery)}</span>
+            </span>
+            {r.actualSanrentan && (
+              <span class="text-xs text-gray-500">
+                結果 3連単: {r.actualSanrentan.combination} ({formatYen(r.actualSanrentan.payout)})
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    })}
+  </div>
+)}
+
+{!hasAny && (
+  <p class="text-sm text-gray-400">買い目データが揃っていません。</p>
+)}

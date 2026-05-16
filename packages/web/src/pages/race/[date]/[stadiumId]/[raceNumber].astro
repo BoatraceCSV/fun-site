@@ -2,6 +2,7 @@
 import type { RacePrediction } from "@fun-site/shared";
 import { getRaceGradeBadge, getStadiumById, parseRaceCode } from "@fun-site/shared";
 import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
+import BetPayoutSummary from "../../../../components/BetPayoutSummary.astro";
 import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
@@ -258,6 +259,17 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       hitStatus={prediction.betHitStatus}
     />
   </section>
+
+  {/* 3連単 払戻 / 回収率（確定済みのみ意味を持つ。フォーメーションが計算できる場合のみ表示） */}
+  {prediction.betPayout && (prediction.betPayout.daily.betCount > 0 || prediction.betPayout.realtime.betCount > 0) && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-1">もし買ったら</h2>
+      <p class="text-xs text-gray-500 mb-3">
+        買い目フォーメーションの全組合せを 1 点 ¥100 で 3連単 として買った場合の払戻 / 回収率。
+      </p>
+      <BetPayoutSummary summary={prediction.betPayout} />
+    </section>
+  )}
 
   {/* スタート予想 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">

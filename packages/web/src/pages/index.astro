@@ -1,5 +1,6 @@
 ---
 import { STADIUMS, toJSTDateString } from "@fun-site/shared";
+import DailyBetSummary from "../components/DailyBetSummary.astro";
 import RaceCard from "../components/RaceCard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions } from "../lib/data";
@@ -84,6 +85,9 @@ for (const [stadiumId, races] of stadiumGroups.entries()) {
       <p class="text-sm">AM 9:00 のバッチ処理後に更新されます</p>
     </div>
   ) : null}
+
+  {/* AI 3連単 戦略の当日サマリー（締切済みレースのみ集計対象） */}
+  <DailyBetSummary predictions={predictions} />
 
   {/* レース場一覧 - 開催中: 締切が一番近いレースの RaceCard / 非開催: レース場名のみ */}
   <section>

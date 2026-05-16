@@ -8,9 +8,16 @@ const INITIAL_DELAY_MS = 1000;
 // BoatraceCSV で現在 fun-site が利用する CSV を列挙する。
 // 旧 programs / prediction-preview / estimate / confirm は上流で生成停止に伴い廃止済み。
 // `results` は preview-realtime が当日確定直後に追記する realtime 結果 CSV
-// (`data/results/realtime/YYYY/MM/DD.csv`)。K-file 由来の翌日確定
-// (`data/results/daily/...`) は対象外。
-export type CsvType = "title" | "race_cards" | "stt" | "index" | "results";
+// (`data/results/realtime/YYYY/MM/DD.csv`)。`payouts` は同じく当日確定直後に
+// bc_rs2 から追記する払戻 CSV (`data/results/payouts/YYYY/MM/DD.csv`)。
+// K-file 由来の翌日確定 (`data/results/daily/...`) は対象外。
+export type CsvType =
+  | "title"
+  | "race_cards"
+  | "stt"
+  | "index"
+  | "results"
+  | "payouts";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
@@ -20,6 +27,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   // boatracecsv.github.io リポジトリの実体は `data/estimate/index/YYYY/MM/DD.csv`。
   index: "estimate/index",
   results: "results/realtime",
+  payouts: "results/payouts",
 };
 
 /**
