@@ -2,7 +2,7 @@
 
 ボートレースの **スタート予想** と **AI による総合評価** を、当日全レース分の静的ページとして配信するファンサイト。
 
-[BoatraceCSV](https://github.com/BoatraceCSV) が 5 分間隔で更新する CSV を Pub/Sub 経由で受け取り、Cloud Run Job が当日全ページを再ビルドして GCS + Cloud CDN で配信する。
+[BoatraceCSV](https://github.com/BoatraceCSV) が 2 分間隔で更新する CSV を Pub/Sub 経由で受け取り、Cloud Run Job が当日全ページを再ビルドして GCS + Cloud CDN で配信する。
 
 ## 特徴
 
