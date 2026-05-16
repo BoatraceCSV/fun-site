@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node --import tsx/esm src/main.ts",
+    "start:prod": "node --conditions=production dist/main.js",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
