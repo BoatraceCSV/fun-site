@@ -24,7 +24,6 @@
 - 方針転換は as-is 本文を直接書き換え、末尾の「経緯」節に 1 行追記する
 - 過去のスナップショットが必要なら `git log --follow docs/<file>.md` で辿る
 - `README.md` には詳細を書かない。詳細は `docs/` に書き、`README.md` からリンクする
-- `docs/` の構成・目次は [docs/README.md](docs/README.md) を参照
 
 ## コーディング規約
 
