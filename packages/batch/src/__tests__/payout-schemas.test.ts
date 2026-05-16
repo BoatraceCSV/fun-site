@@ -79,8 +79,7 @@ const ASHIYA_R12_ROW = [
   "4",
 ];
 
-const buildCsv = (rows: string[][]): string =>
-  [HEADER, ...rows].map((r) => r.join(",")).join("\n");
+const buildCsv = (rows: string[][]): string => [HEADER, ...rows].map((r) => r.join(",")).join("\n");
 
 describe("parsePayouts", () => {
   it("芦屋 race12 の 1 行をフルパースする", () => {
@@ -88,7 +87,8 @@ describe("parsePayouts", () => {
     const result = parsePayouts(csv);
     expect(result.length).toBe(1);
 
-    const r = result[0]!;
+    const r = result[0];
+    if (!r) throw new Error("expected at least one parsed row");
     expect(r.raceCode).toBe("202605162112");
     expect(r.raceDate).toBe("2026-05-16");
     expect(r.stadiumId).toBe("21");
@@ -122,7 +122,8 @@ describe("parsePayouts", () => {
     row[24] = "";
     row[25] = "";
     const csv = buildCsv([row]);
-    const r = parsePayouts(csv)[0]!;
+    const r = parsePayouts(csv)[0];
+    if (!r) throw new Error("expected at least one parsed row");
     expect(r.kakurenfuku[0]?.combination).toBe("1=4");
     expect(r.kakurenfuku[1]).toBeNull();
     expect(r.kakurenfuku[2]?.combination).toBe("2=4");
@@ -136,7 +137,8 @@ describe("parsePayouts", () => {
   it("レース回の R サフィックスを取り除く", () => {
     const row = [...ASHIYA_R12_ROW];
     row[3] = "12R";
-    const r = parsePayouts(buildCsv([row]))[0]!;
+    const r = parsePayouts(buildCsv([row]))[0];
+    if (!r) throw new Error("expected at least one parsed row");
     expect(r.raceNumber).toBe(12);
   });
 
@@ -145,7 +147,8 @@ describe("parsePayouts", () => {
     row[30] = '"2,180"'; // CSV-escaped
     // For simplicity, just verify the parser handles digits-with-comma via _to_int
     const csv = buildCsv([row]);
-    const r = parsePayouts(csv)[0]!;
+    const r = parsePayouts(csv)[0];
+    if (!r) throw new Error("expected at least one parsed row");
     // The csv-parse should yield "2,180", which the parser cleans to 2180.
     expect(r.sanrentan?.payout).toBe(2180);
   });

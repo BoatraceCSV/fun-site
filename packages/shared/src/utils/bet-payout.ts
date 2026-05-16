@@ -55,9 +55,7 @@ const ZERO_RESULT: BetPayoutResult = {
 };
 
 /** 1〜3 着が揃っていれば `[1着, 2着, 3着]` を返す（ヘルパ） */
-const extractTopThree = (
-  result: RaceResultRow,
-): readonly [number, number, number] | undefined => {
+const extractTopThree = (result: RaceResultRow): readonly [number, number, number] | undefined => {
   const byRank = new Map<number, number>(
     result.finishes.map((f) => [f.rank, f.boatNumber] as const),
   );
@@ -147,7 +145,7 @@ export const computeRaceBetPayoutSummary = (
   result: RaceResultRow | undefined,
   payout: RacePayoutRow | undefined,
 ): RaceBetPayoutSummary => {
-  if (!dailyPicks && !realtimePicks) return ZERO_SUMMARY;
+  if (!(dailyPicks || realtimePicks)) return ZERO_SUMMARY;
   return {
     daily: computeBetPayout(dailyPicks, result, payout),
     realtime: computeBetPayout(realtimePicks, result, payout),

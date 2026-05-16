@@ -1,8 +1,4 @@
-import type {
-  CombinationPayout,
-  RacePayoutRow,
-  SinglePayout,
-} from "@fun-site/shared";
+import type { CombinationPayout, RacePayoutRow, SinglePayout } from "@fun-site/shared";
 import { parse } from "csv-parse/sync";
 
 const stripRSuffix = (raw: string | undefined): number => {
@@ -48,10 +44,7 @@ const buildCombinationPayout = (
 const parsePayoutRow = (row: Record<string, string>): RacePayoutRow => {
   const fukusho: SinglePayout[] = [];
   for (const rank of [1, 2, 3] as const) {
-    const entry = buildSinglePayout(
-      row[`複勝_${rank}着_艇番`],
-      row[`複勝_${rank}着_払戻金`],
-    );
+    const entry = buildSinglePayout(row[`複勝_${rank}着_艇番`], row[`複勝_${rank}着_払戻金`]);
     if (entry) fukusho.push(entry);
   }
 
@@ -75,27 +68,11 @@ const parsePayoutRow = (row: Record<string, string>): RacePayoutRow => {
     fetchedAt: row["取得日時"] ?? "",
     tansho: buildSinglePayout(row["単勝_艇番"], row["単勝_払戻金"]),
     fukusho,
-    nirentan: buildCombinationPayout(
-      row["2連単_組番"],
-      row["2連単_払戻金"],
-      row["2連単_人気"],
-    ),
-    nirenpuku: buildCombinationPayout(
-      row["2連複_組番"],
-      row["2連複_払戻金"],
-      row["2連複_人気"],
-    ),
+    nirentan: buildCombinationPayout(row["2連単_組番"], row["2連単_払戻金"], row["2連単_人気"]),
+    nirenpuku: buildCombinationPayout(row["2連複_組番"], row["2連複_払戻金"], row["2連複_人気"]),
     kakurenfuku,
-    sanrentan: buildCombinationPayout(
-      row["3連単_組番"],
-      row["3連単_払戻金"],
-      row["3連単_人気"],
-    ),
-    sanrenpuku: buildCombinationPayout(
-      row["3連複_組番"],
-      row["3連複_払戻金"],
-      row["3連複_人気"],
-    ),
+    sanrentan: buildCombinationPayout(row["3連単_組番"], row["3連単_払戻金"], row["3連単_人気"]),
+    sanrenpuku: buildCombinationPayout(row["3連複_組番"], row["3連複_払戻金"], row["3連複_人気"]),
   };
 };
 

@@ -1,7 +1,7 @@
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
-import type { RacePayoutRow } from "./race-payout.js";
 import type { IndexState } from "./race-card.js";
+import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */

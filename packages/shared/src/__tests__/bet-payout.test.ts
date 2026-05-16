@@ -170,7 +170,11 @@ describe("aggregateDailyBetPayout", () => {
 
   it("betCount=0 のレースは母数から除外", () => {
     const r1 = computeBetPayout(undefined, undefined, undefined);
-    const r2 = computeBetPayout(picks([1], [4], [2]), makeResult([1, 4, 2]), makePayout("1-4-2", 2180));
+    const r2 = computeBetPayout(
+      picks([1], [4], [2]),
+      makeResult([1, 4, 2]),
+      makePayout("1-4-2", 2180),
+    );
     const agg = aggregateDailyBetPayout([r1, r2]);
     expect(agg.settledRaceCount).toBe(1);
     expect(agg.hitCount).toBe(1);

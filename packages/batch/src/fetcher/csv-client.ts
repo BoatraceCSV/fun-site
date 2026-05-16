@@ -11,13 +11,7 @@ const INITIAL_DELAY_MS = 1000;
 // (`data/results/realtime/YYYY/MM/DD.csv`)。`payouts` は同じく当日確定直後に
 // bc_rs2 から追記する払戻 CSV (`data/results/payouts/YYYY/MM/DD.csv`)。
 // K-file 由来の翌日確定 (`data/results/daily/...`) は対象外。
-export type CsvType =
-  | "title"
-  | "race_cards"
-  | "stt"
-  | "index"
-  | "results"
-  | "payouts";
+export type CsvType = "title" | "race_cards" | "stt" | "index" | "results" | "payouts";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
