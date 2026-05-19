@@ -91,7 +91,7 @@ export const runPipeline = async (): Promise<void> => {
 
   // Step 3: 書き出し → Astro ビルド → デプロイ
   console.info("Step 3: Writing data, building and deploying...");
-  await buildAndDeploy(predictions);
+  await buildAndDeploy(predictions, raceDate);
 
   // Step 4: last-build.json を GCS に保存（次回ビルド時の早期 return 比較用）
   if (process.env["CSV_SOURCE"] === "gcs") {

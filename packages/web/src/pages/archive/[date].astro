@@ -2,17 +2,20 @@
 import { getStadiumById } from "@fun-site/shared";
 import RaceCard from "../../components/RaceCard.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import { loadAvailableDates, loadPredictions } from "../../lib/data";
+import { loadAvailableDates, loadHistoricalDates, loadPredictions } from "../../lib/data";
 
 export async function getStaticPaths() {
+  // 当日分のみページ生成 (過去ページは GCS 残置を利用)。
   const dates = await loadAvailableDates();
+  // 「他の日付」セクション用に、これまで公開された全日付を渡す。
+  const historicalDates = await loadHistoricalDates();
   const paths = [];
 
   for (const date of dates) {
     const predictions = await loadPredictions(date);
     paths.push({
       params: { date },
-      props: { predictions, date, allDates: dates },
+      props: { predictions, date, historicalDates },
     });
   }
 
@@ -22,10 +25,10 @@ export async function getStaticPaths() {
 interface Props {
   predictions: Awaited<ReturnType<typeof loadPredictions>>;
   date: string;
-  allDates: string[];
+  historicalDates: string[];
 }
 
-const { predictions, date, allDates } = Astro.props;
+const { predictions, date, historicalDates } = Astro.props;
 
 const stadiumGroups = new Map<string, typeof predictions>();
 for (const prediction of predictions) {
@@ -35,14 +38,23 @@ for (const prediction of predictions) {
   stadiumGroups.set(key, group);
 }
 
-const otherDates = allDates.filter((d) => d !== date).slice(0, 10);
+// 「他の日付」: 同月の他の日付を優先し、不足分は前月から補完。最大 14 件。
+const currentMonth = date.slice(0, 7);
+const sameMonthOthers = historicalDates.filter(
+  (d) => d !== date && d.startsWith(currentMonth),
+);
+const prevMonthOthers = historicalDates.filter(
+  (d) => d !== date && !d.startsWith(currentMonth),
+);
+const OTHER_DATES_LIMIT = 14;
+const otherDates = [...sameMonthOthers, ...prevMonthOthers].slice(0, OTHER_DATES_LIMIT);
 ---
 
 <BaseLayout title={`${date} の予想 - アーカイブ`}>
   <nav class="text-sm text-gray-500 mb-4">
     <a href="/" class="hover:text-blue-600">トップ</a>
     <span class="mx-1">/</span>
-    <span>アーカイブ</span>
+    <a href="/archive/" class="hover:text-blue-600">アーカイブ</a>
     <span class="mx-1">/</span>
     <span>{date}</span>
   </nav>
@@ -80,11 +92,16 @@ const otherDates = allDates.filter((d) => d !== date).slice(0, 10);
 
   {otherDates.length > 0 && (
     <section class="mt-10">
-      <h2 class="font-bold mb-3">他の日付</h2>
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="font-bold">他の日付</h2>
+        <a href="/archive/" class="text-sm text-blue-600 hover:text-blue-800">
+          すべてのアーカイブ →
+        </a>
+      </div>
       <div class="flex flex-wrap gap-2">
         {otherDates.map((d) => (
           <a
-            href={`/archive/${d}`}
+            href={`/archive/${d}/`}
             class="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
           >
             {d}

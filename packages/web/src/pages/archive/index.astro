@@ -1,0 +1,78 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { loadHistoricalDates } from "../../lib/data";
+
+const dates = await loadHistoricalDates();
+
+// 月別グルーピング ("YYYY-MM" → ["YYYY-MM-DD", ...])。
+// dates は降順なので、Map に順に追加していけば月キーも降順で保持される。
+const groupByMonth = (input: readonly string[]): Map<string, string[]> => {
+  const m = new Map<string, string[]>();
+  for (const d of input) {
+    const month = d.slice(0, 7);
+    const arr = m.get(month) ?? [];
+    arr.push(d);
+    m.set(month, arr);
+  }
+  return m;
+};
+
+const monthGroups = groupByMonth(dates);
+
+const formatMonth = (yyyymm: string): string => {
+  const [y, mo] = yyyymm.split("-");
+  return `${y}年${Number(mo)}月`;
+};
+
+const formatDay = (yyyymmdd: string): string => {
+  const day = yyyymmdd.slice(8, 10);
+  return `${Number(day)}日`;
+};
+---
+
+<BaseLayout title="アーカイブ - 過去のレース予想">
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <span>アーカイブ</span>
+  </nav>
+
+  <h1 class="text-2xl font-bold mb-2">アーカイブ</h1>
+  <p class="text-sm text-gray-500 mb-6">
+    これまでに公開された日付の予想ページ {dates.length} 件
+  </p>
+
+  {dates.length === 0 ? (
+    <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
+      <p>過去日のデータはまだありません</p>
+    </div>
+  ) : (
+    <div class="space-y-8">
+      {[...monthGroups.entries()].map(([month, days]) => (
+        <section>
+          <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+            <span class="w-1 h-6 bg-blue-600 rounded-full" />
+            {formatMonth(month)}
+            <span class="text-sm text-gray-400 font-normal">{days.length}日</span>
+          </h2>
+          <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 gap-2">
+            {days.map((d) => (
+              <a
+                href={`/archive/${d}/`}
+                class="text-sm text-center px-3 py-2 bg-white border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+              >
+                {formatDay(d)}
+              </a>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  )}
+
+  <div class="mt-8 text-center">
+    <a href="/" class="text-blue-600 hover:text-blue-800 text-sm">
+      ← トップページに戻る
+    </a>
+  </div>
+</BaseLayout>

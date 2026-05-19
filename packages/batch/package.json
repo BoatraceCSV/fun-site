@@ -8,7 +8,8 @@
     "start:prod": "node --conditions=production dist/main.js",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed-archive-dates": "node --import tsx/esm src/scripts/seed-archive-dates.ts"
   },
   "dependencies": {
     "@fun-site/shared": "workspace:*",

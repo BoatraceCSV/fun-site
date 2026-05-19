@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { type RacePrediction, toJSTDateString } from "@fun-site/shared";
 
 const RACES_DIR = resolve(process.cwd(), "src/data/races");
+const DATES_INDEX_PATH = resolve(process.cwd(), "src/data/_meta/dates.json");
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * ビルド対象日（JST 当日）。
@@ -77,12 +79,43 @@ export const loadAvailableDates = async (): Promise<string[]> => {
   try {
     const entries = await readdir(RACES_DIR);
     const all = entries
-      .filter((e) => /^\d{4}-\d{2}-\d{2}$/.test(e))
+      .filter((e) => DATE_RE.test(e))
       .sort()
       .reverse();
     if (process.env["BUILD_ALL_DATES"] === "1") return all;
     const target = getBuildTargetDate();
     return all.filter((d) => d === target);
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * `src/data/_meta/dates.json` をベースにした「過去公開済み日付」一覧。
+ *
+ * バッチが GCS から取得した `_meta/dates.json` を Astro ビルド前にこの位置へ
+ * 書き出しており、これまでに GCS Web バケットへデプロイされた全日付を返す
+ * (降順)。`/archive/` インデックスや `/archive/[date]` の「他の日付」など、
+ * 過去ページへの導線を描画するために使う。
+ *
+ * `loadAvailableDates` とは別関数。`loadAvailableDates` を変更すると
+ * トップページや archive ページの getStaticPaths が過去日まで生成して
+ * しまうため、用途を分けている。
+ *
+ * ファイルが無い / 壊れている場合は空配列を返す (ローカル開発で初回ビルド
+ * 前など)。
+ */
+export const loadHistoricalDates = async (): Promise<string[]> => {
+  try {
+    const content = await readFile(DATES_INDEX_PATH, "utf-8");
+    const parsed = JSON.parse(content) as unknown;
+    if (!parsed || typeof parsed !== "object") return [];
+    const dates = (parsed as { dates?: unknown }).dates;
+    if (!Array.isArray(dates)) return [];
+    return dates
+      .filter((d): d is string => typeof d === "string" && DATE_RE.test(d))
+      .sort()
+      .reverse();
   } catch {
     return [];
   }

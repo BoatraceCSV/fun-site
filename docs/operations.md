@@ -104,6 +104,31 @@ gcloud run jobs update fun-site-batch \
   --remove-env-vars FORCE_REBUILD
 ```
 
+## アーカイブ日付インデックスのシード
+
+`/archive/` インデックスと `/archive/[date]` の「他の日付」セクションは、
+`gs://${GCS_WEB_BUCKET}/_meta/dates.json` に保持された日付リストを参照する。
+通常運用ではバッチが当日分を毎ビルドで追記するが、機能導入直後など、
+既に GCS に過去ページが残っているのにインデックスが空の状態のときは、
+シードスクリプトを 1 度実行してバケットの実態から流し込む:
+
+スクリプトは `@google-cloud/storage` SDK を使うため、batch パッケージの依存解決経由で実行する:
+
+```bash
+# 認証
+gcloud auth application-default login
+
+# 既存の `archive/<date>/` プレフィックスを列挙して dates.json を生成
+pnpm --filter @fun-site/batch run seed-archive-dates
+
+# 内容確認のみ (書き込まない)
+DRY_RUN=1 pnpm --filter @fun-site/batch run seed-archive-dates
+```
+
+その後の運用では、バッチ (`packages/batch/src/site-builder/dates-index.ts`)
+が `buildAndDeploy` の最後で `dates.json` に当日を追記して GCS に書き戻す
+ので、追加の操作は不要。
+
 ## バックフィル（過去日付）
 
 特定日の再生成は `BUILD_TARGET_DATE` を渡す:
