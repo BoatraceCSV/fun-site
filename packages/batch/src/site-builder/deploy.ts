@@ -151,6 +151,10 @@ export const deployToStorage = async (): Promise<void> => {
   // ローカルに存在しないリモートファイルを削除（rsync -d 相当）
   // images/ プレフィックスは画像生成ステップで別途アップロードされるため除外
   // _meta/ は last-build.json などの内部メタを置く領域なので削除対象から除外
+  // _astro/ は Astro が content-hash で名付ける CSS/JS のチャンク。残置される
+  //   過去日付ページ(下記)がこれらを参照しているため、削除すると過去ページの
+  //   CSS / JS が 404 になる。content-hash 命名なので同名上書きはなく、
+  //   蓄積しても破綻しない (必要なら別途まとめてクリーンアップ)。
   //
   // 5 分サイクルでの再ビルドは当日分のみを対象とする (lib/data.ts) ため、
   // 過去日付の race / archive ページはローカルに存在せず、素朴な削除フィルタだと
@@ -162,7 +166,9 @@ export const deployToStorage = async (): Promise<void> => {
   const DATE_PREFIX_RE = /^(race|archive)\/(\d{4}-\d{2}-\d{2})\//;
   const toDelete = [...existingByName.keys()].filter((name) => {
     if (uploadedNames.has(name)) return false;
-    if (name.startsWith("images/") || name.startsWith("_meta/")) return false;
+    if (name.startsWith("images/") || name.startsWith("_meta/") || name.startsWith("_astro/")) {
+      return false;
+    }
     const m = name.match(DATE_PREFIX_RE);
     if (m && m[2] !== todayJST) return false;
     return true;

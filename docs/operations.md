@@ -125,6 +125,31 @@ pnpm --filter @fun-site/batch run seed-archive-dates
 DRY_RUN=1 pnpm --filter @fun-site/batch run seed-archive-dates
 ```
 
+## 過去ページの CSS 参照を復旧する
+
+旧 `deploy.ts` は `_astro/` 配下を毎回 rsync 削除していたため、
+過去日付の `race/<date>/.../index.html` と `archive/<date>/index.html` が
+既に消えた CSS ハッシュを参照して 404 になることがある。
+現行 `deploy.ts` では `_astro/` を保護対象に追加して将来の削除を止めているが、
+既に発生している 404 は HTML を書き換えて現行ハッシュに揃える必要がある:
+
+```bash
+gcloud auth application-default login
+
+# 内容確認 (書き込まない)
+DRY_RUN=1 pnpm --filter @fun-site/batch run recover-past-css
+
+# 本番適用
+pnpm --filter @fun-site/batch run recover-past-css
+```
+
+スクリプトは GCS 上の `_astro/*.css` を列挙してから、過去日付 HTML の
+`<link rel="stylesheet" href="/_astro/*.css">` を検査し、リンク先が
+現存しないものだけ現行 CSS に置き換える。既に有効なリンクは触らない。
+
+CDN キャッシュが残っていると書き換え後も古い 404 が返る場合があるので、
+必要に応じて Cloud CDN のキャッシュ無効化を併用する。
+
 その後の運用では、バッチ (`packages/batch/src/site-builder/dates-index.ts`)
 が `buildAndDeploy` の最後で `dates.json` に当日を追記して GCS に書き戻す
 ので、追加の操作は不要。
