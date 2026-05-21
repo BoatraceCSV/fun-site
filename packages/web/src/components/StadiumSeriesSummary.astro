@@ -1,0 +1,66 @@
+---
+import type { SeriesBetPayoutAggregate } from "@fun-site/shared";
+
+interface Props {
+  /**
+   * 当該会場の節集計。null の場合は「節集計データなし」として何も表示しない
+   * (例: 節初日でまだ confirm 確定レース 0、または summary ファイルが未生成)。
+   */
+  agg: SeriesBetPayoutAggregate | null | undefined;
+}
+
+const { agg } = Astro.props;
+
+const formatYen = (n: number): string => `¥${n.toLocaleString("ja-JP")}`;
+const formatPercent = (n: number): string => `${(n * 100).toFixed(1)}%`;
+
+/** "2026-05-21" → "5/21" */
+const shortDate = (d: string): string => {
+  const [_y, m, day] = d.split("-");
+  return `${Number(m)}/${Number(day)}`;
+};
+---
+
+{agg && agg.settledRaceCount > 0 && (
+  <section class="mb-6">
+    <h2 class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+      <span class="w-1 h-4 bg-blue-600 rounded-full" />
+      今節成績
+      <span class="text-xs font-normal text-gray-500">
+        ({shortDate(agg.seriesStartDate)} 〜 {shortDate(agg.seriesEndDate)}・{agg.dayCount}日間 / 直前買い目)
+      </span>
+    </h2>
+    <p class="text-xs text-gray-500 mb-3">
+      節初日から当日までの締切済みレースを集計。直前情報反映後の買い目フォーメーション全組合せを 1 点 ¥100 で 3連単 として買った場合の成績。
+    </p>
+    <div class="rounded-lg border-l-4 p-4 border-cyan-400 bg-cyan-50">
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <div>
+          <p class="text-xs text-gray-500">的中率</p>
+          <p class="text-lg font-bold text-gray-900">
+            {formatPercent(agg.hitRate)}
+            <span class="text-xs font-normal text-gray-500 ml-1">
+              ({agg.hitCount}/{agg.settledRaceCount})
+            </span>
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500">回収率</p>
+          <p class={`text-lg font-bold ${agg.recoveryRate >= 1 ? "text-green-700" : "text-gray-900"}`}>
+            {formatPercent(agg.recoveryRate)}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500">賭け金合計</p>
+          <p class="text-sm text-gray-700">{formatYen(agg.totalBetCostYen)}</p>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500">払戻合計</p>
+          <p class={`text-sm font-medium ${agg.totalPayoutYen > 0 ? "text-green-700" : "text-gray-500"}`}>
+            {formatYen(agg.totalPayoutYen)}
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+)}

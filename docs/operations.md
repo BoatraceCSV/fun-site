@@ -104,6 +104,22 @@ gcloud run jobs update fun-site-batch \
   --remove-env-vars FORCE_REBUILD
 ```
 
+## 節集計データ (GCS の保管物)
+
+会場ページの「今節成績」表示に使う節集計は、バッチ
+([`series-aggregator.ts`](../packages/batch/src/site-builder/series-aggregator.ts))
+が以下を生成・参照する:
+
+| GCS パス | 役割 | 更新タイミング |
+|---|---|---|
+| `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` | レース予想の生 JSON。節集計の incremental キャッシュにヒットしなかった過去日を補完するために `fetchHistoricalPredictions(date)` で取得する | 当日ビルド毎に上書き |
+| `gs://${GCS_DATA_BUCKET}/_meta/series-state.json` | stadium × date のスナップショット (`settledRaceCount` / `hitCount` / `totalBetCostYen` / `totalPayoutYen` + `dayLabel`) を保持。過去日エントリは再計算せずに再利用、当日分は毎ビルド上書き、`SERIES_LOOKBACK_DAYS` 上限を超えた古い日は prune | 当日ビルド毎 |
+| `packages/web/src/data/_meta/series-summary.json` | Astro が読む集計結果 (`byStadium[stadiumId]: SeriesBetPayoutAggregate`)。GCS にはアップロードせず Astro ビルド入力としてのみ使う | 当日ビルド毎 |
+
+通常運用では追加の操作は不要。手動で state を捨てて作り直したい場合は GCS の
+`_meta/series-state.json` を削除すれば、次回ビルドで `lookback` 範囲を GCS から
+再構築する (一時的に集計が縮退するだけで致命的ではない)。
+
 ## アーカイブ日付インデックスのシード
 
 `/archive/` インデックスと `/archive/[date]` の「他の日付」セクションは、

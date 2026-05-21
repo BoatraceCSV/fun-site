@@ -28,3 +28,13 @@ export {
   type DailyBetPayoutAggregate,
   type RaceBetPayoutSummary,
 } from "./bet-payout.js";
+export {
+  aggregateSeriesBetPayout,
+  buildDailySnapshot,
+  detectSeries,
+  toDailySnapshot,
+  type DailyBetPayoutSnapshot,
+  type DetectedSeries,
+  type SeriesBetPayoutAggregate,
+  type SeriesDayInfo,
+} from "./series.js";

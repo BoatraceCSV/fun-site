@@ -1,9 +1,14 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { type RacePrediction, toJSTDateString } from "@fun-site/shared";
+import {
+  type RacePrediction,
+  type SeriesBetPayoutAggregate,
+  toJSTDateString,
+} from "@fun-site/shared";
 
 const RACES_DIR = resolve(process.cwd(), "src/data/races");
 const DATES_INDEX_PATH = resolve(process.cwd(), "src/data/_meta/dates.json");
+const SERIES_SUMMARY_PATH = resolve(process.cwd(), "src/data/_meta/series-summary.json");
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -118,5 +123,49 @@ export const loadHistoricalDates = async (): Promise<string[]> => {
       .reverse();
   } catch {
     return [];
+  }
+};
+
+/**
+ * `_meta/series-summary.json` から会場別の節集計を読み込む。
+ *
+ * バッチ (`series-aggregator.ts`) が書き出した、当日基準の節集計
+ * (`realtime` 戦略・初日〜当日)。ファイルが無い / 壊れている場合は null を返す
+ * (会場ページ側で「節成績セクションを出さない」フォールバックを取る)。
+ *
+ * 形式:
+ *
+ * ```jsonc
+ * {
+ *   "updatedAt": "ISO 日時",
+ *   "raceDate": "YYYY-MM-DD",
+ *   "byStadium": { "01": SeriesBetPayoutAggregate, ... }
+ * }
+ * ```
+ *
+ * 24 会場分を 1 度ロードしてマップで持つ想定。`getStaticPaths` から呼ぶ場合は
+ * 結果を呼び出し側でキャッシュすること (このロード自体はメモ化していない)。
+ */
+export type SeriesSummaryFile = {
+  readonly updatedAt: string;
+  readonly raceDate: string;
+  readonly byStadium: Readonly<Record<string, SeriesBetPayoutAggregate>>;
+};
+
+export const loadSeriesSummary = async (): Promise<SeriesSummaryFile | null> => {
+  try {
+    const content = await readFile(SERIES_SUMMARY_PATH, "utf-8");
+    const parsed = JSON.parse(content) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const obj = parsed as Partial<SeriesSummaryFile>;
+    if (typeof obj.raceDate !== "string" || !DATE_RE.test(obj.raceDate)) return null;
+    if (!obj.byStadium || typeof obj.byStadium !== "object") return null;
+    return {
+      updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : "",
+      raceDate: obj.raceDate,
+      byStadium: obj.byStadium,
+    };
+  } catch {
+    return null;
   }
 };
