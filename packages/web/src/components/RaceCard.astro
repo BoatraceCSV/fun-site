@@ -1,19 +1,18 @@
 ---
-import type { RacePrediction } from "@fun-site/shared";
-import {
-  BOAT_COLORS,
-  computeBettingPicks,
-  computeOneMarkDistances,
-  getRaceGradeBadge,
-  getStadiumById,
-  isValidBoatNumber,
-} from "@fun-site/shared";
+import type { RacePrediction, SeriesBetPayoutAggregate } from "@fun-site/shared";
+import { getRaceGradeBadge, getStadiumById } from "@fun-site/shared";
 
 interface Props {
   prediction: RacePrediction;
+  /**
+   * 当該会場の節集計 (直前買い目戦略)。3 行目の今節成績表示に使う。
+   * 渡されない or null の場合は「節成績データなし」表示にフォールバック。
+   * `_meta/series-summary.json` の `byStadium[stadiumId]` を呼び出し側でルックアップして渡す。
+   */
+  seriesAggregate?: SeriesBetPayoutAggregate | null;
 }
 
-const { prediction } = Astro.props;
+const { prediction, seriesAggregate } = Astro.props;
 const stadium = getStadiumById(prediction.stadiumId);
 const stadiumName = stadium?.name ?? prediction.stadiumName;
 const raceUrl = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}`;
@@ -33,26 +32,16 @@ const subtitle = subtitleParts.join(" ");
 // 2 行目先頭のグレードバッジ。一般戦 (IP) や未設定の場合は null。
 const gradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
-// 買い目: AI 評価から走行距離 → フォーメーション 1着・2着・3着候補を導出
-const distances = computeOneMarkDistances(prediction.racers, prediction.aiEvaluation);
-const picks = computeBettingPicks(distances);
-// AI 評価が空 (全 strengthPt = 0) のときは買い目は無意味なので非表示
-const hasAiEvaluation = prediction.aiEvaluation.entries.some((e) => e.strengthPt > 0);
-const pickGroups = hasAiEvaluation
-  ? [
-      { label: "1着", boats: picks.first },
-      { label: "2着", boats: picks.second },
-      { label: "3着", boats: picks.third },
-    ]
-  : [];
+// 3 行目: 今節成績 (直前買い目戦略)。
+// settledRaceCount === 0 (節初日でまだ確定 0 等) は「データなし」扱いにする。
+const hasSeriesData =
+  seriesAggregate != null && seriesAggregate.settledRaceCount > 0;
 
-const boatBoxStyle = (boatNumber: number): string => {
-  const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
-  const bg = color?.hex ?? "#999";
-  const fg = color?.textHex ?? "#fff";
-  // 1号艇 (白) は視認性確保のため細いボーダーを付ける
-  const border = boatNumber === 1 ? " border: 1px solid #cbd5e1;" : "";
-  return `background-color: ${bg}; color: ${fg};${border}`;
+const formatPercent = (n: number): string => `${(n * 100).toFixed(1)}%`;
+/** "2026-05-21" → "5/21" */
+const shortDate = (d: string): string => {
+  const parts = d.split("-");
+  return `${Number(parts[1])}/${Number(parts[2])}`;
 };
 ---
 
@@ -92,36 +81,30 @@ const boatBoxStyle = (boatNumber: number): string => {
     </p>
   )}
 
-  {/* 3行目: 買い目 (1着 - 2着 - 3着 のフォーメーション) */}
-  {pickGroups.length > 0 ? (
-    <div class="flex flex-wrap items-center gap-1 text-xs" aria-label="買い目">
-      {pickGroups.map((group, gi) => (
-        <>
-          {gi > 0 && (
-            <span class="text-gray-400 font-bold mx-0.5" aria-hidden="true">−</span>
-          )}
-          <div
-            class="flex items-center gap-1"
-            aria-label={`${group.label}候補`}
-          >
-            {group.boats.length === 0 ? (
-              <span class="text-gray-400">該当なし</span>
-            ) : (
-              group.boats.map((bn) => (
-                <span
-                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold tabular-nums"
-                  style={boatBoxStyle(bn)}
-                  title={`${group.label}候補: ${bn}号艇`}
-                >
-                  {bn}
-                </span>
-              ))
-            )}
-          </div>
-        </>
-      ))}
+  {/* 3行目: 今節成績 (直前買い目戦略の的中率 / 回収率)。
+       渡されない / データなしの場合は控えめなフォールバック表示。 */}
+  {hasSeriesData ? (
+    <div
+      class="flex items-center gap-2 text-xs"
+      aria-label={`今節成績 ${shortDate(seriesAggregate!.seriesStartDate)} 〜 ${shortDate(seriesAggregate!.seriesEndDate)}`}
+    >
+      <span class="text-gray-500 shrink-0">今節</span>
+      <span class="text-gray-600 shrink-0 tabular-nums">
+        {shortDate(seriesAggregate!.seriesStartDate)}〜{shortDate(seriesAggregate!.seriesEndDate)}
+      </span>
+      <span class="text-gray-300" aria-hidden="true">|</span>
+      <span class="text-gray-700">
+        的中 <span class="font-bold tabular-nums">{formatPercent(seriesAggregate!.hitRate)}</span>
+        <span class="text-gray-400 text-[10px] ml-0.5 tabular-nums">
+          ({seriesAggregate!.hitCount}/{seriesAggregate!.settledRaceCount})
+        </span>
+      </span>
+      <span class="text-gray-300" aria-hidden="true">|</span>
+      <span class={seriesAggregate!.recoveryRate >= 1 ? "text-green-700" : "text-gray-700"}>
+        回収 <span class="font-bold tabular-nums">{formatPercent(seriesAggregate!.recoveryRate)}</span>
+      </span>
     </div>
   ) : (
-    <p class="text-xs text-gray-400">買い目: AI 評価未取得</p>
+    <p class="text-xs text-gray-400">今節成績: 集計データなし</p>
   )}
 </a>

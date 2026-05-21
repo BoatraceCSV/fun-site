@@ -3,12 +3,17 @@ import { STADIUMS, toJSTDateString } from "@fun-site/shared";
 import DailyBetSummary from "../components/DailyBetSummary.astro";
 import RaceCard from "../components/RaceCard.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { loadAvailableDates, loadPredictions } from "../lib/data";
+import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../lib/data";
 
 const today = toJSTDateString(new Date());
 const dates = await loadAvailableDates();
 const latestDate = dates[0] ?? today;
 const predictions = await loadPredictions(latestDate);
+// 各 RaceCard の 3 行目「今節成績」表示用。summary.raceDate と latestDate が一致しない場合
+// (古い summary ファイル等) は null 扱いにし、カード側で「集計データなし」表示にフォールバック。
+const seriesSummary = await loadSeriesSummary();
+const matchedSummary =
+  seriesSummary && seriesSummary.raceDate === latestDate ? seriesSummary : null;
 
 const stadiumGroups = new Map<string, typeof predictions>();
 for (const prediction of predictions) {
@@ -99,7 +104,12 @@ for (const [stadiumId, races] of stadiumGroups.entries()) {
       {STADIUMS.map((s) => {
         const next = nextRaceByStadium.get(s.id);
         if (next) {
-          return <RaceCard prediction={next} />;
+          return (
+            <RaceCard
+              prediction={next}
+              seriesAggregate={matchedSummary?.byStadium[s.id] ?? null}
+            />
+          );
         }
         return (
           <div
