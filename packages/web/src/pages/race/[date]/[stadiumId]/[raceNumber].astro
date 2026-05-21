@@ -1,5 +1,5 @@
 ---
-import type { RacePrediction } from "@fun-site/shared";
+import type { RacePrediction, SeriesBetPayoutAggregate } from "@fun-site/shared";
 import { getRaceGradeBadge, getStadiumById, parseRaceCode } from "@fun-site/shared";
 import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
 import BetPayoutSummary from "../../../../components/BetPayoutSummary.astro";
@@ -7,9 +7,10 @@ import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
+import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
 import StartPredictionDiagram from "../../../../components/StartPredictionDiagram.astro";
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
-import { loadAvailableDates, loadPredictions } from "../../../../lib/data";
+import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../../../../lib/data";
 
 /** レース番号リンクバー用の各レースのメタ情報 */
 type RaceNavItem = {
@@ -25,6 +26,10 @@ type RaceNavItem = {
 
 export async function getStaticPaths() {
   const dates = await loadAvailableDates();
+  // 節集計は当日基準で 1 ファイルにまとまっているので、全パス共通で 1 度だけ読む。
+  // summary.raceDate と一致する日のパスにのみ付与する (BUILD_ALL_DATES=1 で過去日を巻き込んでも
+  // 古い日付の race ページに当日サマリーが漏れないようにするため)。
+  const seriesSummary = await loadSeriesSummary();
   const paths = [];
 
   for (const date of dates) {
@@ -54,13 +59,18 @@ export async function getStaticPaths() {
       const stadiumRaces = [
         ...(racesByStadium.get(parsed.stadiumId) ?? []),
       ].sort((a, b) => a.raceNumber - b.raceNumber);
+      // 節集計は summary.raceDate と当該パスの date が一致するときだけ付与。
+      const seriesAggregate =
+        seriesSummary && seriesSummary.raceDate === parsed.date
+          ? (seriesSummary.byStadium[parsed.stadiumId] ?? null)
+          : null;
       paths.push({
         params: {
           date: parsed.date,
           stadiumId: parsed.stadiumId,
           raceNumber: String(prediction.raceNumber),
         },
-        props: { prediction, stadiumRaces },
+        props: { prediction, stadiumRaces, seriesAggregate },
       });
     }
   }
@@ -71,9 +81,10 @@ export async function getStaticPaths() {
 interface Props {
   prediction: RacePrediction;
   stadiumRaces: RaceNavItem[];
+  seriesAggregate: SeriesBetPayoutAggregate | null;
 }
 
-const { prediction, stadiumRaces } = Astro.props;
+const { prediction, stadiumRaces, seriesAggregate } = Astro.props;
 const stadium = getStadiumById(prediction.stadiumId);
 const stadiumName = stadium?.name ?? prediction.stadiumName;
 const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName || "スタート予想"}`;
@@ -270,6 +281,10 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       <BetPayoutSummary summary={prediction.betPayout} />
     </section>
   )}
+
+  {/* 今節成績（会場・直前買い目戦略の的中率 / 回収率）。
+       「もし買ったら」(当該レース単体) の直後に置き、節全体の文脈を提供する。 */}
+  <StadiumSeriesSummary agg={seriesAggregate} />
 
   {/* スタート予想 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">

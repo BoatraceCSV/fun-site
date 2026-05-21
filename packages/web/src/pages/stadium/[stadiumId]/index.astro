@@ -1,25 +1,16 @@
 ---
-import type { SeriesBetPayoutAggregate } from "@fun-site/shared";
 import { STADIUMS, parseRaceCode } from "@fun-site/shared";
 import RaceCard from "../../../components/RaceCard.astro";
-import StadiumSeriesSummary from "../../../components/StadiumSeriesSummary.astro";
 import BaseLayout from "../../../layouts/BaseLayout.astro";
-import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../../../lib/data";
+import { loadAvailableDates, loadPredictions } from "../../../lib/data";
 
 export async function getStaticPaths() {
   const dates = await loadAvailableDates();
   const latestDate = dates[0];
-  // 節集計は 24 会場分を 1 ファイルで持つので、getStaticPaths 内で 1 度だけ読む。
-  const seriesSummary = await loadSeriesSummary();
   if (!latestDate) {
     return STADIUMS.map((s) => ({
       params: { stadiumId: s.id },
-      props: {
-        stadium: s,
-        predictions: [],
-        date: "",
-        seriesAggregate: seriesSummary?.byStadium[s.id] ?? null,
-      },
+      props: { stadium: s, predictions: [], date: "" },
     }));
   }
 
@@ -38,7 +29,6 @@ export async function getStaticPaths() {
       stadium: s,
       predictions: stadiumPredictions.get(s.id) ?? [],
       date: latestDate,
-      seriesAggregate: seriesSummary?.byStadium[s.id] ?? null,
     },
   }));
 }
@@ -47,10 +37,9 @@ interface Props {
   stadium: (typeof STADIUMS)[number];
   predictions: Awaited<ReturnType<typeof loadPredictions>>;
   date: string;
-  seriesAggregate: SeriesBetPayoutAggregate | null;
 }
 
-const { stadium, predictions, date, seriesAggregate } = Astro.props;
+const { stadium, predictions, date } = Astro.props;
 const sortedPredictions = [...predictions].sort(
   (a, b) => a.raceNumber - b.raceNumber,
 );
@@ -68,8 +57,6 @@ const sortedPredictions = [...predictions].sort(
     {stadium.prefecture}
     {date && <span> - {date}</span>}
   </p>
-
-  <StadiumSeriesSummary agg={seriesAggregate} />
 
   {sortedPredictions.length === 0 ? (
     <div class="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
