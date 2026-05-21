@@ -221,6 +221,11 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     </ul>
   </nav>
 
+  {/* 今節成績（会場・直前買い目戦略の的中率 / 回収率）。
+       1R-12R リンクバーの直下に置き、当該節での会場全体の傾向を最初に提示する。
+       データが無い場合 (節初日で confirm 0 / summary 未生成) は何も描画しない。 */}
+  <StadiumSeriesSummary agg={seriesAggregate} />
+
   {/* ヘッダ */}
   <header class="mb-6">
     <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
@@ -281,10 +286,6 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       <BetPayoutSummary summary={prediction.betPayout} />
     </section>
   )}
-
-  {/* 今節成績（会場・直前買い目戦略の的中率 / 回収率）。
-       「もし買ったら」(当該レース単体) の直後に置き、節全体の文脈を提供する。 */}
-  <StadiumSeriesSummary agg={seriesAggregate} />
 
   {/* スタート予想 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
