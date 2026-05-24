@@ -1,5 +1,13 @@
+import { activePredictors } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
 import type { CsvType } from "./fetcher/csv-client.js";
+
+/**
+ * CSV 種別 + 予想者別 index の generation トラッキングキー。
+ * 予想者別 index は `index:{predictor_id}` の形でキー化する
+ * (boatrace.gcs_publisher の csv_type 命名と揃える)。
+ */
+export type CsvGenerationKey = CsvType | `index:${string}`;
 
 /**
  * 直近のビルドメタデータ。
@@ -9,8 +17,11 @@ import type { CsvType } from "./fetcher/csv-client.js";
 export type BuildState = {
   readonly lastBuildAt: string;
   readonly raceDate: string;
-  /** ビルド時に参照した GCS object の generation（unix ms）。CSV 種別 → generation 文字列 */
-  readonly csvGenerations: Partial<Record<CsvType, string>>;
+  /**
+   * ビルド時に参照した GCS object の generation（unix ms）。CSV 種別 → generation 文字列。
+   * 予想者別 index は `index:{predictor_id}` キー (例: `index:v1_basic`)。
+   */
+  readonly csvGenerations: Partial<Record<CsvGenerationKey, string>>;
 };
 
 const META_OBJECT_NAME = "_meta/last-build.json";
@@ -60,44 +71,62 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
   race_cards: "programs/race_cards",
   stt: "previews/stt",
-  // boatracecsv.github.io リポジトリの実体パスに合わせて `data/estimate/index/...` を使う。
-  index: "estimate/index",
   results: "results/realtime",
   payouts: "results/payouts",
 };
 
-const buildCsvObjectName = (type: CsvType, date: string): string => {
+const buildCsvObjectName = (relativePath: string, date: string): string => {
   const dateSlash = date.replaceAll("-", "/");
-  return `${CSV_GCS_PATH_ROOT}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
+  return `${CSV_GCS_PATH_ROOT}/${relativePath}/${dateSlash}.csv`;
+};
+
+/**
+ * 監視対象のキーリスト (固定 CSV + active 予想者ごとの index)。
+ * boatrace.gcs_publisher と同じ csv_type 命名 (`index:{predictor_id}`) を採用。
+ */
+const buildTrackedKeys = (): {
+  key: CsvGenerationKey;
+  relativePath: string;
+}[] => {
+  const keys: { key: CsvGenerationKey; relativePath: string }[] = (
+    ["title", "race_cards", "stt", "results", "payouts"] as const
+  ).map((type) => ({ key: type, relativePath: CSV_PATH_PREFIX[type] }));
+  for (const p of activePredictors()) {
+    keys.push({
+      key: `index:${p.id}` as const,
+      relativePath: `estimate/${p.id}`,
+    });
+  }
+  return keys;
 };
 
 /** 当日 CSV 群の generation を一括取得（不在は undefined） */
 export const fetchCurrentCsvGenerations = async (
   date: string,
-): Promise<Partial<Record<CsvType, string>>> => {
-  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results", "payouts"];
+): Promise<Partial<Record<CsvGenerationKey, string>>> => {
+  const tracked = buildTrackedKeys();
   const bucket = getStorage().bucket(CSV_GCS_BUCKET);
 
   const entries = await Promise.all(
-    types.map(async (type): Promise<[CsvType, string | undefined]> => {
-      const file = bucket.file(buildCsvObjectName(type, date));
+    tracked.map(async ({ key, relativePath }): Promise<[CsvGenerationKey, string | undefined]> => {
+      const file = bucket.file(buildCsvObjectName(relativePath, date));
       try {
         const [metadata] = await file.getMetadata();
-        return [type, String(metadata.generation ?? "")];
+        return [key, String(metadata.generation ?? "")];
       } catch (error) {
         const code = (error as { code?: number } | undefined)?.code;
-        if (code === 404) return [type, undefined];
+        if (code === 404) return [key, undefined];
         console.warn(
-          `Failed to stat ${type} CSV: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to stat ${key} CSV: ${error instanceof Error ? error.message : String(error)}`,
         );
-        return [type, undefined];
+        return [key, undefined];
       }
     }),
   );
 
-  const result: Partial<Record<CsvType, string>> = {};
-  for (const [type, gen] of entries) {
-    if (gen) result[type] = gen;
+  const result: Partial<Record<CsvGenerationKey, string>> = {};
+  for (const [key, gen] of entries) {
+    if (gen) result[key] = gen;
   }
   return result;
 };
@@ -108,15 +137,14 @@ export const fetchCurrentCsvGenerations = async (
  */
 export const isUpToDate = (
   date: string,
-  current: Partial<Record<CsvType, string>>,
+  current: Partial<Record<CsvGenerationKey, string>>,
   previous: BuildState | undefined,
 ): boolean => {
   if (!previous) return false;
   if (previous.raceDate !== date) return false;
-  const types: CsvType[] = ["title", "race_cards", "stt", "index", "results", "payouts"];
-  for (const type of types) {
-    const cur = current[type];
-    const prev = previous.csvGenerations[type];
+  for (const { key } of buildTrackedKeys()) {
+    const cur = current[key];
+    const prev = previous.csvGenerations[key];
     // どちらも未存在ならスキップせず（初回ビルド余地を残す）
     if (cur === undefined && prev === undefined) continue;
     if (cur !== prev) return false;

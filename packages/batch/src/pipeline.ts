@@ -1,4 +1,5 @@
 import { toJSTDateString } from "@fun-site/shared";
+import { buildPredictorStats, datesForActivePredictors } from "./aggregator/predictor-stats.js";
 import {
   fetchCurrentCsvGenerations,
   isUpToDate,
@@ -66,8 +67,11 @@ export const runPipeline = async (): Promise<void> => {
   // Step 1: CSV データ取得
   console.info("Step 1: Fetching CSV data...");
   const csvData = await fetchAllCsvData(raceDate);
+  const indexSummary = csvData.indexesByPredictor
+    .map((p) => `${p.predictor.id}=${p.rows.length}`)
+    .join(",");
   console.info(
-    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.indexes.length} index, ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
+    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, index[${indexSummary}], ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
   );
 
   if (csvData.raceCards.length === 0) {
@@ -81,13 +85,29 @@ export const runPipeline = async (): Promise<void> => {
   const predictions = buildAllRacePredictions(
     csvData.raceCards,
     csvData.stt,
-    csvData.indexes,
+    csvData.indexesByPredictor,
     csvData.titles,
     csvData.results,
     csvData.payouts,
     generatedAt,
   );
   console.info(`Built ${predictions.length} predictions`);
+
+  // Step 2.5: 予想者統計集計 (active 予想者の startedAt 〜 当日)。
+  // 書き出し先は packages/web/src/data/predictors/stats.json で、Astro が
+  // /predictors ページを描画する際に読み込む。失敗は非致命 (集計データ無しで
+  // /predictors が空状態になるだけ)。
+  try {
+    const dates = datesForActivePredictors(raceDate);
+    console.info(`Step 2.5: Aggregating predictor stats over ${dates.length} day(s)...`);
+    await buildPredictorStats(dates);
+  } catch (error) {
+    console.warn(
+      `Failed to build predictor stats (non-fatal): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
   // Step 3: 書き出し → Astro ビルド → デプロイ
   console.info("Step 3: Writing data, building and deploying...");

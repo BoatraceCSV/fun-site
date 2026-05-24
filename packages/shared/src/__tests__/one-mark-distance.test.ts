@@ -24,9 +24,10 @@ const makeRacer = (boatNumber: number, avgST: number): RaceRacer => ({
 
 const makeAi = (entries: { boatNumber: number; strengthPt: number }[]): AiEvaluation => ({
   state: "realtime",
+  componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
   entries: entries.map((e) => ({
     boatNumber: e.boatNumber,
-    contribution: { frame: 0, racer: 0, motor: 0, exhibition: 0, weather: 0 },
+    contribution: { waku: 0, racer: 0, motor: 0, exhibit: 0, weather: 0 },
     strengthPt: e.strengthPt,
   })),
 });

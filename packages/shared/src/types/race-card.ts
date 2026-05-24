@@ -49,31 +49,38 @@ export type SttRow = {
   readonly boats: readonly SttBoat[];
 };
 
+import type { ComponentKey } from "../predictors.js";
+
 /** index CSV の状態（realtime: 直前情報反映済み / daily: 朝バッチ時点） */
 export type IndexState = "realtime" | "daily";
 
-/** index CSV 由来の枠別 AI 評価 */
+/**
+ * index CSV 由来の枠別 AI 評価。
+ *
+ * 採用成分は predictor によって異なる(`v1_basic` は 5 成分、将来の
+ * `v2_tenkai` は 6 成分など)。`components` / `contributions` は
+ * `predictor.componentKeys` をキーに持つ。
+ */
 export type IndexEntry = {
   readonly boatNumber: number;
-  readonly framePt: number;
-  readonly framePtContribution: number;
-  readonly racerPt: number;
-  readonly racerPtContribution: number;
-  readonly motorPt: number;
-  readonly motorPtContribution: number;
-  readonly exhibitionPt: number;
-  readonly exhibitionPtContribution: number;
-  readonly weatherPt: number;
-  readonly weatherPtContribution: number;
+  /** 成分pt(素点、偏差値スケール 50±10)。キーは ComponentKey。 */
+  readonly components: Readonly<Partial<Record<ComponentKey, number>>>;
+  /** 寄与pt = w × 成分pt。キーは ComponentKey。 */
+  readonly contributions: Readonly<Partial<Record<ComponentKey, number>>>;
+  /** 寄与の総和(強さpt)。 */
   readonly strengthPt: number;
 };
 
 /** index CSV 由来のレース行 */
 export type IndexRow = {
+  /** 由来予想者の ID(`v1_basic` / `v2_tenkai` / ...)。 */
+  readonly predictorId: string;
   readonly raceCode: string;
   readonly raceDate: string;
   readonly stadiumId: string;
   readonly raceNumber: number;
   readonly state: IndexState;
+  /** この行で値を持つ成分キー(predictor.componentKeys と一致)。 */
+  readonly componentKeys: readonly ComponentKey[];
   readonly entries: readonly IndexEntry[];
 };

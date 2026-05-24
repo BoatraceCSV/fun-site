@@ -3,6 +3,7 @@ export type {
   AiEvaluation,
   AiEvaluationContribution,
   AiEvaluationEntry,
+  PredictorPrediction,
   RacePrediction,
   RaceRacer,
   StartPrediction,

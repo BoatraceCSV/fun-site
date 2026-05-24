@@ -1,0 +1,59 @@
+---
+import type { PredictorPrediction, RaceRacer } from "@fun-site/shared";
+import AiEvaluationChart from "./AiEvaluationChart.astro";
+import BetPayoutSummary from "./BetPayoutSummary.astro";
+import BettingPicks from "./BettingPicks.astro";
+
+interface Props {
+  /** この予想者ぶんの予想内容 (1 予想者 / 1 レース)。 */
+  prediction: PredictorPrediction;
+  /** AI 評価バー / 1マーク予想で参照する出走表。 */
+  racers: readonly RaceRacer[];
+  /** 結果確定後の AI 評価チャートを表示するか。デフォルト true。 */
+  showChart?: boolean;
+}
+
+const { prediction, racers, showChart = true } = Astro.props;
+
+// チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
+const chartEval = prediction.aiEvaluationRealtime ?? prediction.aiEvaluationDaily;
+---
+
+<section
+  class="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden"
+  aria-label={`${prediction.predictorName}の予想`}
+  data-predictor-id={prediction.predictorId}
+>
+  <header class="px-4 py-2 bg-gradient-to-r from-indigo-50 to-white border-b border-gray-200 flex items-center justify-between">
+    <h2 class="text-base font-bold text-gray-800 flex items-center gap-2">
+      <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+        {prediction.slot}
+      </span>
+      <span>{prediction.predictorName}</span>
+    </h2>
+    <span class="text-[11px] text-gray-400 font-mono">{prediction.predictorId}</span>
+  </header>
+
+  <div class="p-4 space-y-4">
+    {/* 買い目 */}
+    <BettingPicks
+      racers={racers}
+      aiEvaluationDaily={prediction.aiEvaluationDaily}
+      aiEvaluationRealtime={prediction.aiEvaluationRealtime}
+      hitStatus={prediction.betHitStatus}
+    />
+
+    {/* 回収率 */}
+    <div class="border-t border-gray-100 pt-3">
+      <BetPayoutSummary summary={prediction.betPayout} />
+    </div>
+
+    {/* AI 評価のスタックバー (任意) */}
+    {showChart && chartEval && (
+      <div class="border-t border-gray-100 pt-3">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">AI 評価の内訳</h3>
+        <AiEvaluationChart evaluation={chartEval} />
+      </div>
+    )}
+  </div>
+</section>

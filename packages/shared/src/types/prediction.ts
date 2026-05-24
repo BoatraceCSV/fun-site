@@ -1,3 +1,4 @@
+import type { ComponentKey } from "../predictors.js";
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
 import type { IndexState } from "./race-card.js";
@@ -39,16 +40,15 @@ export type StartPrediction = {
   readonly entries: readonly StartPredictionEntry[];
 };
 
-/** AI 評価の寄与pt 内訳 */
-export type AiEvaluationContribution = {
-  readonly frame: number;
-  readonly racer: number;
-  readonly motor: number;
-  /** 状態 daily の場合は 0 として扱う */
-  readonly exhibition: number;
-  /** 状態 daily の場合は 0 として扱う */
-  readonly weather: number;
-};
+/**
+ * AI 評価の寄与pt 内訳。
+ *
+ * 採用成分は predictor によって異なる。`Partial` を用いる理由は、daily 状態の
+ * 場合に preview 由来成分 (exhibit / weather) を 0 ではなく省略 / 0 で表現する
+ * 余地を残すため。UI 側は `evaluation.componentKeys` で iterate して、未定義は
+ * 0 として扱う。
+ */
+export type AiEvaluationContribution = Readonly<Partial<Record<ComponentKey, number>>>;
 
 /** AI 評価 - 1枠分 */
 export type AiEvaluationEntry = {
@@ -61,7 +61,34 @@ export type AiEvaluationEntry = {
 /** AI による総合評価（index CSV 由来） */
 export type AiEvaluation = {
   readonly state: IndexState;
+  /** この評価が採用する成分キー（描画順)。predictor.componentKeys と一致。 */
+  readonly componentKeys: readonly ComponentKey[];
   readonly entries: readonly AiEvaluationEntry[];
+};
+
+/**
+ * 1 予想者ぶんの予想内容。`RacePrediction.predictions[]` の要素として
+ * レース 1 件に複数 (active 予想者の数だけ) 並ぶ。
+ *
+ * `betPayout` / `betHitStatus` は **その予想者の買い目** に対する集計。
+ * `aiEvaluationDaily` / `aiEvaluationRealtime` の有無はその予想者の
+ * index CSV に対応する状態の行が存在するかどうかに依存する。
+ */
+export type PredictorPrediction = {
+  /** 予想者 ID (例: "v1_basic", "v2_tenkai")。 */
+  readonly predictorId: string;
+  /** UI 表示名 (レジストリから注入。例: "A君予想")。 */
+  readonly predictorName: string;
+  /** 表示順 (active 予想者の中での slot。低いほど先頭)。 */
+  readonly slot: number;
+  /** 朝バッチ時点の AI 評価。daily 行が無ければ undefined。 */
+  readonly aiEvaluationDaily?: AiEvaluation;
+  /** 直前情報反映後の AI 評価。realtime 行が無ければ undefined。 */
+  readonly aiEvaluationRealtime?: AiEvaluation;
+  /** この予想者の買い目・回収率集計。3連単 1 レース分。 */
+  readonly betPayout: RaceBetPayoutSummary;
+  /** この予想者の当日 / 直前買い目それぞれの的中状態。 */
+  readonly betHitStatus: BetHitStatus;
 };
 
 /** レース予想（新スキーマ） */
@@ -122,7 +149,15 @@ export type RacePrediction = {
    * 当日買い目 / 直前買い目それぞれの 3連単 ベット結果（点数・賭け金・払戻）。
    * `raceResult` または `racePayout` が無い場合は payoutYen=0 / hit=false。
    * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
+   * **後方互換用フィールド**。新しい UI は `predictions` 配列の各 `PredictorPrediction`
+   * から各予想者ぶんの集計を参照する。
    */
   readonly betPayout?: RaceBetPayoutSummary;
+  /**
+   * Active な予想者ぶんの予想内容(A君 / B君 ...)。
+   * `slot` 昇順で並んでいる。
+   * 古い JSON ではこのフィールドが無いため、UI 側は空配列フォールバックすること。
+   */
+  readonly predictions?: readonly PredictorPrediction[];
   readonly generatedAt: string;
 };

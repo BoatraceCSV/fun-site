@@ -79,10 +79,12 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 | `programs/title` | レース名・グレード・締切時刻 |
 | `programs/race_cards` | 出走表（選手・モーター・全国平均ST） |
 | `previews/stt` | 直前情報（進入コース・スタート展示） |
-| `estimate/index` | AI 総合評価（5 要素の寄与pt） |
+| `estimate/{predictor_id}` | 各 active 予想者の AI 総合評価 (componentKeys ぶんの寄与pt) |
 | `results/realtime` | 当日確定直後のレース結果（着順・決まり手・ST） |
 
-レース 1 件あたり `RacePrediction` JSON を 1 ファイル生成し、`packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に配置する。Astro はこれを `getStaticPaths()` 内で読み込んで静的ページを生成する。
+予想者 (predictor) は固有 ID (`v1_basic` = A君予想、将来の `v2_tenkai` = B君予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
+
+レース 1 件あたり `RacePrediction` JSON を 1 ファイル生成し、`packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に配置する。`RacePrediction.predictions[]` に active 予想者ぶんの `PredictorPrediction` (AI 評価・買い目・回収率) が slot 昇順で並ぶ。Astro はこれを `getStaticPaths()` 内で読み込んで静的ページを生成する。
 
 ## ページ構成
 
@@ -90,7 +92,8 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 |---|---|
 | `/` | 当日トップ。開催中 24 場の次レースを一覧表示 |
 | `/stadium/{stadiumId}/` | 会場別。当日 1〜12R |
-| `/race/{date}/{stadiumId}/{raceNumber}/` | レース詳細（スタート予想・AI 評価・出走表・結果） |
+| `/race/{date}/{stadiumId}/{raceNumber}/` | レース詳細（スタート予想・予想者ごとのカード・出走表・結果） |
+| `/predictors/` | 予想者比較。active 予想者の通算回収率・月次推移・採用成分の一覧 |
 | `/archive/{date}/` | 過去日付の一覧 |
 
 ビルド対象日は環境変数で制御する:
@@ -113,3 +116,4 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 初期設計: Cloud Scheduler で JST 09:00 に 1 日 1 回バッチ実行する案を採用
 - 2026-05: preview-realtime が 2 分間隔で CSV を更新するようになったのに合わせ、朝バッチを廃止し Pub/Sub → Eventarc → Workflow → Cloud Run Job のイベント駆動チェーンに移行。リージョンも `us-central1` から `asia-northeast1` に統一
 - 2026-05: 当初検討していた Vertex AI / Gemini による展開予想生成は採用見送り。`estimate/index` の強さpt をそのまま AI 総合評価として提示する方針に確定
+- 2026-05: 単一予想者前提から **複数予想者並行運用** へ移行。boatracecsv 側で `data/estimate/{predictor_id}/` 配下に予想者別 CSV を出力し、fun-site 側はレジストリ ([`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts)) の active 予想者を `RacePrediction.predictions[]` にまとめて UI でカード表示する構成へ。回収率の悪い予想者は退役 (`status: "retired"`) し、新規予想者は固有 ID で追加する (ID 再利用なし)。比較ページ `/predictors/` を追加。

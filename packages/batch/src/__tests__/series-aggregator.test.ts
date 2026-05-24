@@ -27,7 +27,11 @@ const makePrediction = (args: {
   votingDeadline: "",
   racers: [],
   startPrediction: { fromExhibition: false, entries: [] },
-  aiEvaluation: { state: "daily", entries: [] },
+  aiEvaluation: {
+    state: "daily",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+    entries: [],
+  },
   betPayout: args.betPayoutRealtime
     ? {
         daily: {

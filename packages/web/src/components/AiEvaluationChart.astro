@@ -1,6 +1,12 @@
 ---
-import type { AiEvaluation, AiEvaluationEntry } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import type { AiEvaluation, AiEvaluationEntry, ComponentKey } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  COMPONENT_COLORS,
+  COMPONENT_SHORT_LABELS,
+  isPreviewDerivedComponent,
+  isValidBoatNumber,
+} from "@fun-site/shared";
 
 interface Props {
   evaluation: AiEvaluation;
@@ -10,28 +16,20 @@ const { evaluation } = Astro.props;
 
 const isDaily = evaluation.state === "daily";
 
-const SEGMENTS = [
-  { key: "frame", label: "枠番", color: "#3b82f6" },
-  { key: "racer", label: "選手", color: "#22c55e" },
-  { key: "motor", label: "モーター", color: "#f97316" },
-  ...(isDaily
-    ? []
-    : [
-        { key: "exhibition", label: "展示", color: "#a855f7" },
-        { key: "weather", label: "気象", color: "#06b6d4" },
-      ]),
-] as const;
+// 表示対象成分: 評価が採用する componentKeys 順。daily 状態では
+// preview 由来成分 (展示 / 気象) を非表示にする。
+const segmentKeys: readonly ComponentKey[] = evaluation.componentKeys.filter(
+  (key) => !(isDaily && isPreviewDerivedComponent(key)),
+);
 
-type SegmentKey = (typeof SEGMENTS)[number]["key"];
+const SEGMENTS = segmentKeys.map((key) => ({
+  key,
+  label: COMPONENT_SHORT_LABELS[key],
+  color: COMPONENT_COLORS[key],
+}));
 
-const segmentValue = (entry: AiEvaluationEntry, key: SegmentKey): number => {
-  const c = entry.contribution;
-  if (key === "frame") return c.frame;
-  if (key === "racer") return c.racer;
-  if (key === "motor") return c.motor;
-  if (key === "exhibition") return c.exhibition;
-  return c.weather;
-};
+const segmentValue = (entry: AiEvaluationEntry, key: ComponentKey): number =>
+  entry.contribution[key] ?? 0;
 
 const sortedEntries = [...evaluation.entries].sort((a, b) => a.boatNumber - b.boatNumber);
 
@@ -39,7 +37,7 @@ type Bar = {
   readonly entry: AiEvaluationEntry;
   readonly total: number;
   readonly segments: readonly {
-    readonly key: SegmentKey;
+    readonly key: ComponentKey;
     readonly label: string;
     readonly color: string;
     readonly value: number;

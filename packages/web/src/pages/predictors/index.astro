@@ -1,0 +1,218 @@
+---
+import { activePredictors, allPredictors } from "@fun-site/shared";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+/**
+ * 予想者比較ページ。
+ *
+ * `packages/web/src/data/predictors/stats.json` を読み込み、各 active 予想者の
+ * 月次回収率の推移・通算成績を一覧表示する。stats.json が無い (初回ビルドや
+ * 集計失敗) 場合はレジストリの宣言情報だけを表示する。
+ */
+
+type PredictorMonthlyStats = {
+  readonly month: string;
+  readonly raceCount: number;
+  readonly hitCount: number;
+  readonly dailyHitCount: number;
+  readonly realtimeHitCount: number;
+  readonly betCostYen: number;
+  readonly payoutYen: number;
+  readonly recoveryRate: number | null;
+};
+
+type PredictorOverallStats = {
+  readonly predictorId: string;
+  readonly predictorName: string;
+  readonly slot: number;
+  readonly status: "active" | "retired";
+  readonly startedAt: string;
+  readonly componentKeys: readonly string[];
+  readonly monthly: readonly PredictorMonthlyStats[];
+  readonly total: PredictorMonthlyStats;
+};
+
+type PredictorStatsReport = {
+  readonly updatedAt: string;
+  readonly predictors: readonly PredictorOverallStats[];
+};
+
+// stats.json は集計バッチが生成する。未生成の場合は import エラーで落ちないよう
+// 静的 import ではなく Vite の glob import を使う。
+const statsModules = import.meta.glob<{ default: PredictorStatsReport }>(
+  "../../data/predictors/stats.json",
+  { eager: true },
+);
+const stats: PredictorStatsReport | undefined =
+  Object.values(statsModules)[0]?.default;
+
+// 集計データが無い予想者もレジストリから補完する (新規追加直後など)。
+const statsById = new Map<string, PredictorOverallStats>(
+  (stats?.predictors ?? []).map((p) => [p.predictorId, p]),
+);
+const known = allPredictors();
+const overall: PredictorOverallStats[] = known.map((p) => {
+  const found = statsById.get(p.id);
+  if (found) return found;
+  // 集計データ無し → 空統計
+  return {
+    predictorId: p.id,
+    predictorName: p.displayName,
+    slot: p.slot,
+    status: p.status,
+    startedAt: p.startedAt,
+    componentKeys: [...p.componentKeys],
+    monthly: [],
+    total: {
+      month: "total",
+      raceCount: 0,
+      hitCount: 0,
+      dailyHitCount: 0,
+      realtimeHitCount: 0,
+      betCostYen: 0,
+      payoutYen: 0,
+      recoveryRate: null,
+    },
+  };
+});
+
+// active が先頭・slot 昇順、retired は末尾。
+overall.sort((a, b) => {
+  if (a.status !== b.status) return a.status === "active" ? -1 : 1;
+  return a.slot - b.slot;
+});
+
+const activeCount = activePredictors().length;
+const formatYen = (n: number) => `¥${n.toLocaleString("ja-JP")}`;
+const formatPct = (n: number | null) =>
+  n === null ? "—" : `${(n * 100).toFixed(1)}%`;
+const formatHitRate = (hit: number, n: number) =>
+  n === 0 ? "—" : `${((hit / n) * 100).toFixed(1)}%`;
+---
+
+<BaseLayout title="予想者比較 | ボートレース予想">
+  <div class="max-w-5xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">予想者比較</h1>
+    <p class="text-sm text-gray-600 mb-6">
+      Active な予想者 {activeCount} 名の累計回収率・的中率・購入額を比較します。各予想者の
+      <strong>採用成分</strong> と <strong>開始日</strong>
+      の組合せで結果がどう変わるかを観察するためのページです。
+    </p>
+
+    {!stats && (
+      <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+        集計データ (<code class="font-mono text-xs">src/data/predictors/stats.json</code>)
+        がまだ生成されていません。集計バッチ完了後に通算・月次データが表示されます。
+      </div>
+    )}
+
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-800 mb-3">通算成績</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm bg-white rounded-lg shadow-sm">
+          <thead>
+            <tr class="text-left text-gray-600 border-b border-gray-200">
+              <th class="px-3 py-2">予想者</th>
+              <th class="px-3 py-2">状態</th>
+              <th class="px-3 py-2">成分</th>
+              <th class="px-3 py-2">開始日</th>
+              <th class="px-3 py-2 text-right">レース数</th>
+              <th class="px-3 py-2 text-right">的中率</th>
+              <th class="px-3 py-2 text-right">購入額</th>
+              <th class="px-3 py-2 text-right">払戻</th>
+              <th class="px-3 py-2 text-right">回収率</th>
+            </tr>
+          </thead>
+          <tbody>
+            {overall.map((p) => (
+              <tr class={`border-b border-gray-100 ${p.status === "retired" ? "text-gray-400" : "text-gray-800"}`}>
+                <td class="px-3 py-2 font-bold">
+                  <div>{p.predictorName}</div>
+                  <div class="text-[11px] font-mono text-gray-500">{p.predictorId}</div>
+                </td>
+                <td class="px-3 py-2">
+                  {p.status === "active" ? (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800 border border-green-300">active</span>
+                  ) : (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-600 border border-gray-200">retired</span>
+                  )}
+                </td>
+                <td class="px-3 py-2 text-xs">
+                  {p.componentKeys.length === 0 ? "—" : p.componentKeys.join(" / ")}
+                </td>
+                <td class="px-3 py-2 text-xs font-mono">{p.startedAt || "—"}</td>
+                <td class="px-3 py-2 text-right font-mono">{p.total.raceCount.toLocaleString()}</td>
+                <td class="px-3 py-2 text-right font-mono">
+                  {formatHitRate(p.total.hitCount, p.total.raceCount)}
+                </td>
+                <td class="px-3 py-2 text-right font-mono">{formatYen(p.total.betCostYen)}</td>
+                <td class="px-3 py-2 text-right font-mono">{formatYen(p.total.payoutYen)}</td>
+                <td class={`px-3 py-2 text-right font-mono font-bold ${
+                  p.total.recoveryRate !== null && p.total.recoveryRate >= 1
+                    ? "text-green-700"
+                    : ""
+                }`}>
+                  {formatPct(p.total.recoveryRate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-800 mb-3">月次回収率の推移</h2>
+      {overall.map((p) => (
+        <article class="mb-4">
+          <h3 class="text-sm font-bold text-gray-700 mb-2">
+            {p.predictorName}
+            <span class="ml-2 text-[11px] font-mono text-gray-500">{p.predictorId}</span>
+          </h3>
+          {p.monthly.length === 0 ? (
+            <p class="text-xs text-gray-400">月次データなし。</p>
+          ) : (
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-xs bg-gray-50 rounded">
+                <thead>
+                  <tr class="text-left text-gray-600">
+                    <th class="px-2 py-1">月</th>
+                    <th class="px-2 py-1 text-right">レース数</th>
+                    <th class="px-2 py-1 text-right">的中</th>
+                    <th class="px-2 py-1 text-right">購入</th>
+                    <th class="px-2 py-1 text-right">払戻</th>
+                    <th class="px-2 py-1 text-right">回収率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.monthly.map((m) => (
+                    <tr>
+                      <td class="px-2 py-1 font-mono">{m.month}</td>
+                      <td class="px-2 py-1 text-right font-mono">{m.raceCount}</td>
+                      <td class="px-2 py-1 text-right font-mono">{m.hitCount}</td>
+                      <td class="px-2 py-1 text-right font-mono">{formatYen(m.betCostYen)}</td>
+                      <td class="px-2 py-1 text-right font-mono">{formatYen(m.payoutYen)}</td>
+                      <td class={`px-2 py-1 text-right font-mono ${
+                        m.recoveryRate !== null && m.recoveryRate >= 1
+                          ? "font-bold text-green-700"
+                          : ""
+                      }`}>
+                        {formatPct(m.recoveryRate)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
+      ))}
+    </section>
+
+    <p class="text-xs text-gray-500">
+      回収率 = 払戻 ÷ 購入額。購入額は買い目フォーメーションの全組合せを 1 点 ¥100 で
+      3連単 として買った想定。同レースに当日 / 直前の両方で買い目が組めた場合は
+      両方を合算しています (= 2 通り買った前提)。
+    </p>
+  </div>
+</BaseLayout>
