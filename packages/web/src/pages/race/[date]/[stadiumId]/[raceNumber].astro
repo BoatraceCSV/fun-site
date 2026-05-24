@@ -1,10 +1,12 @@
 ---
-import type { RacePrediction, SeriesBetPayoutAggregate } from "@fun-site/shared";
+import type {
+  PredictorPrediction,
+  RacePrediction,
+  SeriesBetPayoutAggregate,
+} from "@fun-site/shared";
 import { getRaceGradeBadge, getStadiumById, parseRaceCode } from "@fun-site/shared";
-import AiEvaluationChart from "../../../../components/AiEvaluationChart.astro";
-import BetPayoutSummary from "../../../../components/BetPayoutSummary.astro";
-import BettingPicks from "../../../../components/BettingPicks.astro";
 import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
+import PredictorCard from "../../../../components/PredictorCard.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
 import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
@@ -264,28 +266,36 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     </section>
   )}
 
-  {/* 買い目（当日・直前を併記） */}
-  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-    <h2 class="font-bold text-lg mb-3">買い目</h2>
-    <BettingPicks
-      racers={prediction.racers}
-      aiEvaluationDaily={prediction.aiEvaluationDaily}
-      aiEvaluationRealtime={prediction.aiEvaluationRealtime}
-      aiEvaluation={prediction.aiEvaluation}
-      hitStatus={prediction.betHitStatus}
-    />
-  </section>
-
-  {/* 3連単 払戻 / 回収率（確定済みのみ意味を持つ。フォーメーションが計算できる場合のみ表示） */}
-  {prediction.betPayout && (prediction.betPayout.daily.betCount > 0 || prediction.betPayout.realtime.betCount > 0) && (
-    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 class="font-bold text-lg mb-1">もし買ったら</h2>
-      <p class="text-xs text-gray-500 mb-3">
-        買い目フォーメーションの全組合せを 1 点 ¥100 で 3連単 として買った場合の払戻 / 回収率。
-      </p>
-      <BetPayoutSummary summary={prediction.betPayout} />
+  {/* 予想者ごとの買い目・回収率・AI 評価 */}
+  {(() => {
+    // 新スキーマで predictions[] が存在すればそれを使う。
+    // 旧 JSON (predictions 未設定) では aiEvaluation 単体から仮想 PredictorPrediction
+    // を 1 件だけ組み立て (= A君予想相当) して同じ UI を流用する。
+    const fromArray: readonly PredictorPrediction[] = prediction.predictions ?? [];
+    const fallback: readonly PredictorPrediction[] =
+      fromArray.length > 0
+        ? fromArray
+        : [
+            {
+              predictorId: "v1_basic",
+              predictorName: "A君予想",
+              slot: 1,
+              aiEvaluationDaily: prediction.aiEvaluationDaily,
+              aiEvaluationRealtime: prediction.aiEvaluationRealtime,
+              betPayout:
+                prediction.betPayout ?? {
+                  daily: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
+                  realtime: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
+                },
+              betHitStatus: prediction.betHitStatus ?? { dailyHit: false, realtimeHit: false },
+            },
+          ];
+    return fallback;
+  })().map((pp) => (
+    <section class="mb-6">
+      <PredictorCard prediction={pp} racers={prediction.racers} />
     </section>
-  )}
+  ))}
 
   {/* スタート予想 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
@@ -293,19 +303,13 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     <StartPredictionDiagram start={prediction.startPrediction} />
   </section>
 
-  {/* 1マーク予想 */}
+  {/* 1マーク予想 (primary predictor の AI 評価を採用) */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <h2 class="font-bold text-lg mb-3">1マーク予想</h2>
     <OneMarkPredictionDiagram
       racers={prediction.racers}
       aiEvaluation={prediction.aiEvaluation}
     />
-  </section>
-
-  {/* AIによる総合評価 */}
-  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-    <h2 class="font-bold text-lg mb-3">AIによる総合評価</h2>
-    <AiEvaluationChart evaluation={prediction.aiEvaluation} />
   </section>
 
   {/* 出走表 */}

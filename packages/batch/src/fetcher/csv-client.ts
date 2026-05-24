@@ -1,3 +1,4 @@
+import type { PredictorSpec } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
 
 const HTTP_BASE_URL = "https://boatracecsv.github.io/data";
@@ -5,24 +6,30 @@ const HTTP_BASE_URL = "https://boatracecsv.github.io/data";
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
 
-// BoatraceCSV で現在 fun-site が利用する CSV を列挙する。
+// BoatraceCSV で現在 fun-site が利用する非予想者依存 CSV を列挙する。
 // 旧 programs / prediction-preview / estimate / confirm は上流で生成停止に伴い廃止済み。
 // `results` は preview-realtime が当日確定直後に追記する realtime 結果 CSV
 // (`data/results/realtime/YYYY/MM/DD.csv`)。`payouts` は同じく当日確定直後に
 // bc_rs2 から追記する払戻 CSV (`data/results/payouts/YYYY/MM/DD.csv`)。
 // K-file 由来の翌日確定 (`data/results/daily/...`) は対象外。
-export type CsvType = "title" | "race_cards" | "stt" | "index" | "results" | "payouts";
+//
+// 予想者ごとの index CSV (`data/estimate/{predictor_id}/...`) は `fetchIndexCsvText`
+// が PredictorSpec を引数に取って動的にパスを組み立てる。
+export type CsvType = "title" | "race_cards" | "stt" | "results" | "payouts";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
   race_cards: "programs/race_cards",
   stt: "previews/stt",
-  // 旧 design.md 記載の `data/index/...` は実体不在で 404 → fetchAndParse で空配列に潰れていた既存バグ。
-  // boatracecsv.github.io リポジトリの実体は `data/estimate/index/YYYY/MM/DD.csv`。
-  index: "estimate/index",
   results: "results/realtime",
   payouts: "results/payouts",
 };
+
+/**
+ * Predictor `predictor` の index CSV のリポジトリ相対パス
+ * (HTTP / GCS 両ソースで共通の `data/` 直下のディレクトリ部分)。
+ */
+const predictorIndexRelativePath = (predictor: PredictorSpec): string => `estimate/${predictor.id}`;
 
 /**
  * CSV のソース。
@@ -52,22 +59,22 @@ const getStorage = (): Storage => {
   return storage;
 };
 
-const buildHttpUrl = (type: CsvType, date: string): string => {
+const buildHttpUrl = (relativePath: string, date: string): string => {
   // date は "YYYY-MM-DD" 形式なので、直接文字列操作でスラッシュ区切りに変換
   // new Date(date) を使うとタイムゾーン依存のバグが発生する
   const dateSlash = date.replaceAll("-", "/");
-  return `${HTTP_BASE_URL}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
+  return `${HTTP_BASE_URL}/${relativePath}/${dateSlash}.csv`;
 };
 
-const buildGcsObjectName = (type: CsvType, date: string): string => {
+const buildGcsObjectName = (relativePath: string, date: string): string => {
   const dateSlash = date.replaceAll("-", "/");
-  return `${GCS_PATH_ROOT}/${CSV_PATH_PREFIX[type]}/${dateSlash}.csv`;
+  return `${GCS_PATH_ROOT}/${relativePath}/${dateSlash}.csv`;
 };
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchHttp = async (type: CsvType, date: string): Promise<string> => {
-  const url = buildHttpUrl(type, date);
+const fetchHttp = async (relativePath: string, date: string): Promise<string> => {
+  const url = buildHttpUrl(relativePath, date);
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -90,8 +97,8 @@ const fetchHttp = async (type: CsvType, date: string): Promise<string> => {
   throw new Error(`Failed to fetch ${url} after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 };
 
-const fetchGcs = async (type: CsvType, date: string): Promise<string> => {
-  const objectName = buildGcsObjectName(type, date);
+const fetchGcs = async (relativePath: string, date: string): Promise<string> => {
+  const objectName = buildGcsObjectName(relativePath, date);
   const bucket = getStorage().bucket(GCS_BUCKET);
   const file = bucket.file(objectName);
 
@@ -122,6 +129,11 @@ const fetchGcs = async (type: CsvType, date: string): Promise<string> => {
   );
 };
 
+const fetchAt = async (relativePath: string, date: string): Promise<string> => {
+  const source = getCsvSource();
+  return source === "gcs" ? fetchGcs(relativePath, date) : fetchHttp(relativePath, date);
+};
+
 /**
  * CSV テキストを取得（指数バックオフリトライ付き）。
  *
@@ -129,7 +141,13 @@ const fetchGcs = async (type: CsvType, date: string): Promise<string> => {
  * - `gcs` → Cloud Storage `gs://${CSV_GCS_BUCKET}/${CSV_GCS_PATH_ROOT}/...` (既定本番)
  * - `http` (default) → GitHub Pages `https://boatracecsv.github.io/data/...`
  */
-export const fetchCsvText = async (type: CsvType, date: string): Promise<string> => {
-  const source = getCsvSource();
-  return source === "gcs" ? fetchGcs(type, date) : fetchHttp(type, date);
-};
+export const fetchCsvText = async (type: CsvType, date: string): Promise<string> =>
+  fetchAt(CSV_PATH_PREFIX[type], date);
+
+/**
+ * 予想者 `predictor` の index CSV テキストを取得する。パスは
+ * `data/estimate/{predictor.id}/YYYY/MM/DD.csv`。リトライ / ソース切り替え
+ * 動作は `fetchCsvText` と同じ。
+ */
+export const fetchIndexCsvText = async (predictor: PredictorSpec, date: string): Promise<string> =>
+  fetchAt(predictorIndexRelativePath(predictor), date);

@@ -1,12 +1,15 @@
 import type {
+  ComponentKey,
   IndexEntry,
   IndexRow,
   IndexState,
+  PredictorSpec,
   RaceCardRacer,
   RaceCardRow,
   SttBoat,
   SttRow,
 } from "@fun-site/shared";
+import { COMPONENT_LABELS } from "@fun-site/shared";
 import { parse } from "csv-parse/sync";
 
 const BOAT_COUNT = 6;
@@ -98,40 +101,57 @@ const parseSttRow = (row: Record<string, string>): SttRow => {
 export const parseStt = (csvText: string): SttRow[] => parseCsv(csvText).map(parseSttRow);
 
 // === index CSV ===
+//
+// Index CSV のスキーマは predictor の componentKeys に依存する。
+// 列名規約は boatracecsv 側 `index_columns()` と同じ:
+//   - `{N}枠_{label}`        (素点)
+//   - `{N}枠_寄与_{label}`    (寄与)
+//   - `{N}枠_強さpt`         (合計)
+// `label` は `COMPONENT_LABELS[key]` で解決。
 
-const parseIndexEntry = (row: Record<string, string>, slot: number): IndexEntry => {
+const parseIndexEntry = (
+  row: Record<string, string>,
+  slot: number,
+  componentKeys: readonly ComponentKey[],
+): IndexEntry => {
   const f = (field: string) => row[`${slot}枠_${field}`] ?? "";
+  const components: Partial<Record<ComponentKey, number>> = {};
+  const contributions: Partial<Record<ComponentKey, number>> = {};
+  for (const key of componentKeys) {
+    const label = COMPONENT_LABELS[key];
+    components[key] = toNumber(f(label));
+    contributions[key] = toNumber(f(`寄与_${label}`));
+  }
   return {
     boatNumber: slot,
-    framePt: toNumber(f("枠番pt")),
-    framePtContribution: toNumber(f("寄与_枠番pt")),
-    racerPt: toNumber(f("選手pt")),
-    racerPtContribution: toNumber(f("寄与_選手pt")),
-    motorPt: toNumber(f("モーターpt")),
-    motorPtContribution: toNumber(f("寄与_モーターpt")),
-    exhibitionPt: toNumber(f("展示pt")),
-    exhibitionPtContribution: toNumber(f("寄与_展示pt")),
-    weatherPt: toNumber(f("気象pt")),
-    weatherPtContribution: toNumber(f("寄与_気象pt")),
+    components,
+    contributions,
     strengthPt: toNumber(f("強さpt")),
   };
 };
 
-const parseIndexRow = (row: Record<string, string>): IndexRow => {
+const parseIndexRow = (row: Record<string, string>, predictor: PredictorSpec): IndexRow => {
   const entries: IndexEntry[] = [];
   for (let i = 1; i <= BOAT_COUNT; i++) {
-    entries.push(parseIndexEntry(row, i));
+    entries.push(parseIndexEntry(row, i, predictor.componentKeys));
   }
   const stateRaw = (row["状態"] ?? "daily").trim();
   const state: IndexState = stateRaw === "realtime" ? "realtime" : "daily";
   return {
+    predictorId: predictor.id,
     raceCode: row["レースコード"] ?? "",
     raceDate: row["レース日"] ?? "",
     stadiumId: row["レース場コード"] ?? "",
     raceNumber: stripRSuffix(row["レース回"]),
     state,
+    componentKeys: predictor.componentKeys,
     entries,
   };
 };
 
-export const parseIndex = (csvText: string): IndexRow[] => parseCsv(csvText).map(parseIndexRow);
+/**
+ * 予想者 `predictor` の index CSV をパースする。
+ * 列名は `predictor.componentKeys` から動的に組み立てる。
+ */
+export const parseIndex = (csvText: string, predictor: PredictorSpec): IndexRow[] =>
+  parseCsv(csvText).map((row) => parseIndexRow(row, predictor));
