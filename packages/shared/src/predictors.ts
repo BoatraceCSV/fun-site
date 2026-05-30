@@ -16,8 +16,7 @@
  */
 
 /** 各予想者で採用しうる特徴量成分のキー。 */
-export type ComponentKey = "waku" | "racer" | "motor" | "exhibit" | "weather";
-// v2_tenkai 投入時に "tenkai" を追加する。
+export type ComponentKey = "waku" | "racer" | "motor" | "exhibit" | "weather" | "tenkai";
 
 /** Component key → 日本語ラベル (CSV 列名から成分への逆引きにも使う)。 */
 export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
@@ -26,6 +25,7 @@ export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
   motor: "モーターpt",
   exhibit: "展示pt",
   weather: "気象pt",
+  tenkai: "展開優位pt",
 };
 
 /** Component key → 短縮表示ラベル(UI バー凡例等で使う)。 */
@@ -35,6 +35,7 @@ export const COMPONENT_SHORT_LABELS: Readonly<Record<ComponentKey, string>> = {
   motor: "モーター",
   exhibit: "展示",
   weather: "気象",
+  tenkai: "展開",
 };
 
 /** Component key → バー / 凡例の色 (UI 描画専用)。 */
@@ -44,13 +45,15 @@ export const COMPONENT_COLORS: Readonly<Record<ComponentKey, string>> = {
   motor: "#f97316",
   exhibit: "#a855f7",
   weather: "#06b6d4",
+  tenkai: "#ec4899",
 };
 
 /**
  * daily 状態(朝バッチ)では未取得な preview 由来の成分。
  * UI 側はこれらを daily 評価では非表示にする。
+ * `tenkai` (展開優位pt) はスタート展示の進入コースに依存するため preview 由来。
  */
-export const PREVIEW_DERIVED_COMPONENTS: readonly ComponentKey[] = ["exhibit", "weather"];
+export const PREVIEW_DERIVED_COMPONENTS: readonly ComponentKey[] = ["exhibit", "weather", "tenkai"];
 
 /** `key` が preview 由来成分かを判定。 */
 export function isPreviewDerivedComponent(key: ComponentKey): boolean {
@@ -97,15 +100,15 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-05-01",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
   },
-  // 将来追加例:
-  // {
-  //   id: "v2_tenkai",
-  //   displayName: "B君予想",
-  //   slot: 2,
-  //   status: "active",
-  //   startedAt: "2026-06-01",
-  //   componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "tenkai"],
-  // },
+  {
+    id: "v2_tenkai",
+    displayName: "B君予想",
+    slot: 2,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。Phase 2 投入日。
+    startedAt: "2026-06-01",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "tenkai"],
+  },
 ];
 
 /** 登録されている全予想者 (active + retired) を返す。 */
