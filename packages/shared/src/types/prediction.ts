@@ -87,7 +87,7 @@ export type PredictorPrediction = {
   readonly aiEvaluationRealtime?: AiEvaluation;
   /** この予想者の買い目・回収率集計。3連単 1 レース分。 */
   readonly betPayout: RaceBetPayoutSummary;
-  /** この予想者の A君直前 / B君直前買い目それぞれの的中状態。 */
+  /** この予想者の当日 / 直前買い目それぞれの的中状態。 */
   readonly betHitStatus: BetHitStatus;
 };
 
@@ -120,12 +120,12 @@ export type RacePrediction = {
    */
   readonly aiEvaluation: AiEvaluation;
   /**
-   * 朝バッチ時点の AI 評価（直前情報反映前）。買い目「A君直前買い目」表示に利用する。
+   * 朝バッチ時点の AI 評価（直前情報反映前）。買い目「当日買い目」表示に利用する。
    * index CSV に daily 行が存在しない場合は undefined。
    */
   readonly aiEvaluationDaily?: AiEvaluation;
   /**
-   * 直前情報反映後の AI 評価。買い目「B君直前買い目」表示に利用する。
+   * 直前情報反映後の AI 評価。買い目「直前買い目」表示に利用する。
    * index CSV に realtime 行が存在しない場合（直前情報未反映時）は undefined。
    */
   readonly aiEvaluationRealtime?: AiEvaluation;
@@ -135,7 +135,7 @@ export type RacePrediction = {
    */
   readonly raceResult?: RaceResultRow;
   /**
-   * A君直前買い目 / B君直前買い目それぞれが結果に対して的中したか。
+   * 当日買い目 / 直前買い目それぞれが結果に対して的中したか。
    * `raceResult` が無い、または 1〜3 着が揃っていない場合は両方 false。
    * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
    */
@@ -146,7 +146,7 @@ export type RacePrediction = {
    */
   readonly racePayout?: RacePayoutRow;
   /**
-   * A君直前買い目 / B君直前買い目それぞれの 3連単 ベット結果（点数・賭け金・払戻）。
+   * 当日買い目 / 直前買い目それぞれの 3連単 ベット結果（点数・賭け金・払戻）。
    * `raceResult` または `racePayout` が無い場合は payoutYen=0 / hit=false。
    * 古い JSON では未設定の場合があるため、UI 側では undefined フォールバックすること。
    * **後方互換用フィールド**。新しい UI は `predictions` 配列の各 `PredictorPrediction`

@@ -3,8 +3,8 @@ import type { BettingPicks } from "./one-mark-distance.js";
 
 /**
  * 買い目の的中状態。
- * - dailyHit: A君直前買い目（朝バッチ・直前情報反映前）の三連単フォーメーションが的中
- * - realtimeHit: B君直前買い目（直前情報反映後）の三連単フォーメーションが的中
+ * - dailyHit: 当日買い目（朝バッチ・直前情報反映前）の三連単フォーメーションが的中
+ * - realtimeHit: 直前買い目（直前情報反映後）の三連単フォーメーションが的中
  *
  * 結果が未確定 / 1〜3 着が揃っていない場合はいずれも false。
  */
@@ -43,11 +43,11 @@ const isFormationHit = (
 };
 
 /**
- * A君直前買い目 / B君直前買い目それぞれの的中状況を判定する。
+ * 当日買い目 / 直前買い目それぞれの的中状況を判定する。
  *
  * @param result      レース結果。undefined のとき（未確定）は両方 false。
- * @param dailyPicks  A君直前買い目（朝バッチ時点の AI 評価から導出した買い目）
- * @param realtimePicks B君直前買い目（直前情報反映後の AI 評価から導出した買い目）
+ * @param dailyPicks  当日買い目（朝バッチ時点の AI 評価から導出した買い目）
+ * @param realtimePicks 直前買い目（直前情報反映後の AI 評価から導出した買い目）
  */
 export const checkBettingHit = (
   result: RaceResultRow | undefined,

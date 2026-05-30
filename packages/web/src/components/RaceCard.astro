@@ -5,7 +5,7 @@ import { getRaceGradeBadge, getStadiumById } from "@fun-site/shared";
 interface Props {
   prediction: RacePrediction;
   /**
-   * 当該会場の節集計 (B君直前買い目戦略)。3 行目の今節成績表示に使う。
+   * 当該会場の節集計 (直前買い目戦略)。3 行目の今節成績表示に使う。
    * 渡されない or null の場合は「節成績データなし」表示にフォールバック。
    * `_meta/series-summary.json` の `byStadium[stadiumId]` を呼び出し側でルックアップして渡す。
    */
@@ -32,7 +32,7 @@ const subtitle = subtitleParts.join(" ");
 // 2 行目先頭のグレードバッジ。一般戦 (IP) や未設定の場合は null。
 const gradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
-// 3 行目: 今節成績 (B君直前買い目戦略)。
+// 3 行目: 今節成績 (直前買い目戦略)。
 // settledRaceCount === 0 (節初日でまだ確定 0 等) は「データなし」扱いにする。
 const hasSeriesData =
   seriesAggregate != null && seriesAggregate.settledRaceCount > 0;
@@ -81,7 +81,7 @@ const shortDate = (d: string): string => {
     </p>
   )}
 
-  {/* 3行目: 今節成績 (B君直前買い目戦略の的中率 / 回収率)。
+  {/* 3行目: 今節成績 (直前買い目戦略の的中率 / 回収率)。
        渡されない / データなしの場合は控えめなフォールバック表示。 */}
   {hasSeriesData ? (
     <div

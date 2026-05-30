@@ -137,7 +137,7 @@ const ZERO_SUMMARY: RaceBetPayoutSummary = {
 };
 
 /**
- * A君直前買い目 / B君直前買い目それぞれの 3連単 ベット結果を一括計算する。
+ * 当日買い目 / 直前買い目それぞれの 3連単 ベット結果を一括計算する。
  */
 export const computeRaceBetPayoutSummary = (
   dailyPicks: BettingPicks | undefined,
@@ -188,8 +188,8 @@ const ZERO_AGGREGATE: DailyBetPayoutAggregate = {
  *
  * `betCount === 0` のレース（フォーメーションが計算できない / 結果未確定）は
  * 母数 (`settledRaceCount`) にも分子 (`hitCount` / `totalPayoutYen`) にも
- * 含めない。これにより「A君直前買い目しか出ていないが B君直前は未取得」のケースで
- * B君直前側の母数が水増しされない。
+ * 含めない。これにより「当日買い目しか出ていないが直前は未取得」のケースで
+ * 直前側の母数が水増しされない。
  */
 export const aggregateDailyBetPayout = (
   results: readonly BetPayoutResult[],

@@ -109,7 +109,7 @@ const emptyState = (): SeriesState => ({
 /**
  * 当日の `RacePrediction[]` から会場別のスナップショット + dayLabel を抽出する。
  *
- * `realtime` 戦略のみが対象 (会場ページに出すのは B君直前買い目のため)。
+ * `realtime` 戦略のみが対象 (会場ページに出すのは直前買い目のため)。
  *
  * - `snapshot`: primary predictor (slot=1) の集計 (後方互換)。
  *   `betPayout?.realtime` 必須 (無いレースは集計対象外)。

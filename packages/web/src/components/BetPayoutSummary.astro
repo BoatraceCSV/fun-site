@@ -2,11 +2,16 @@
 import type { RaceBetPayoutSummary } from "@fun-site/shared";
 
 interface Props {
-  /** 3連単 戦略の払戻結果。A君直前 / B君直前 それぞれの計算結果を持つ。 */
+  /** 3連単 戦略の払戻結果。当日 / 直前 それぞれの計算結果を持つ。 */
   summary?: RaceBetPayoutSummary;
+  /** ラベルの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  predictorName?: string;
 }
 
-const { summary } = Astro.props;
+const { summary, predictorName } = Astro.props;
+
+/** "A君予想" → "A君"。 予想 サフィックスを剥がしてラベルに使う。 */
+const labelPrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 
 type SectionKind = "daily" | "realtime";
 
@@ -17,8 +22,8 @@ type Section = {
 };
 
 const sections: readonly Section[] = [
-  { kind: "daily", label: "A君直前買い目", result: summary?.daily },
-  { kind: "realtime", label: "B君直前買い目", result: summary?.realtime },
+  { kind: "daily", label: `${labelPrefix}当日買い目`, result: summary?.daily },
+  { kind: "realtime", label: `${labelPrefix}直前買い目`, result: summary?.realtime },
 ];
 
 const hasAny = sections.some((s) => s.result && s.result.betCount > 0);

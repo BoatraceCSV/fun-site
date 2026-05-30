@@ -9,15 +9,17 @@ import {
 
 interface Props {
   racers: readonly RaceRacer[];
-  /** 朝バッチ時点の AI 評価 (= A君直前買い目の根拠)。無ければ A君直前買い目は表示されない。 */
+  /** 朝バッチ時点の AI 評価 (= 当日買い目の根拠)。無ければ当日買い目は表示されない。 */
   aiEvaluationDaily?: AiEvaluation;
-  /** 直前情報反映後の AI 評価 (= B君直前買い目の根拠)。無ければ B君直前買い目は「未取得」と表示する。 */
+  /** 直前情報反映後の AI 評価 (= 直前買い目の根拠)。無ければ直前買い目は「未取得」と表示する。 */
   aiEvaluationRealtime?: AiEvaluation;
   /** 後方互換: いずれの個別評価も渡されていない場合のフォールバック。
-   *  state によって A君直前買い目 / B君直前買い目 を切り替える。 */
+   *  state によって当日買い目 / 直前買い目 を切り替える。 */
   aiEvaluation?: AiEvaluation;
   /** 結果確定後の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
+  /** 見出しの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  predictorName?: string;
 }
 
 const {
@@ -26,7 +28,13 @@ const {
   aiEvaluationRealtime,
   aiEvaluation,
   hitStatus,
+  predictorName,
 } = Astro.props;
+
+/** 見出し: "{shortName}当日買い目" / "{shortName}直前買い目"。
+ *  predictorName 末尾の「予想」サフィックスは除去する ("A君予想" → "A君")。
+ *  predictorName 省略時はプレフィクス無し。 */
+const headingPrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 
 // 後方互換: aiEvaluation 単体が渡された場合は state を見て daily / realtime のどちらかに振り分ける
 const dailyEval =
@@ -57,12 +65,12 @@ const sections: {
 }[] = [
   {
     kind: "daily",
-    heading: "A君直前買い目",
+    heading: `${headingPrefix}当日買い目`,
     groups: dailyEval ? buildGroups(dailyEval) : null,
   },
   {
     kind: "realtime",
-    heading: "B君直前買い目",
+    heading: `${headingPrefix}直前買い目`,
     groups: realtimeEval ? buildGroups(realtimeEval) : null,
   },
 ];
@@ -72,7 +80,7 @@ const isSectionHit = (kind: SectionKind): boolean => {
   return kind === "daily" ? hitStatus.dailyHit : hitStatus.realtimeHit;
 };
 
-/** A君 (daily) = 🎯 + amber, B君 (realtime) = 🔥 + cyan で識別する */
+/** 当日 = 🎯 + amber, 直前 = 🔥 + cyan で識別する */
 const hitBadgeClass = (kind: SectionKind): string =>
   kind === "daily"
     ? "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
@@ -104,7 +112,7 @@ const boatBoxStyle = (boatNumber: number): string => {
       </h3>
       {section.groups === null ? (
         <p class="text-xs text-gray-400">
-          {section.heading === "B君直前買い目"
+          {section.kind === "realtime"
             ? "直前情報がまだ反映されていません。"
             : "当日の AI 評価が取得できていません。"}
         </p>
@@ -142,5 +150,5 @@ const boatBoxStyle = (boatNumber: number): string => {
 </div>
 <p class="text-xs text-gray-500 mt-3">
   1マーク予想の走行距離を基準に、各着順の上位艇から ±0.10 以内の艇を候補としています（三連単フォーメーションの目安）。
-  「A君直前買い目」は朝バッチ時点（直前情報反映前）、「B君直前買い目」は直前情報反映後の AI 評価に基づきます。
+  「当日買い目」は朝バッチ時点（直前情報反映前）、「直前買い目」は直前情報反映後の AI 評価に基づきます。
 </p>

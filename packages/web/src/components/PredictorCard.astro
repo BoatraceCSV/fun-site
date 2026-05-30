@@ -41,11 +41,15 @@ const chartEval = prediction.aiEvaluationRealtime ?? prediction.aiEvaluationDail
       aiEvaluationDaily={prediction.aiEvaluationDaily}
       aiEvaluationRealtime={prediction.aiEvaluationRealtime}
       hitStatus={prediction.betHitStatus}
+      predictorName={prediction.predictorName}
     />
 
     {/* 回収率 */}
     <div class="border-t border-gray-100 pt-3">
-      <BetPayoutSummary summary={prediction.betPayout} />
+      <BetPayoutSummary
+        summary={prediction.betPayout}
+        predictorName={prediction.predictorName}
+      />
     </div>
 
     {/* AI 評価のスタックバー (任意) */}

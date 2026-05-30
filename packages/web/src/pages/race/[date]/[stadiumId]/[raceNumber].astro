@@ -20,10 +20,10 @@ type RaceNavItem = {
   raceName: string;
   votingDeadline: string;
   isConfirmed: boolean;
-  /** A君直前買い目が的中したか（確定済みかつ A君直前買い目フォーメーションが結果と一致） */
-  dailyHit: boolean;
-  /** B君直前買い目が的中したか（確定済みかつ B君直前買い目フォーメーションが結果と一致） */
-  realtimeHit: boolean;
+  /** A君（slot=1, primary predictor）の直前買い目が的中したか。🎯 アイコン表示用。 */
+  aRealtimeHit: boolean;
+  /** B君（slot=2）の直前買い目が的中したか。🔥 アイコン表示用。B君予想が存在しない場合は false。 */
+  bRealtimeHit: boolean;
 };
 
 export async function getStaticPaths() {
@@ -46,13 +46,24 @@ export async function getStaticPaths() {
       // 文字列も併用判定する (上流 CSV の `電話投票締切予定` 列は確定後に "確定" に置き換わる)。
       const isConfirmed =
         prediction.raceResult !== undefined || prediction.votingDeadline === "確定";
+      // A君 (slot=1) / B君 (slot=2) ぶんの直前買い目的中。
+      // 新スキーマでは predictions[] が slot 昇順で並ぶ。
+      // 旧 JSON (predictions 未設定) では legacy `betHitStatus` を A君ぶんとして採用、B君は無し扱い。
+      const predictorsBySlot = new Map(
+        (prediction.predictions ?? []).map((p) => [p.slot, p] as const),
+      );
+      const aPred = predictorsBySlot.get(1);
+      const bPred = predictorsBySlot.get(2);
+      const aRealtimeHit =
+        aPred?.betHitStatus.realtimeHit ?? prediction.betHitStatus?.realtimeHit ?? false;
+      const bRealtimeHit = bPred?.betHitStatus.realtimeHit ?? false;
       list.push({
         raceNumber: prediction.raceNumber,
         raceName: prediction.raceName ?? "",
         votingDeadline: prediction.votingDeadline ?? "",
         isConfirmed,
-        dailyHit: prediction.betHitStatus?.dailyHit ?? false,
-        realtimeHit: prediction.betHitStatus?.realtimeHit ?? false,
+        aRealtimeHit,
+        bRealtimeHit,
       });
       racesByStadium.set(parsed.stadiumId, list);
     }
@@ -112,9 +123,9 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         const meta = raceByNumber.get(n);
         const isAvailable = meta !== undefined;
         const isConfirmed = meta?.isConfirmed ?? false;
-        const dailyHit = meta?.dailyHit ?? false;
-        const realtimeHit = meta?.realtimeHit ?? false;
-        const hasAnyHit = dailyHit || realtimeHit;
+        const aRealtimeHit = meta?.aRealtimeHit ?? false;
+        const bRealtimeHit = meta?.bRealtimeHit ?? false;
+        const hasAnyHit = aRealtimeHit || bRealtimeHit;
 
         // 状態別のスタイル: 背景色そのもので識別
         // 現在     → 青ベタ (白文字)
@@ -158,7 +169,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                     確定
                   </span>
                   {/* A君直前買い目的中 → 🎯 (amber)、B君直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
-                  {dailyHit && (
+                  {aRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
                       title="A君直前買い目が的中"
@@ -167,7 +178,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                       🎯
                     </span>
                   )}
-                  {realtimeHit && (
+                  {bRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
                       title="B君直前買い目が的中"
@@ -207,7 +218,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                 class={tileClass}
                 aria-label={`${n}R ${meta?.raceName ?? ""}${
                   isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
-                }${hasAnyHit ? ` (${[dailyHit ? "A君直前買い目的中" : "", realtimeHit ? "B君直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
+                }${hasAnyHit ? ` (${[aRealtimeHit ? "A君直前買い目的中" : "", bRealtimeHit ? "B君直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -223,7 +234,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     </ul>
   </nav>
 
-  {/* 今節成績（会場・B君直前買い目戦略の的中率 / 回収率）。
+  {/* 今節成績（会場・primary predictor 直前買い目戦略の的中率 / 回収率）。
        1R-12R リンクバーの直下に置き、当該節での会場全体の傾向を最初に提示する。
        データが無い場合 (節初日で confirm 0 / summary 未生成) は何も描画しない。 */}
   <StadiumSeriesSummary agg={seriesAggregate} />
@@ -262,6 +273,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       <RaceResultSection
         result={prediction.raceResult}
         hitStatus={prediction.betHitStatus}
+        predictorName={prediction.predictions?.[0]?.predictorName ?? "A君予想"}
       />
     </section>
   )}

@@ -4,11 +4,15 @@ import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   result: RaceResultRow;
-  /** A君直前買い目 / B君直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
+  /** 当日買い目 / 直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
+  /** 的中バッジの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  predictorName?: string;
 }
 
-const { result, hitStatus } = Astro.props;
+const { result, hitStatus, predictorName } = Astro.props;
+/** "A君予想" → "A君"。 予想 サフィックスを剥がしてバッジに使う。 */
+const badgePrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 
 const sortedFinishes = [...result.finishes].sort((a, b) => a.rank - b.rank);
 const sortedCourses = [...result.courses].sort((a, b) => a.courseNumber - b.courseNumber);
@@ -36,19 +40,19 @@ const recordedAtLabel = formatRecordedAt(result.recordedAt);
       {hitStatus.dailyHit && (
         <span
           class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300"
-          aria-label="A君直前買い目が的中"
+          aria-label={`${badgePrefix}当日買い目が的中`}
         >
           <span aria-hidden="true">🎯</span>
-          <span>A君直前買い目 的中</span>
+          <span>{badgePrefix}当日買い目 的中</span>
         </span>
       )}
       {hitStatus.realtimeHit && (
         <span
           class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-800 border border-cyan-300"
-          aria-label="B君直前買い目が的中"
+          aria-label={`${badgePrefix}直前買い目が的中`}
         >
           <span aria-hidden="true">🔥</span>
-          <span>B君直前買い目 的中</span>
+          <span>{badgePrefix}直前買い目 的中</span>
         </span>
       )}
     </div>
