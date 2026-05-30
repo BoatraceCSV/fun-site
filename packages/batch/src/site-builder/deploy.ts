@@ -54,6 +54,29 @@ const getContentType = (filePath: string): string => {
   return contentTypes[ext ?? ""] ?? "application/octet-stream";
 };
 
+/**
+ * デプロイ先オブジェクトに付ける `Cache-Control` を決める。
+ *
+ * 背景: Cloud CDN は `CACHE_ALL_STATIC` + `default_ttl` (既定 3600s) で動くため、
+ * オブジェクトに `Cache-Control` が無いと HTML まで最大 1 時間 (stale 配信なら最大
+ * 1 日) キャッシュされ、5 分サイクルで再ビルドしても古いトップページが表示され得る。
+ *
+ * 方針:
+ * - `.html` … `no-cache` (キャッシュはするが利用前に必ず再検証 = 常に最新)
+ * - `_astro/` 配下 … content-hash 命名で内容が変われば URL も変わるため `immutable`
+ *   で 1 年キャッシュ
+ * - それ以外 (favicon / robots / sitemap など) … 1 時間キャッシュ
+ *
+ * 注意: 下流の差分アップロードは md5Hash 一致時にスキップするため、内容が変わら
+ * ないオブジェクトには新しい `Cache-Control` は反映されない。HTML は再ビルドごとに
+ * 内容が変わるため次サイクルで自動的に新ヘッダへ更新される。
+ */
+const getCacheControl = (destination: string): string => {
+  if (destination.endsWith(".html")) return "no-cache";
+  if (destination.startsWith("_astro/")) return "public, max-age=31536000, immutable";
+  return "public, max-age=3600";
+};
+
 /** ファイルの MD5 を base64 文字列で返す（GCS metadata.md5Hash と同形式） */
 const computeMd5Base64 = (filePath: string): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -142,7 +165,10 @@ export const deployToStorage = async (): Promise<void> => {
   await mapWithConcurrency(toUpload, UPLOAD_CONCURRENCY, async ({ filePath, destination }) => {
     await bucket.upload(filePath, {
       destination,
-      metadata: { contentType: getContentType(filePath) },
+      metadata: {
+        contentType: getContentType(filePath),
+        cacheControl: getCacheControl(destination),
+      },
     });
   });
 

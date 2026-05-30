@@ -55,6 +55,7 @@ GCP 上の構成と Terraform の責務。アーキテクチャ全体像は [arc
 - グローバル静的 IP × 1
 - HTTPS LB（Certificate Manager の管理証明書、HTTP は HTTPS にリダイレクト）
 - backend bucket で Web バケットを背後に、Cloud CDN を有効化（既定 TTL は `cdn_cache_ttl` 変数）
+- Cloud CDN は `CACHE_ALL_STATIC` でオブジェクトの `Cache-Control` を尊重する。`deploy.ts` がアップロード時に種別ごとに付与する: `.html` は `no-cache`（毎回再検証で常に最新）、`_astro/` の content-hash 付き CSS/JS は `public, max-age=31536000, immutable`、その他は `public, max-age=3600`。`Cache-Control` を付けないと HTML まで `cdn_cache_ttl` ぶんキャッシュされ、再ビルドしても古いトップページが配信され続けるため必須
 - A レコードは LB の IP を指す。DNS のネームサーバーは `terraform output dns_name_servers` で取得しレジストラに登録する
 
 ## リアルタイムパイプライン
