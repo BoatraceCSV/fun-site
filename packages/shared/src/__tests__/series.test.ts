@@ -281,6 +281,46 @@ describe("aggregateSeriesBetPayout", () => {
     expect(agg.totalPayoutYen).toBe(2180);
   });
 
+  it("byPredictor を渡すと各予想者ぶんの集計が含まれる (primary と同じ slot は両立)", () => {
+    const v1Snaps: DailyBetPayoutSnapshot[] = [
+      {
+        date: "2026-05-19",
+        settledRaceCount: 10,
+        hitCount: 3,
+        totalBetCostYen: 1000,
+        totalPayoutYen: 4500,
+      },
+    ];
+    const v2Snaps: DailyBetPayoutSnapshot[] = [
+      {
+        date: "2026-05-19",
+        settledRaceCount: 10,
+        hitCount: 1,
+        totalBetCostYen: 1200,
+        totalPayoutYen: 800,
+      },
+    ];
+    const agg = aggregateSeriesBetPayout(series, v1Snaps, {
+      v1_basic: v1Snaps,
+      v2_tenkai: v2Snaps,
+    });
+    // primary (= snapshots 引数) は v1Snaps と一致
+    expect(agg.settledRaceCount).toBe(10);
+    expect(agg.hitRate).toBeCloseTo(3 / 10);
+    expect(agg.recoveryRate).toBeCloseTo(4500 / 1000);
+    // byPredictor が埋まる
+    expect(agg.byPredictor).toBeDefined();
+    expect(agg.byPredictor?.v1_basic?.hitRate).toBeCloseTo(3 / 10);
+    expect(agg.byPredictor?.v1_basic?.recoveryRate).toBeCloseTo(4500 / 1000);
+    expect(agg.byPredictor?.v2_tenkai?.hitRate).toBeCloseTo(1 / 10);
+    expect(agg.byPredictor?.v2_tenkai?.recoveryRate).toBeCloseTo(800 / 1200);
+  });
+
+  it("byPredictor 引数なしの旧 API 互換: byPredictor は未設定", () => {
+    const agg = aggregateSeriesBetPayout(series, []);
+    expect(agg.byPredictor).toBeUndefined();
+  });
+
   it("hitRate / recoveryRate は合算値から再計算 (日次平均ではない)", () => {
     // day A: 1/2 = 50%, day B: 0/8 = 0% → 単純平均だと 25% だが、母数加重で 1/10 = 10%
     const snapshots: DailyBetPayoutSnapshot[] = [

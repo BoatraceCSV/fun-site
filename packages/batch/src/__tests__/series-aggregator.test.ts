@@ -216,4 +216,106 @@ describe("computeSeriesSummary", () => {
   it("SERIES_LOOKBACK_DAYS は 7", () => {
     expect(SERIES_LOOKBACK_DAYS).toBe(7);
   });
+
+  it("予想者別 predictions[] が指定されると byPredictor に分解集計される", () => {
+    // 同レースで v1_basic は的中、v2_tenkai は外れた、というシナリオ。
+    // primary (= top-level betPayout.realtime) は A君と同じ値、byPredictor に
+    // 両者ぶんが入ることを確認する。
+    const pred: RacePrediction = {
+      raceCode: "202605211201",
+      raceDate: "2026-05-21",
+      stadiumId: "12",
+      stadiumName: "test",
+      raceNumber: 1,
+      raceName: "general",
+      raceTitle: "title",
+      dayLabel: "初日",
+      grade: "",
+      votingDeadline: "",
+      racers: [],
+      startPrediction: { fromExhibition: false, entries: [] },
+      aiEvaluation: {
+        state: "daily",
+        componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+        entries: [],
+      },
+      betPayout: {
+        daily: {
+          betCount: 0,
+          betCostYen: 0,
+          payoutYen: 0,
+          hit: false,
+          actualSanrentan: null,
+        },
+        realtime: {
+          betCount: 1,
+          betCostYen: 100,
+          payoutYen: 2180,
+          hit: true,
+          actualSanrentan: null,
+        },
+      },
+      predictions: [
+        {
+          predictorId: "v1_basic",
+          predictorName: "A君予想",
+          slot: 1,
+          betPayout: {
+            daily: {
+              betCount: 0,
+              betCostYen: 0,
+              payoutYen: 0,
+              hit: false,
+              actualSanrentan: null,
+            },
+            realtime: {
+              betCount: 1,
+              betCostYen: 100,
+              payoutYen: 2180,
+              hit: true,
+              actualSanrentan: null,
+            },
+          },
+          betHitStatus: { dailyHit: false, realtimeHit: true },
+        },
+        {
+          predictorId: "v2_tenkai",
+          predictorName: "B君予想",
+          slot: 2,
+          betPayout: {
+            daily: {
+              betCount: 0,
+              betCostYen: 0,
+              payoutYen: 0,
+              hit: false,
+              actualSanrentan: null,
+            },
+            realtime: {
+              betCount: 2,
+              betCostYen: 200,
+              payoutYen: 0,
+              hit: false,
+              actualSanrentan: null,
+            },
+          },
+          betHitStatus: { dailyHit: false, realtimeHit: false },
+        },
+      ],
+      generatedAt: "2026-05-21T00:00:00.000Z",
+    };
+    const summary = computeSeriesSummary(emptyState, [pred], "2026-05-21");
+    const agg = summary.byStadium["12"];
+    expect(agg).toBeDefined();
+    // 旧 UI / primary は A君と同じ
+    expect(agg?.settledRaceCount).toBe(1);
+    expect(agg?.hitCount).toBe(1);
+    expect(agg?.recoveryRate).toBeCloseTo(2180 / 100);
+    // byPredictor が埋まる
+    expect(agg?.byPredictor).toBeDefined();
+    expect(agg?.byPredictor?.v1_basic?.hitCount).toBe(1);
+    expect(agg?.byPredictor?.v1_basic?.recoveryRate).toBeCloseTo(2180 / 100);
+    expect(agg?.byPredictor?.v2_tenkai?.hitCount).toBe(0);
+    expect(agg?.byPredictor?.v2_tenkai?.totalBetCostYen).toBe(200);
+    expect(agg?.byPredictor?.v2_tenkai?.recoveryRate).toBe(0);
+  });
 });

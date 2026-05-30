@@ -1,5 +1,9 @@
 ---
-import type { SeriesBetPayoutAggregate } from "@fun-site/shared";
+import type {
+  PredictorSeriesAggregate,
+  SeriesBetPayoutAggregate,
+} from "@fun-site/shared";
+import { allPredictors } from "@fun-site/shared";
 
 interface Props {
   /**
@@ -19,9 +23,56 @@ const shortDate = (d: string): string => {
   const [_y, m, day] = d.split("-");
   return `${Number(m)}/${Number(day)}`;
 };
+
+// 表示用カード: 予想者別もしくは primary フォールバック。
+type Card = {
+  readonly key: string;
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly stats: PredictorSeriesAggregate;
+};
+
+const buildCards = (a: SeriesBetPayoutAggregate): Card[] => {
+  // 新スキーマ: byPredictor が存在すればレジストリの slot 順で並べる。
+  // レジストリに無い (退役後) 予想者の集計はその次に並べる。
+  if (a.byPredictor && Object.keys(a.byPredictor).length > 0) {
+    const known = allPredictors();
+    const knownIds = new Set(known.map((p) => p.id));
+    const ordered: Card[] = [];
+    for (const p of known) {
+      const stats = a.byPredictor[p.id];
+      if (!stats) continue;
+      ordered.push({ key: p.id, title: `${p.displayName}成績`, subtitle: p.id, stats });
+    }
+    for (const [predictorId, stats] of Object.entries(a.byPredictor)) {
+      if (knownIds.has(predictorId)) continue;
+      ordered.push({ key: predictorId, title: `${predictorId} 成績`, subtitle: predictorId, stats });
+    }
+    if (ordered.length > 0) return ordered;
+  }
+  // 旧 JSON フォールバック: トップフィールドを primary (A君) として 1 枚だけ表示。
+  return [
+    {
+      key: "primary",
+      title: "A君成績",
+      stats: {
+        settledRaceCount: a.settledRaceCount,
+        hitCount: a.hitCount,
+        totalBetCostYen: a.totalBetCostYen,
+        totalPayoutYen: a.totalPayoutYen,
+        hitRate: a.hitRate,
+        recoveryRate: a.recoveryRate,
+      },
+    },
+  ];
+};
+
+const cards: Card[] = agg ? buildCards(agg) : [];
+// 当節で 1 レースでも集計対象があれば表示。全 predictor が 0 件ならセクションごと隠す。
+const hasAny = cards.some((c) => c.stats.settledRaceCount > 0);
 ---
 
-{agg && agg.settledRaceCount > 0 && (
+{agg && hasAny && (
   <section class="mb-6">
     <h2 class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
       <span class="w-1 h-4 bg-blue-600 rounded-full" />
@@ -33,34 +84,48 @@ const shortDate = (d: string): string => {
     <p class="text-xs text-gray-500 mb-3">
       節初日から当日までの締切済みレースを集計。直前情報反映後の買い目フォーメーション全組合せを 1 点 ¥100 で 3連単 として買った場合の成績。
     </p>
-    <div class="rounded-lg border-l-4 p-4 border-cyan-400 bg-cyan-50">
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>
-          <p class="text-xs text-gray-500">的中率</p>
-          <p class="text-lg font-bold text-gray-900">
-            {formatPercent(agg.hitRate)}
-            <span class="text-xs font-normal text-gray-500 ml-1">
-              ({agg.hitCount}/{agg.settledRaceCount})
-            </span>
-          </p>
-        </div>
-        <div>
-          <p class="text-xs text-gray-500">回収率</p>
-          <p class={`text-lg font-bold ${agg.recoveryRate >= 1 ? "text-green-700" : "text-gray-900"}`}>
-            {formatPercent(agg.recoveryRate)}
-          </p>
-        </div>
-        <div>
-          <p class="text-xs text-gray-500">賭け金合計</p>
-          <p class="text-sm text-gray-700">{formatYen(agg.totalBetCostYen)}</p>
-        </div>
-        <div>
-          <p class="text-xs text-gray-500">払戻合計</p>
-          <p class={`text-sm font-medium ${agg.totalPayoutYen > 0 ? "text-green-700" : "text-gray-500"}`}>
-            {formatYen(agg.totalPayoutYen)}
-          </p>
-        </div>
-      </div>
+    <div class={`grid grid-cols-1 ${cards.length > 1 ? "md:grid-cols-2" : ""} gap-3`}>
+      {cards.map((c) => (
+        <article class="rounded-lg border-l-4 p-4 border-cyan-400 bg-cyan-50">
+          <h3 class="text-sm font-bold text-gray-800 mb-2 flex items-baseline gap-2">
+            <span>{c.title}</span>
+            {c.subtitle && (
+              <span class="text-[11px] font-mono text-gray-500">{c.subtitle}</span>
+            )}
+          </h3>
+          {c.stats.settledRaceCount === 0 ? (
+            <p class="text-xs text-gray-500">集計対象レースなし</p>
+          ) : (
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <p class="text-xs text-gray-500">的中率</p>
+                <p class="text-lg font-bold text-gray-900">
+                  {formatPercent(c.stats.hitRate)}
+                  <span class="text-xs font-normal text-gray-500 ml-1">
+                    ({c.stats.hitCount}/{c.stats.settledRaceCount})
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">回収率</p>
+                <p class={`text-lg font-bold ${c.stats.recoveryRate >= 1 ? "text-green-700" : "text-gray-900"}`}>
+                  {formatPercent(c.stats.recoveryRate)}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">賭け金合計</p>
+                <p class="text-sm text-gray-700">{formatYen(c.stats.totalBetCostYen)}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500">払戻合計</p>
+                <p class={`text-sm font-medium ${c.stats.totalPayoutYen > 0 ? "text-green-700" : "text-gray-500"}`}>
+                  {formatYen(c.stats.totalPayoutYen)}
+                </p>
+              </div>
+            </div>
+          )}
+        </article>
+      ))}
     </div>
   </section>
 )}

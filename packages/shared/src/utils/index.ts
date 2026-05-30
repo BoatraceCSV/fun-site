@@ -35,6 +35,7 @@ export {
   toDailySnapshot,
   type DailyBetPayoutSnapshot,
   type DetectedSeries,
+  type PredictorSeriesAggregate,
   type SeriesBetPayoutAggregate,
   type SeriesDayInfo,
 } from "./series.js";

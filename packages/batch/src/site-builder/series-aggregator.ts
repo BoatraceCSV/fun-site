@@ -123,7 +123,8 @@ export const buildSeriesSummary = async (
     const snapshots: DailyBetPayoutSnapshot[] = series.dates
       .map((d) => stadiumState.perDay[d])
       .filter((s): s is DailyBetPayoutSnapshot => s !== undefined);
-    byStadium[stadiumId] = aggregateSeriesBetPayout(series, snapshots);
+    const snapshotsByPredictor = extractSnapshotsByPredictor(stadiumState, series.dates);
+    byStadium[stadiumId] = aggregateSeriesBetPayout(series, snapshots, snapshotsByPredictor);
   }
 
   // 5. 永続化: state を prune して GCS に書き戻し、summary をローカルに書き出し
@@ -156,6 +157,24 @@ const buildPerDayInfo = (stadiumState: StadiumSeriesState): Map<string, SeriesDa
   return map;
 };
 
+/**
+ * 会場 state から「節 dates 内に存在する」予想者別 snapshot 配列を抽出。
+ * 旧 state JSON (perDayByPredictor 未設定) では空 dict を返す。
+ */
+const extractSnapshotsByPredictor = (
+  stadiumState: StadiumSeriesState,
+  seriesDates: readonly string[],
+): Readonly<Record<string, readonly DailyBetPayoutSnapshot[]>> => {
+  const out: Record<string, DailyBetPayoutSnapshot[]> = {};
+  for (const [predictorId, perDay] of Object.entries(stadiumState.perDayByPredictor ?? {})) {
+    const snaps = seriesDates
+      .map((d) => perDay[d])
+      .filter((s): s is DailyBetPayoutSnapshot => s !== undefined);
+    if (snaps.length > 0) out[predictorId] = snaps;
+  }
+  return out;
+};
+
 /** Astro が読む位置に summary を書き出す */
 const writeLocalSeriesSummary = async (summary: SeriesSummary): Promise<void> => {
   await mkdir(dirname(LOCAL_SUMMARY_PATH), { recursive: true });
@@ -179,7 +198,8 @@ export const computeSeriesSummary = (
     const snapshots = series.dates
       .map((d) => stadiumState.perDay[d])
       .filter((s): s is DailyBetPayoutSnapshot => s !== undefined);
-    byStadium[stadiumId] = aggregateSeriesBetPayout(series, snapshots);
+    const snapshotsByPredictor = extractSnapshotsByPredictor(stadiumState, series.dates);
+    byStadium[stadiumId] = aggregateSeriesBetPayout(series, snapshots, snapshotsByPredictor);
   }
   return {
     updatedAt: new Date().toISOString(),

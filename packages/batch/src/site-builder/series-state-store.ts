@@ -41,7 +41,20 @@ export type SeriesState = {
 };
 
 export type StadiumSeriesState = {
+  /**
+   * Primary predictor (= slot=1 / A君) の per-day snapshot。
+   * 旧 UI / 後方互換のため必須フィールドとして保持。
+   */
   readonly perDay: Readonly<Record<string, DailyBetPayoutSnapshot>>;
+  /**
+   * 予想者別の per-day snapshot (`predictor_id` → `date` → snapshot)。
+   * 旧 state JSON では未設定のため optional。新スキーマでは A君含め全 active
+   * 予想者を格納する (primary も含めて重複保持しておく方が UI 側の分岐が
+   * 単純になる)。
+   */
+  readonly perDayByPredictor?: Readonly<
+    Record<string, Readonly<Record<string, DailyBetPayoutSnapshot>>>
+  >;
   readonly dayLabels: Readonly<Record<string, string>>;
 };
 
@@ -97,11 +110,20 @@ const emptyState = (): SeriesState => ({
  * 当日の `RacePrediction[]` から会場別のスナップショット + dayLabel を抽出する。
  *
  * `realtime` 戦略のみが対象 (会場ページに出すのは直前買い目のため)。
- * `betPayout?.realtime` が無いレースは集計対象外。
+ *
+ * - `snapshot`: primary predictor (slot=1) の集計 (後方互換)。
+ *   `betPayout?.realtime` 必須 (無いレースは集計対象外)。
+ * - `byPredictor`: `prediction.predictions[]` を予想者 ID 別に分解した
+ *   per-predictor 集計。新規 JSON のみで作成され、旧 JSON では空 Map。
+ *   A君 (= primary) も含む。
  */
 export type DailySnapshotByStadium = ReadonlyMap<
   string,
-  { snapshot: DailyBetPayoutSnapshot; dayLabel: string }
+  {
+    snapshot: DailyBetPayoutSnapshot;
+    byPredictor: ReadonlyMap<string, DailyBetPayoutSnapshot>;
+    dayLabel: string;
+  }
 >;
 
 export const extractDailySnapshotsByStadium = (
@@ -114,15 +136,43 @@ export const extractDailySnapshotsByStadium = (
     arr.push(p);
     grouped.set(p.stadiumId, arr);
   }
-  const out = new Map<string, { snapshot: DailyBetPayoutSnapshot; dayLabel: string }>();
+  const out = new Map<
+    string,
+    {
+      snapshot: DailyBetPayoutSnapshot;
+      byPredictor: ReadonlyMap<string, DailyBetPayoutSnapshot>;
+      dayLabel: string;
+    }
+  >();
   for (const [stadiumId, group] of grouped) {
+    // primary (後方互換): 既存の betPayout?.realtime をそのまま使う
     const realtimeResults = group
       .map((p) => p.betPayout?.realtime)
       .filter((r): r is NonNullable<typeof r> => r !== undefined);
     const snapshot = buildDailySnapshot(date, realtimeResults);
+
+    // 予想者別: prediction.predictions[] 配列から predictor_id ごとに分解
+    const perPredictorBuckets = new Map<
+      string,
+      NonNullable<RacePrediction["betPayout"]>["realtime"][]
+    >();
+    for (const p of group) {
+      for (const pp of p.predictions ?? []) {
+        const rt = pp.betPayout?.realtime;
+        if (!rt) continue;
+        const bucket = perPredictorBuckets.get(pp.predictorId) ?? [];
+        bucket.push(rt);
+        perPredictorBuckets.set(pp.predictorId, bucket);
+      }
+    }
+    const byPredictor = new Map<string, DailyBetPayoutSnapshot>();
+    for (const [predictorId, results] of perPredictorBuckets) {
+      byPredictor.set(predictorId, buildDailySnapshot(date, results));
+    }
+
     // 会場内で dayLabel は基本どのレースも同じ。先頭の non-empty を採用する。
     const dayLabel = group.find((p) => p.dayLabel)?.dayLabel ?? "";
-    out.set(stadiumId, { snapshot, dayLabel });
+    out.set(stadiumId, { snapshot, byPredictor, dayLabel });
   }
   return out;
 };
@@ -131,6 +181,7 @@ export const extractDailySnapshotsByStadium = (
  * 当日分のスナップショットを既存の state にマージし、新しい state を返す。
  *
  * 既存の過去日エントリはそのまま残し、当日分のみ上書き。
+ * `perDayByPredictor` も同様に当日分のみ各予想者の slot を上書き。
  */
 export const mergeDailySnapshots = (
   state: SeriesState,
@@ -138,10 +189,29 @@ export const mergeDailySnapshots = (
   daily: DailySnapshotByStadium,
 ): SeriesState => {
   const byStadium: Record<string, StadiumSeriesState> = { ...state.byStadium };
-  for (const [stadiumId, { snapshot, dayLabel }] of daily) {
-    const prev = byStadium[stadiumId] ?? { perDay: {}, dayLabels: {} };
+  for (const [stadiumId, { snapshot, byPredictor, dayLabel }] of daily) {
+    const prev = byStadium[stadiumId] ?? {
+      perDay: {},
+      perDayByPredictor: {},
+      dayLabels: {},
+    };
+    // 予想者別: 既存予想者の他日付エントリを保持しつつ、当日分の各予想者
+    // snapshot を上書き。byPredictor が空の旧 JSON 由来データに対しては
+    // ループが回らないので perDayByPredictor は維持される。
+    const nextPerDayByPredictor: Record<
+      string,
+      Readonly<Record<string, DailyBetPayoutSnapshot>>
+    > = { ...(prev.perDayByPredictor ?? {}) };
+    for (const [predictorId, snap] of byPredictor) {
+      const prevForPredictor = nextPerDayByPredictor[predictorId] ?? {};
+      nextPerDayByPredictor[predictorId] = {
+        ...prevForPredictor,
+        [date]: snap,
+      };
+    }
     byStadium[stadiumId] = {
       perDay: { ...prev.perDay, [date]: snapshot },
+      perDayByPredictor: nextPerDayByPredictor,
       dayLabels: { ...prev.dayLabels, [date]: dayLabel },
     };
   }
@@ -167,7 +237,19 @@ export const pruneSeriesState = (state: SeriesState, oldestKeepDate: string): Se
     for (const [date, label] of Object.entries(s.dayLabels)) {
       if (date >= oldestKeepDate) dayLabels[date] = label;
     }
-    byStadium[stadiumId] = { perDay, dayLabels };
+    // 予想者別: 各 predictor の per-day を同じ閾値で剪定
+    const perDayByPredictor: Record<string, Readonly<Record<string, DailyBetPayoutSnapshot>>> = {};
+    for (const [predictorId, predictorPerDay] of Object.entries(s.perDayByPredictor ?? {})) {
+      const kept: Record<string, DailyBetPayoutSnapshot> = {};
+      for (const [date, snap] of Object.entries(predictorPerDay)) {
+        if (date >= oldestKeepDate) kept[date] = snap;
+      }
+      // 全日剪定された predictor は entry ごと削除 (退役予想者の自動掃除)
+      if (Object.keys(kept).length > 0) {
+        perDayByPredictor[predictorId] = kept;
+      }
+    }
+    byStadium[stadiumId] = { perDay, perDayByPredictor, dayLabels };
   }
   return { ...state, byStadium };
 };
