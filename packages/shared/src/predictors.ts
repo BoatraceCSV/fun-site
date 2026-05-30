@@ -106,7 +106,7 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     slot: 2,
     status: "active",
     // boatracecsv 側 registry.py と同期。Phase 2 投入日。
-    startedAt: "2026-06-01",
+    startedAt: "2026-05-30",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "tenkai"],
   },
 ];

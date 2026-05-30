@@ -35,7 +35,7 @@ describe("predictor registry", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
     expect(predictorById("v1_basic")?.startedAt).toBe("2026-05-01");
-    expect(predictorById("v2_tenkai")?.startedAt).toBe("2026-06-01");
+    expect(predictorById("v2_tenkai")?.startedAt).toBe("2026-05-30");
   });
 
   it("returns active predictors sorted by slot", () => {
