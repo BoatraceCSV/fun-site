@@ -42,8 +42,14 @@ FROM deps AS runner
 
 # ビルド成果物 (shared/dist, batch/dist) のみ runner に持ち込む。
 # packages/web は Astro ビルドのソース + node_modules/.bin/astro が必要なので丸ごとコピー。
+# shared/src は Tailwind v4 の `@source` ディレクティブ
+# (packages/web/src/styles/global.css) がスキャン対象として参照するため、
+# runtime 実行ではなくビルド時 (web の Astro ビルド) に必要。
+# これを含めないと race-grades.ts 等で動的に組み立てているクラス
+# (`bg-amber-500 text-white` など) が production CSS に生成されない。
 COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/shared/dist/ ./packages/shared/dist/
+COPY --from=builder /app/packages/shared/src/ ./packages/shared/src/
 COPY --from=builder /app/packages/batch/package.json ./packages/batch/
 COPY --from=builder /app/packages/batch/dist/ ./packages/batch/dist/
 COPY --from=builder /app/packages/web/ ./packages/web/
