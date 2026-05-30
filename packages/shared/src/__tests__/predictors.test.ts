@@ -22,10 +22,20 @@ describe("predictor registry", () => {
     expect(v1?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
   });
 
+  it("has v2_tenkai active with 6 components including tenkai", () => {
+    const v2 = predictorById("v2_tenkai");
+    expect(v2).toBeDefined();
+    expect(v2?.displayName).toBe("B君予想");
+    expect(v2?.slot).toBe(2);
+    expect(v2?.status).toBe("active");
+    expect(v2?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather", "tenkai"]);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
-    // boatracecsv 側 (data/estimate/v1_basic/) の最古ファイル日付と
-    // 揃えておく必要がある。fun-site /predictors の累計回収率の起点。
+    // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
+    // fun-site /predictors の累計回収率の起点。
     expect(predictorById("v1_basic")?.startedAt).toBe("2026-05-01");
+    expect(predictorById("v2_tenkai")?.startedAt).toBe("2026-06-01");
   });
 
   it("returns active predictors sorted by slot", () => {
@@ -59,6 +69,7 @@ describe("component constants", () => {
     expect(COMPONENT_LABELS.motor).toBe("モーターpt");
     expect(COMPONENT_LABELS.exhibit).toBe("展示pt");
     expect(COMPONENT_LABELS.weather).toBe("気象pt");
+    expect(COMPONENT_LABELS.tenkai).toBe("展開優位pt");
   });
 
   it("uses 30 for racer fallback (新人 / 長期離脱明け対策)", () => {

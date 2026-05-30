@@ -117,3 +117,4 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 2026-05: preview-realtime が 2 分間隔で CSV を更新するようになったのに合わせ、朝バッチを廃止し Pub/Sub → Eventarc → Workflow → Cloud Run Job のイベント駆動チェーンに移行。リージョンも `us-central1` から `asia-northeast1` に統一
 - 2026-05: 当初検討していた Vertex AI / Gemini による展開予想生成は採用見送り。`estimate/index` の強さpt をそのまま AI 総合評価として提示する方針に確定
 - 2026-05: 単一予想者前提から **複数予想者並行運用** へ移行。boatracecsv 側で `data/estimate/{predictor_id}/` 配下に予想者別 CSV を出力し、fun-site 側はレジストリ ([`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts)) の active 予想者を `RacePrediction.predictions[]` にまとめて UI でカード表示する構成へ。回収率の悪い予想者は退役 (`status: "retired"`) し、新規予想者は固有 ID で追加する (ID 再利用なし)。比較ページ `/predictors/` を追加。
+- 2026-06: 第 2 予想者 `v2_tenkai` (B君予想) を投入。v1_basic の 5 成分に **展開優位pt (`tenkai`)** を加えた 6 成分構成。展開優位pt はスタート展示の進入コースと枠番デフォルトコースの長期勝率差を場別標準化したもので、preview 由来成分のため朝バッチ (`state=daily`) では 50 (中立) に固定される。
