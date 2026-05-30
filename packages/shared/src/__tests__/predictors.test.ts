@@ -45,7 +45,7 @@ describe("predictor registry", () => {
     for (let i = 1; i < actives.length; i++) {
       const prev = actives[i - 1];
       const curr = actives[i];
-      if (!prev || !curr) throw new Error("unreachable");
+      if (!(prev && curr)) throw new Error("unreachable");
       expect(curr.slot).toBeGreaterThanOrEqual(prev.slot);
     }
   });
@@ -93,7 +93,8 @@ describe("predictorCsvPath", () => {
   });
 
   it("zero-pads month and day", () => {
-    const v1 = predictorById("v1_basic")!;
+    const v1 = predictorById("v1_basic");
+    if (!v1) throw new Error("v1_basic missing");
     expect(predictorCsvPath(v1, { year: 2026, month: 1, day: 3 })).toBe(
       "data/estimate/v1_basic/2026/01/03.csv",
     );
@@ -102,7 +103,8 @@ describe("predictorCsvPath", () => {
 
 describe("Pub/Sub csv_type round-trip", () => {
   it("indexCsvTypeFor + predictorFromIndexCsvType are inverses", () => {
-    const v1 = predictorById("v1_basic")!;
+    const v1 = predictorById("v1_basic");
+    if (!v1) throw new Error("v1_basic missing");
     const csvType = indexCsvTypeFor(v1);
     expect(csvType).toBe("index:v1_basic");
     expect(predictorFromIndexCsvType(csvType)).toBe(v1);
