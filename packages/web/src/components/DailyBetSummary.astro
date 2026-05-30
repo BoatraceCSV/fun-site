@@ -1,6 +1,11 @@
 ---
-import type { DailyBetPayoutAggregate, RacePrediction } from "@fun-site/shared";
-import { aggregateDailyBetPayout } from "@fun-site/shared";
+import type {
+  BetPayoutResult,
+  DailyBetPayoutAggregate,
+  PredictorSpec,
+  RacePrediction,
+} from "@fun-site/shared";
+import { activePredictors, aggregateDailyBetPayout } from "@fun-site/shared";
 
 interface Props {
   /** 当日の全レース予想。確定済みかつフォーメーションが計算できたレースだけが集計対象に入る。 */
@@ -9,43 +14,60 @@ interface Props {
 
 const { predictions } = Astro.props;
 
-// 当日 / 直前 それぞれの BetPayoutResult を集めて集計。
-const dailyResults = predictions
-  .map((p) => p.betPayout?.daily)
-  .filter((r): r is NonNullable<typeof r> => r !== undefined);
-const realtimeResults = predictions
-  .map((p) => p.betPayout?.realtime)
-  .filter((r): r is NonNullable<typeof r> => r !== undefined);
-
-const dailyAgg: DailyBetPayoutAggregate = aggregateDailyBetPayout(dailyResults);
-const realtimeAgg: DailyBetPayoutAggregate = aggregateDailyBetPayout(realtimeResults);
-
-const hasAny = dailyAgg.settledRaceCount > 0 || realtimeAgg.settledRaceCount > 0;
+/** "A君予想" → "A君"。 予想 サフィックスを剥がしてプレフィクスに使う。 */
+const shortName = (displayName: string): string => displayName.replace(/予想$/, "");
 
 const formatYen = (n: number): string => `¥${n.toLocaleString("ja-JP")}`;
 const formatPercent = (n: number): string => `${(n * 100).toFixed(1)}%`;
 
+/**
+ * 全レース予想を走査し、指定 predictor の **直前 (realtime)** 買い目の
+ * `BetPayoutResult` を集める。新スキーマ (`predictions[]`) を優先し、
+ * 旧 JSON で primary predictor かつ predictions[] が無い場合のみ
+ * legacy `prediction.betPayout.realtime` にフォールバックする。
+ */
+const collectRealtimeResults = (
+  preds: readonly RacePrediction[],
+  predictorId: string,
+  isPrimary: boolean,
+): BetPayoutResult[] => {
+  const out: BetPayoutResult[] = [];
+  for (const p of preds) {
+    const fromArray = p.predictions?.find((pp) => pp.predictorId === predictorId);
+    if (fromArray) {
+      out.push(fromArray.betPayout.realtime);
+      continue;
+    }
+    // 旧 JSON フォールバック (primary predictor ぶんのみ)。
+    if (isPrimary && p.betPayout) {
+      out.push(p.betPayout.realtime);
+    }
+  }
+  return out;
+};
+
 type Card = {
-  readonly kind: "daily" | "realtime";
+  readonly key: string;
+  readonly predictor: PredictorSpec;
   readonly heading: string;
   readonly accentClass: string;
   readonly agg: DailyBetPayoutAggregate;
 };
 
-const cards: readonly Card[] = [
-  {
-    kind: "daily",
-    heading: "当日買い目（朝バッチ時点）",
-    accentClass: "border-amber-400 bg-amber-50",
-    agg: dailyAgg,
-  },
-  {
-    kind: "realtime",
-    heading: "直前買い目（直前情報反映後）",
+const cards: readonly Card[] = activePredictors().map((predictor, idx) => {
+  const isPrimary = idx === 0;
+  const prefix = shortName(predictor.displayName);
+  const results = collectRealtimeResults(predictions, predictor.id, isPrimary);
+  return {
+    key: predictor.id,
+    predictor,
+    heading: `${prefix}直前買い目`,
     accentClass: "border-cyan-400 bg-cyan-50",
-    agg: realtimeAgg,
-  },
-];
+    agg: aggregateDailyBetPayout(results),
+  };
+});
+
+const hasAny = cards.some((c) => c.agg.settledRaceCount > 0);
 ---
 
 {hasAny && (
@@ -55,7 +77,7 @@ const cards: readonly Card[] = [
       本日の AI 3連単 成績
     </h2>
     <p class="text-xs text-gray-500 mb-3">
-      買い目フォーメーションの全組合せを 1 点 ¥100 で 3連単 として買った場合の集計（締切済みレースのみ）。
+      直前情報反映後の買い目フォーメーション全組合せを 1 点 ¥100 で 3連単 として買った場合の集計（締切済みレースのみ・予想者別）。
     </p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {cards.map((c) => {
