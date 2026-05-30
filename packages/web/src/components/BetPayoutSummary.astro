@@ -46,13 +46,20 @@ const badgeClass = (kind: SectionKind): string =>
     {sections.map((s) => {
       const r = s.result;
       if (!r || r.betCount === 0) return null;
+      // 3連単 払戻情報が無いレースは結果未確定とみなし、的中/外れの判定や
+      // 回収率は出さずに「確定前」を表示する。
+      const settled = r.actualSanrentan !== null;
       const recovery = r.betCostYen > 0 ? r.payoutYen / r.betCostYen : 0;
       return (
         <div class="flex flex-col gap-1 border-l-4 pl-3 py-1 rounded-sm" style={`border-color: ${s.kind === "daily" ? "#d97706" : "#0891b2"}`}>
           <div class="flex items-center gap-2 flex-wrap">
             <span class={badgeClass(s.kind)}>{s.label}</span>
             <span class="text-xs text-gray-500">{r.betCount} 点 × ¥100 = {formatYen(r.betCostYen)}</span>
-            {r.hit ? (
+            {!settled ? (
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-300">
+                確定前
+              </span>
+            ) : r.hit ? (
               <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-green-100 text-green-800 border border-green-300">
                 🎯 的中
               </span>
@@ -64,10 +71,10 @@ const badgeClass = (kind: SectionKind): string =>
           </div>
           <div class="flex items-center gap-3 text-sm">
             <span class="text-gray-700">
-              払戻: <span class={r.payoutYen > 0 ? "font-bold text-green-700" : "text-gray-400"}>{formatYen(r.payoutYen)}</span>
+              払戻: <span class={r.payoutYen > 0 ? "font-bold text-green-700" : "text-gray-400"}>{settled ? formatYen(r.payoutYen) : "—"}</span>
             </span>
             <span class="text-gray-700">
-              回収率: <span class={recovery >= 1 ? "font-bold text-green-700" : "text-gray-500"}>{formatPercent(recovery)}</span>
+              回収率: <span class={settled && recovery >= 1 ? "font-bold text-green-700" : "text-gray-500"}>{settled ? formatPercent(recovery) : "—"}</span>
             </span>
             {r.actualSanrentan && (
               <span class="text-xs text-gray-500">
