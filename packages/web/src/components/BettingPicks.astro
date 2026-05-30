@@ -9,12 +9,12 @@ import {
 
 interface Props {
   racers: readonly RaceRacer[];
-  /** 朝バッチ時点の AI 評価 (= 当日買い目の根拠)。無ければ当日買い目は表示されない。 */
+  /** 朝バッチ時点の AI 評価 (= A君直前買い目の根拠)。無ければ A君直前買い目は表示されない。 */
   aiEvaluationDaily?: AiEvaluation;
-  /** 直前情報反映後の AI 評価 (= 直前買い目の根拠)。無ければ直前買い目は「未取得」と表示する。 */
+  /** 直前情報反映後の AI 評価 (= B君直前買い目の根拠)。無ければ B君直前買い目は「未取得」と表示する。 */
   aiEvaluationRealtime?: AiEvaluation;
   /** 後方互換: いずれの個別評価も渡されていない場合のフォールバック。
-   *  state によって当日買い目 / 直前買い目を切り替える。 */
+   *  state によって A君直前買い目 / B君直前買い目 を切り替える。 */
   aiEvaluation?: AiEvaluation;
   /** 結果確定後の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
@@ -57,12 +57,12 @@ const sections: {
 }[] = [
   {
     kind: "daily",
-    heading: "当日買い目",
+    heading: "A君直前買い目",
     groups: dailyEval ? buildGroups(dailyEval) : null,
   },
   {
     kind: "realtime",
-    heading: "直前買い目",
+    heading: "B君直前買い目",
     groups: realtimeEval ? buildGroups(realtimeEval) : null,
   },
 ];
@@ -72,7 +72,7 @@ const isSectionHit = (kind: SectionKind): boolean => {
   return kind === "daily" ? hitStatus.dailyHit : hitStatus.realtimeHit;
 };
 
-/** 当日 = 🎯 + amber, 直前 = 🔥 + cyan で識別する */
+/** A君 (daily) = 🎯 + amber, B君 (realtime) = 🔥 + cyan で識別する */
 const hitBadgeClass = (kind: SectionKind): string =>
   kind === "daily"
     ? "inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"
@@ -104,7 +104,7 @@ const boatBoxStyle = (boatNumber: number): string => {
       </h3>
       {section.groups === null ? (
         <p class="text-xs text-gray-400">
-          {section.heading === "直前買い目"
+          {section.heading === "B君直前買い目"
             ? "直前情報がまだ反映されていません。"
             : "当日の AI 評価が取得できていません。"}
         </p>
@@ -142,5 +142,5 @@ const boatBoxStyle = (boatNumber: number): string => {
 </div>
 <p class="text-xs text-gray-500 mt-3">
   1マーク予想の走行距離を基準に、各着順の上位艇から ±0.10 以内の艇を候補としています（三連単フォーメーションの目安）。
-  「当日買い目」は朝バッチ時点（直前情報反映前）、「直前買い目」は直前情報反映後の AI 評価に基づきます。
+  「A君直前買い目」は朝バッチ時点（直前情報反映前）、「B君直前買い目」は直前情報反映後の AI 評価に基づきます。
 </p>

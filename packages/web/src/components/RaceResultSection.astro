@@ -4,7 +4,7 @@ import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   result: RaceResultRow;
-  /** 当日買い目 / 直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
+  /** A君直前買い目 / B君直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
 }
 
@@ -36,19 +36,19 @@ const recordedAtLabel = formatRecordedAt(result.recordedAt);
       {hitStatus.dailyHit && (
         <span
           class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300"
-          aria-label="当日買い目が的中"
+          aria-label="A君直前買い目が的中"
         >
           <span aria-hidden="true">🎯</span>
-          <span>当日買い目 的中</span>
+          <span>A君直前買い目 的中</span>
         </span>
       )}
       {hitStatus.realtimeHit && (
         <span
           class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-800 border border-cyan-300"
-          aria-label="直前買い目が的中"
+          aria-label="B君直前買い目が的中"
         >
           <span aria-hidden="true">🔥</span>
-          <span>直前買い目 的中</span>
+          <span>B君直前買い目 的中</span>
         </span>
       )}
     </div>

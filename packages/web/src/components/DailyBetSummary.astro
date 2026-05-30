@@ -9,7 +9,7 @@ interface Props {
 
 const { predictions } = Astro.props;
 
-// 当日 / 直前 それぞれの BetPayoutResult を集めて集計。
+// A君直前 / B君直前 それぞれの BetPayoutResult を集めて集計。
 const dailyResults = predictions
   .map((p) => p.betPayout?.daily)
   .filter((r): r is NonNullable<typeof r> => r !== undefined);
@@ -35,13 +35,13 @@ type Card = {
 const cards: readonly Card[] = [
   {
     kind: "daily",
-    heading: "当日買い目（朝バッチ時点）",
+    heading: "A君直前買い目（朝バッチ時点）",
     accentClass: "border-amber-400 bg-amber-50",
     agg: dailyAgg,
   },
   {
     kind: "realtime",
-    heading: "直前買い目（直前情報反映後）",
+    heading: "B君直前買い目（直前情報反映後）",
     accentClass: "border-cyan-400 bg-cyan-50",
     agg: realtimeAgg,
   },

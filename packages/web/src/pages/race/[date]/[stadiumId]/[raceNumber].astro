@@ -20,9 +20,9 @@ type RaceNavItem = {
   raceName: string;
   votingDeadline: string;
   isConfirmed: boolean;
-  /** 当日買い目が的中したか（確定済みかつ当日買い目フォーメーションが結果と一致） */
+  /** A君直前買い目が的中したか（確定済みかつ A君直前買い目フォーメーションが結果と一致） */
   dailyHit: boolean;
-  /** 直前買い目が的中したか（確定済みかつ直前買い目フォーメーションが結果と一致） */
+  /** B君直前買い目が的中したか（確定済みかつ B君直前買い目フォーメーションが結果と一致） */
   realtimeHit: boolean;
 };
 
@@ -157,12 +157,12 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   }`}>
                     確定
                   </span>
-                  {/* 当日買い目的中 → 🎯 (amber)、直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
+                  {/* A君直前買い目的中 → 🎯 (amber)、B君直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
                   {dailyHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="当日買い目が的中"
-                      aria-label="当日買い目が的中"
+                      title="A君直前買い目が的中"
+                      aria-label="A君直前買い目が的中"
                     >
                       🎯
                     </span>
@@ -170,8 +170,8 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   {realtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="直前買い目が的中"
-                      aria-label="直前買い目が的中"
+                      title="B君直前買い目が的中"
+                      aria-label="B君直前買い目が的中"
                     >
                       🔥
                     </span>
@@ -207,7 +207,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                 class={tileClass}
                 aria-label={`${n}R ${meta?.raceName ?? ""}${
                   isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
-                }${hasAnyHit ? ` (${[dailyHit ? "当日買い目的中" : "", realtimeHit ? "直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
+                }${hasAnyHit ? ` (${[dailyHit ? "A君直前買い目的中" : "", realtimeHit ? "B君直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -223,7 +223,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     </ul>
   </nav>
 
-  {/* 今節成績（会場・直前買い目戦略の的中率 / 回収率）。
+  {/* 今節成績（会場・B君直前買い目戦略の的中率 / 回収率）。
        1R-12R リンクバーの直下に置き、当該節での会場全体の傾向を最初に提示する。
        データが無い場合 (節初日で confirm 0 / summary 未生成) は何も描画しない。 */}
   <StadiumSeriesSummary agg={seriesAggregate} />
