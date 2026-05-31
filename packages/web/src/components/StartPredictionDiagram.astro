@@ -4,9 +4,14 @@ import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   start: StartPrediction;
+  /**
+   * ST 値の説明文を差し替える。未指定時は「選手の全国平均ST」を表示。
+   * B君予想のように ST を一律固定値で表示する場合に注記を上書きするため使う。
+   */
+  stNote?: string;
 }
 
-const { start } = Astro.props;
+const { start, stNote } = Astro.props;
 
 // 表示レンジ（秒）。STの一般的な範囲をカバーする
 const ST_MIN = -0.05; // フライング側
@@ -182,6 +187,6 @@ const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
       ? "進入コースは直前情報のスタート展示を基準に表示しています。"
       : "直前情報がまだ届いていないため、進入コースは枠番を仮表示しています。"}
     {" "}
-    スタートタイミングは選手の全国平均STです。
+    {stNote ?? "スタートタイミングは選手の全国平均STです。"}
   </figcaption>
 </figure>

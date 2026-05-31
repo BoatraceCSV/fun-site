@@ -1,8 +1,10 @@
 ---
-import type { PredictorPrediction, RaceRacer } from "@fun-site/shared";
+import type { AiEvaluation, PredictorPrediction, RaceRacer, StartPrediction } from "@fun-site/shared";
 import AiEvaluationChart from "./AiEvaluationChart.astro";
 import BetPayoutSummary from "./BetPayoutSummary.astro";
 import BettingPicks from "./BettingPicks.astro";
+import OneMarkPredictionDiagram from "./OneMarkPredictionDiagram.astro";
+import StartPredictionDiagram from "./StartPredictionDiagram.astro";
 
 interface Props {
   /** この予想者ぶんの予想内容 (1 予想者 / 1 レース)。 */
@@ -11,12 +13,38 @@ interface Props {
   racers: readonly RaceRacer[];
   /** 結果確定後の AI 評価チャートを表示するか。デフォルト true。 */
   showChart?: boolean;
+  /**
+   * スタート予想図。予想者非依存の共通情報 (全国平均ST + 進入コース) だが、
+   * primary predictor (A君) のカード内にまとめて表示するため任意 prop で受け取る。
+   * 渡された場合のみ 1マーク予想と横並びで描画する。
+   */
+  startPrediction?: StartPrediction;
+  /**
+   * 1マーク予想図で参照する AI 評価。この予想者の評価を渡す。
+   * `startPrediction` と両方揃った場合のみ 2 図を横並び描画する。
+   */
+  oneMarkAiEvaluation?: AiEvaluation;
+  /**
+   * スタート予想図の ST 説明文の上書き。B君予想のように ST を一律固定値で
+   * 表示する場合に注記を差し替えるため `StartPredictionDiagram` へ転送する。
+   */
+  startNote?: string;
 }
 
-const { prediction, racers, showChart = true } = Astro.props;
+const {
+  prediction,
+  racers,
+  showChart = true,
+  startPrediction,
+  oneMarkAiEvaluation,
+  startNote,
+} = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
 const chartEval = prediction.aiEvaluationRealtime ?? prediction.aiEvaluationDaily;
+
+// スタート予想・1マーク予想の両方が揃ったときだけカード内に横並び表示する。
+const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== undefined;
 ---
 
 <section
@@ -58,6 +86,23 @@ const chartEval = prediction.aiEvaluationRealtime ?? prediction.aiEvaluationDail
       <div class="border-t border-gray-100 pt-3">
         <h3 class="text-sm font-semibold text-gray-700 mb-2">AI 評価の内訳</h3>
         <AiEvaluationChart evaluation={chartEval} />
+      </div>
+    )}
+
+    {/* スタート予想・1マーク予想 (primary predictor のカードにのみ表示)。
+         小さく横並びに収めるため 2 カラムグリッドで描画する。 */}
+    {showDiagrams && (
+      <div class="border-t border-gray-100 pt-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">スタート予想</h3>
+            <StartPredictionDiagram start={startPrediction!} stNote={startNote} />
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">1マーク予想</h3>
+            <OneMarkPredictionDiagram racers={racers} aiEvaluation={oneMarkAiEvaluation!} />
+          </div>
+        </div>
       </div>
     )}
   </div>

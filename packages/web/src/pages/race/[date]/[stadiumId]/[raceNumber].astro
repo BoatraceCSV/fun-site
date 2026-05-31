@@ -3,14 +3,13 @@ import type {
   PredictorPrediction,
   RacePrediction,
   SeriesBetPayoutAggregate,
+  StartPrediction,
 } from "@fun-site/shared";
 import { getRaceGradeBadge, getStadiumById, parseRaceCode } from "@fun-site/shared";
-import OneMarkPredictionDiagram from "../../../../components/OneMarkPredictionDiagram.astro";
 import PredictorCard from "../../../../components/PredictorCard.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
 import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
-import StartPredictionDiagram from "../../../../components/StartPredictionDiagram.astro";
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../../../../lib/data";
 
@@ -103,6 +102,18 @@ const stadiumName = stadium?.name ?? prediction.stadiumName;
 const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName || "スタート予想"}`;
 const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
+
+// B君予想 (slot=2) のスタート予想は ST を予想せず、全艇一律 0.15 として横並び表示する。
+// 進入コース・枠番は A君と同じ startPrediction を流用し、startTiming のみ 0.15 に置換する。
+const B_KUN_FIXED_ST = 0.15;
+const bKunStartPrediction: StartPrediction = {
+  ...prediction.startPrediction,
+  entries: prediction.startPrediction.entries.map((e) => ({
+    ...e,
+    startTiming: B_KUN_FIXED_ST,
+  })),
+};
+const B_KUN_START_NOTE = `スタートタイミングは B君予想として全艇一律 ${B_KUN_FIXED_ST.toFixed(2)} で表示しています。`;
 ---
 
 <BaseLayout title={title}>
@@ -305,24 +316,31 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     return fallback;
   })().map((pp) => (
     <section class="mb-6">
-      <PredictorCard prediction={pp} racers={prediction.racers} />
+      {/* スタート予想・1マーク予想を各予想者カード内に小さく横並びで表示する。
+           - A君 (slot=1): スタート予想は全国平均ST、1マークは A君の AI 評価。
+           - B君 (slot=2): スタート予想は全艇一律 0.15、1マークは B君の AI 評価。
+           1マーク予想は予想者ごとの AI 評価 (realtime 優先) を採用するため図が異なる。 */}
+      <PredictorCard
+        prediction={pp}
+        racers={prediction.racers}
+        startPrediction={
+          pp.slot === 1
+            ? prediction.startPrediction
+            : pp.slot === 2
+              ? bKunStartPrediction
+              : undefined
+        }
+        oneMarkAiEvaluation={
+          pp.slot === 1
+            ? prediction.aiEvaluation
+            : pp.slot === 2
+              ? (pp.aiEvaluationRealtime ?? pp.aiEvaluationDaily)
+              : undefined
+        }
+        startNote={pp.slot === 2 ? B_KUN_START_NOTE : undefined}
+      />
     </section>
   ))}
-
-  {/* スタート予想 */}
-  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-    <h2 class="font-bold text-lg mb-3">スタート予想</h2>
-    <StartPredictionDiagram start={prediction.startPrediction} />
-  </section>
-
-  {/* 1マーク予想 (primary predictor の AI 評価を採用) */}
-  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-    <h2 class="font-bold text-lg mb-3">1マーク予想</h2>
-    <OneMarkPredictionDiagram
-      racers={prediction.racers}
-      aiEvaluation={prediction.aiEvaluation}
-    />
-  </section>
 
   {/* 出走表 */}
   {prediction.racers.length > 0 && (
