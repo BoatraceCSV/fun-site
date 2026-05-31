@@ -133,6 +133,46 @@ describe("computeBettingPicks", () => {
     expect(picks.third).toEqual([1, 2, 3, 4]);
   });
 
+  it("1着候補が1艇だけのとき、その艇は下位着のデッド候補として除外する (B君 3着窓の逆流)", () => {
+    // 本命1艇が突出し、3着窓(±0.20)だけが1着艇まで届くケース
+    // (boatrace-fun.net 2026-05-31/06/12R で観測された不具合の再現)。
+    // 距離: 1=0.60(突出), 2=0.42, 3=0.41, 4=0.40, 5=0.39, 6=0.27
+    const entries = [
+      entry(1, 0.6),
+      entry(2, 0.42),
+      entry(3, 0.41),
+      entry(4, 0.4),
+      entry(5, 0.39),
+      entry(6, 0.27),
+    ];
+    const picks = computeBettingPicks(entries, bettingToleranceFor("v2_tenkai"));
+    // 1着基準=0.60 ±0.02 → 1 のみ
+    expect(picks.first).toEqual([1]);
+    // 2着基準=0.42 ±0.10 → [0.32,0.52]: 2,3,4,5 (1=0.60 は範囲外)
+    expect(picks.second).toEqual([2, 3, 4, 5]);
+    // 3着基準=0.41 ±0.20 → [0.21,0.61]: 窓自体は 1〜6 を含むが、1着は常に
+    // 1号艇なので 1号艇は 3着で必ず自分自身と衝突して使えない → 除外
+    expect(picks.third).toEqual([2, 3, 4, 5, 6]);
+    expect(picks.third).not.toContain(1);
+  });
+
+  it("1着候補が複数艇あるときは、その艇を下位着に残す (有効な出目で使えるため)", () => {
+    // 距離差がちょうど 0.10 のテストと同じ配置。first=[1,2] のとき
+    // 1号艇は「1着=2号艇」の出目で 2着/3着 に使えるので残る。
+    const entries = [
+      entry(1, 0.5),
+      entry(2, 0.4),
+      entry(3, 0.3),
+      entry(4, 0.2),
+      entry(5, 0.1),
+      entry(6, 0.0),
+    ];
+    const picks = computeBettingPicks(entries);
+    expect(picks.first).toEqual([1, 2]);
+    expect(picks.second).toEqual([1, 2, 3]); // 1号艇は残る
+    expect(picks.third).toEqual([2, 3, 4]);
+  });
+
   it("bettingToleranceFor: 未登録予想者は既定 ±0.10、B君は着順別", () => {
     expect(bettingToleranceFor("v1_basic")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     expect(bettingToleranceFor(undefined)).toEqual({ first: 0.1, second: 0.1, third: 0.1 });

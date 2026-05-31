@@ -27,13 +27,17 @@ export const computeOneMarkDistances = (
   });
 };
 
-/** 買い目（フォーメーション） - 各着順の候補艇番リスト */
+/**
+ * 買い目（フォーメーション） - 各着順の候補艇番リスト。
+ * いずれも艇番昇順。各着のしきい値窓から、有効な出目（1-2-3 着が相異なる
+ * 組合せ）に 1 つも使われないデッド候補を除いたもの（`computeBettingPicks`）。
+ */
 export type BettingPicks = {
-  /** 1着候補: 距離が最大の艇の距離 ±0.1 以内（艇番昇順） */
+  /** 1着候補: 距離が最大の艇の距離 ± `tolerance.first` 以内 */
   readonly first: readonly number[];
-  /** 2着候補: 距離降順で2位の艇の距離 ±0.1 以内（艇番昇順） */
+  /** 2着候補: 距離降順で2位の艇の距離 ± `tolerance.second` 以内 */
   readonly second: readonly number[];
-  /** 3着候補: 距離降順で3位の艇の距離 ±0.1 以内（艇番昇順） */
+  /** 3着候補: 距離降順で3位の艇の距離 ± `tolerance.third` 以内 */
   readonly third: readonly number[];
 };
 
@@ -79,10 +83,22 @@ export const bettingToleranceFor = (predictorId?: string): BettingTolerance =>
  * - 1着候補: 距離が最大の艇の距離 ± `tolerance.first` 以内
  * - 2着候補: 距離降順で2番目の艇の距離 ± `tolerance.second` 以内
  * - 3着候補: 距離降順で3番目の艇の距離 ± `tolerance.third` 以内
- * 各候補リストは艇番昇順。
  *
- * `tolerance` 省略時は `DEFAULT_BETTING_TOLERANCE`（±0.10）。予想者ごとに
- * 変える場合は `bettingToleranceFor(predictorId)` を渡す。
+ * 各着のしきい値窓を独立に取った後、**有効な三連単フォーメーション
+ * （1-2-3 着で同一艇を使わない出目）に 1 つも登場しない艇を各着候補から
+ * 除外する**。これにより、しきい値が着順別（特に B君 v2_tenkai の
+ * 1着0.02 / 3着0.20）のとき、1着の本命艇が窓の広い 3着候補に重複表示
+ * される不具合を解消する。
+ *
+ * 除外するのは「どの有効出目にも使えないデッド候補」のみなので、買える
+ * 組合せの集合は変わらず、`countFormationCombinations` /
+ * `isFormationHit`（組合せ数・的中・回収率）の結果は不変。1着候補が
+ * 複数艇ある場合、その艇は別の艇が 1着になる出目で下位着に使えるため
+ * 残る。
+ *
+ * 各候補リストは艇番昇順。`tolerance` 省略時は
+ * `DEFAULT_BETTING_TOLERANCE`（±0.10）。予想者ごとに変える場合は
+ * `bettingToleranceFor(predictorId)` を渡す。
  */
 export const computeBettingPicks = (
   entries: readonly OneMarkDistanceEntry[],
@@ -98,9 +114,32 @@ export const computeBettingPicks = (
       .sort((a, b) => a - b);
   };
 
+  const rawFirst = pickWithin(sortedDesc[0]?.distance, tolerance.first);
+  const rawSecond = pickWithin(sortedDesc[1]?.distance, tolerance.second);
+  const rawThird = pickWithin(sortedDesc[2]?.distance, tolerance.third);
+
+  // 有効な出目（1-2-3 着が相異なる組合せ）に登場する艇だけを各着で残す。
+  // これは bet-payout.ts の countFormationCombinations と同じ制約。
+  const usedFirst = new Set<number>();
+  const usedSecond = new Set<number>();
+  const usedThird = new Set<number>();
+  for (const a of rawFirst) {
+    for (const b of rawSecond) {
+      if (a === b) continue;
+      for (const c of rawThird) {
+        if (c === a || c === b) continue;
+        usedFirst.add(a);
+        usedSecond.add(b);
+        usedThird.add(c);
+      }
+    }
+  }
+
+  const ascending = (set: ReadonlySet<number>): readonly number[] => [...set].sort((a, b) => a - b);
+
   return {
-    first: pickWithin(sortedDesc[0]?.distance, tolerance.first),
-    second: pickWithin(sortedDesc[1]?.distance, tolerance.second),
-    third: pickWithin(sortedDesc[2]?.distance, tolerance.third),
+    first: ascending(usedFirst),
+    second: ascending(usedSecond),
+    third: ascending(usedThird),
   };
 };
