@@ -20,6 +20,7 @@ import type {
 } from "@fun-site/shared";
 import {
   activePredictors,
+  bettingToleranceFor,
   checkBettingHit,
   computeBettingPicks,
   computeOneMarkDistances,
@@ -148,11 +149,12 @@ const buildPredictorPrediction = (
   const aiEvaluationDaily = dailyIdx ? buildAiEvaluation(dailyIdx) : undefined;
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
 
+  const tolerance = bettingToleranceFor(predictor.id);
   const dailyPicks = aiEvaluationDaily
-    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily))
+    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily), tolerance)
     : undefined;
   const realtimePicks = aiEvaluationRealtime
-    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationRealtime))
+    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationRealtime), tolerance)
     : undefined;
   const betHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
   const betPayout = computeRaceBetPayoutSummary(dailyPicks, realtimePicks, result, payout);

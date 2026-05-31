@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
 import {
   type OneMarkDistanceEntry,
+  bettingToleranceFor,
   computeBettingPicks,
   computeOneMarkDistances,
 } from "../utils/one-mark-distance.js";
@@ -109,5 +110,32 @@ describe("computeBettingPicks", () => {
     expect(picks.first).toEqual([1, 2, 3]); // 0.4 ±0.1
     expect(picks.second).toEqual([1, 2, 3]); // 0.4 ±0.1
     expect(picks.third).toEqual([1, 2, 3]); // 0.35 ±0.1
+  });
+
+  it("着順別しきい値: 1着は絞り 3着は広げる (B君 v2_tenkai 相当)", () => {
+    // 距離: 1=0.40, 2=0.39, 3=0.20, 4=0.35, 5=0.10, 6=0.05
+    // 降順: 1(0.40), 2(0.39), 4(0.35), 3(0.20), 5(0.10), 6(0.05)
+    const entries = [
+      entry(1, 0.4),
+      entry(2, 0.39),
+      entry(3, 0.2),
+      entry(4, 0.35),
+      entry(5, 0.1),
+      entry(6, 0.05),
+    ];
+    // first=0.02, second=0.10, third=0.20
+    const picks = computeBettingPicks(entries, bettingToleranceFor("v2_tenkai"));
+    // 1着基準=0.40 ±0.02 → 1のみ (2=差0.01 OK)。2=0.39は差0.01 ≤ 0.02 なので含む
+    expect(picks.first).toEqual([1, 2]);
+    // 2着基準=0.39 ±0.10 → 1,2,4 (4=差0.04, 3=差0.19 NG)
+    expect(picks.second).toEqual([1, 2, 4]);
+    // 3着基準=0.35 ±0.20 → 1(0.05),2(0.04),3(0.15),4(0.00),5(0.25 NG) → 1,2,3,4
+    expect(picks.third).toEqual([1, 2, 3, 4]);
+  });
+
+  it("bettingToleranceFor: 未登録予想者は既定 ±0.10、B君は着順別", () => {
+    expect(bettingToleranceFor("v1_basic")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
+    expect(bettingToleranceFor(undefined)).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
+    expect(bettingToleranceFor("v2_tenkai")).toEqual({ first: 0.02, second: 0.1, third: 0.2 });
   });
 });

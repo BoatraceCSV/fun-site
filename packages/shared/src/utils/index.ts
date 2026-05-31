@@ -14,8 +14,12 @@ export {
 export {
   computeOneMarkDistances,
   computeBettingPicks,
+  bettingToleranceFor,
+  BETTING_TOLERANCE_BY_PREDICTOR,
+  DEFAULT_BETTING_TOLERANCE,
   type OneMarkDistanceEntry,
   type BettingPicks,
+  type BettingTolerance,
 } from "./one-mark-distance.js";
 export { checkBettingHit, type BetHitStatus } from "./bet-hit.js";
 export {

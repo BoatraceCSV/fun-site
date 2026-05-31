@@ -2,6 +2,7 @@
 import type { AiEvaluation, BetHitStatus, RaceRacer } from "@fun-site/shared";
 import {
   BOAT_COLORS,
+  bettingToleranceFor,
   computeBettingPicks,
   computeOneMarkDistances,
   isValidBoatNumber,
@@ -20,6 +21,8 @@ interface Props {
   hitStatus?: BetHitStatus;
   /** 見出しの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
   predictorName?: string;
+  /** 買い目しきい値を予想者ごとに切り替えるための ID。未指定なら既定の ±0.10。 */
+  predictorId?: string;
 }
 
 const {
@@ -29,7 +32,16 @@ const {
   aiEvaluation,
   hitStatus,
   predictorName,
+  predictorId,
 } = Astro.props;
+
+const tolerance = bettingToleranceFor(predictorId);
+
+/** しきい値の説明文。全着順同値なら "±X"、異なれば着順別に列挙。 */
+const toleranceLabel =
+  tolerance.first === tolerance.second && tolerance.second === tolerance.third
+    ? `±${tolerance.first}`
+    : `1着 ±${tolerance.first} / 2着 ±${tolerance.second} / 3着 ±${tolerance.third}`;
 
 /** 見出し: "{shortName}当日買い目" / "{shortName}直前買い目"。
  *  predictorName 末尾の「予想」サフィックスは除去する ("A君予想" → "A君")。
@@ -48,7 +60,7 @@ type Group = { readonly label: string; readonly boats: readonly number[] };
 
 const buildGroups = (evaluation: AiEvaluation): Group[] => {
   const distanceEntries = computeOneMarkDistances(racers, evaluation);
-  const picks = computeBettingPicks(distanceEntries);
+  const picks = computeBettingPicks(distanceEntries, tolerance);
   return [
     { label: "1着", boats: picks.first },
     { label: "2着", boats: picks.second },
@@ -149,6 +161,6 @@ const boatBoxStyle = (boatNumber: number): string => {
   ))}
 </div>
 <p class="text-xs text-gray-500 mt-3">
-  1マーク予想の走行距離を基準に、各着順の上位艇から ±0.10 以内の艇を候補としています（三連単フォーメーションの目安）。
+  1マーク予想の走行距離を基準に、各着順の上位艇から {toleranceLabel} 以内の艇を候補としています（三連単フォーメーションの目安）。
   「当日買い目」は朝バッチ時点（直前情報反映前）、「直前買い目」は直前情報反映後の AI 評価に基づきます。
 </p>
