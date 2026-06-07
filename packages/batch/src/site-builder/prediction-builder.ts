@@ -4,6 +4,8 @@ import type {
   BetHitStatus,
   ComponentKey,
   IndexRow,
+  MotorStats,
+  MotorStatsRow,
   PredictorPrediction,
   PredictorSpec,
   RaceBetPayoutSummary,
@@ -211,8 +213,42 @@ const buildRecentForm = (
   return { boats };
 };
 
+/** motor_stats の `(場コード, モーター番号)` 突合キー */
+const motorStatsKey = (stadiumCode: string, motorNumber: number): string =>
+  `${stadiumCode}-${motorNumber}`;
+
+/**
+ * motor_stats 行群を `(場コード-モーター番号) → MotorStats` の lookup に変換。
+ * 同一キーが複数あれば記録日が新しい行を採用する。
+ */
+const buildMotorStatsLookup = (rows: readonly MotorStatsRow[]): Map<string, MotorStats> => {
+  const latestRowByKey = new Map<string, MotorStatsRow>();
+  for (const row of rows) {
+    const key = motorStatsKey(row.stadiumCode, row.motorNumber);
+    const existing = latestRowByKey.get(key);
+    if (!existing || row.recordDate > existing.recordDate) {
+      latestRowByKey.set(key, row);
+    }
+  }
+  const lookup = new Map<string, MotorStats>();
+  for (const [key, row] of latestRowByKey) {
+    lookup.set(key, {
+      top3Rate: row.top3Rate,
+      top3Rank: row.top3Rank,
+      championCount: row.championCount,
+      finalAppearances: row.finalAppearances,
+      avgLapSec: row.avgLapSec,
+    });
+  }
+  return lookup;
+};
+
 /** race_cards の racers を出走表用 RaceRacer に詰め直す */
-const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
+const toRaceRacers = (
+  cards: RaceCardRow,
+  stadiumCode: string,
+  motorStatsByKey: ReadonlyMap<string, MotorStats>,
+): RaceRacer[] =>
   cards.racers.map((r) => ({
     boatNumber: r.boatNumber,
     registrationNumber: r.registrationNumber,
@@ -238,6 +274,9 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     boatTop2Rate: r.boatTop2Rate,
     boatTop3Rate: r.boatTop3Rate,
     sessionResults: r.sessionResults,
+    ...(motorStatsByKey.has(motorStatsKey(stadiumCode, r.motorNumber))
+      ? { motorStats: motorStatsByKey.get(motorStatsKey(stadiumCode, r.motorNumber)) }
+      : {}),
   }));
 
 /**
@@ -297,6 +336,7 @@ export const buildRacePrediction = (
   sui: SuiRow | undefined,
   recentNational: RecentFormRow | undefined,
   recentLocal: RecentFormRow | undefined,
+  motorStatsByKey: ReadonlyMap<string, MotorStats>,
   indexRowsByPredictor: ReadonlyMap<
     string,
     { readonly daily?: IndexRow; readonly realtime?: IndexRow }
@@ -312,7 +352,7 @@ export const buildRacePrediction = (
   const stadiumName =
     stadium?.name ?? title?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
 
-  const racers = toRaceRacers(cards);
+  const racers = toRaceRacers(cards, parsed.stadiumId, motorStatsByKey);
 
   // active 予想者ごとに PredictorPrediction を作成
   const predictors = activePredictors();
@@ -379,6 +419,7 @@ export const buildAllRacePredictions = (
   sui: readonly SuiRow[],
   recentNational: readonly RecentFormRow[],
   recentLocal: readonly RecentFormRow[],
+  motorStats: readonly MotorStatsRow[],
   indexesByPredictor: readonly PredictorIndexFetch[],
   titles: readonly TitleRow[],
   results: readonly RaceResultRow[],
@@ -390,6 +431,7 @@ export const buildAllRacePredictions = (
   const suiByCode = new Map(sui.map((s) => [s.raceCode, s]));
   const recentNationalByCode = new Map(recentNational.map((r) => [r.raceCode, r]));
   const recentLocalByCode = new Map(recentLocal.map((r) => [r.raceCode, r]));
+  const motorStatsByKey = buildMotorStatsLookup(motorStats);
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
@@ -420,6 +462,7 @@ export const buildAllRacePredictions = (
       suiByCode.get(cards.raceCode),
       recentNationalByCode.get(cards.raceCode),
       recentLocalByCode.get(cards.raceCode),
+      motorStatsByKey,
       indexLookup.get(cards.raceCode) ?? new Map(),
       titleByCode.get(cards.raceCode),
       resultByCode.get(cards.raceCode),

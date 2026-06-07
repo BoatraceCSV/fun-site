@@ -23,6 +23,7 @@ export type CsvType =
   | "sui"
   | "recent_national"
   | "recent_local"
+  | "motor_stats"
   | "results"
   | "payouts";
 
@@ -34,6 +35,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   sui: "previews/sui",
   recent_national: "programs/recent_national",
   recent_local: "programs/recent_local",
+  motor_stats: "programs/motor_stats",
   results: "results/realtime",
   payouts: "results/payouts",
 };

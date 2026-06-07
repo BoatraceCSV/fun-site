@@ -1,5 +1,6 @@
 import type {
   IndexRow,
+  MotorStatsRow,
   PredictorSpec,
   RaceCardRow,
   RacePayoutRow,
@@ -12,6 +13,7 @@ import type {
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
+import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
 import { parseSui, parseTkz } from "./preview-schemas.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
@@ -43,6 +45,8 @@ export type FetchedCsvData = {
   readonly recentNational: readonly RecentFormRow[];
   /** 近況5節: 当地 (programs/recent_local)。未生成時は空配列。 */
   readonly recentLocal: readonly RecentFormRow[];
+  /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
+  readonly motorStats: readonly MotorStatsRow[];
   /** Active な全予想者の index CSV (失敗した予想者は空 rows で含まれる)。 */
   readonly indexesByPredictor: readonly PredictorIndexFetch[];
   /**
@@ -122,6 +126,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     sui,
     recentNational,
     recentLocal,
+    motorStats,
     indexesByPredictor,
     results,
     payouts,
@@ -133,6 +138,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("sui", date, parseSui),
     fetchAndParse("recent_national", date, parseRecentForm),
     fetchAndParse("recent_local", date, parseRecentForm),
+    fetchAndParse("motor_stats", date, parseMotorStats),
     Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
     fetchAndParse("results", date, parseResults),
     fetchAndParse("payouts", date, parsePayouts),
@@ -146,6 +152,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     sui,
     recentNational,
     recentLocal,
+    motorStats,
     indexesByPredictor,
     results,
     payouts,
@@ -154,6 +161,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
 
 export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
+export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";

@@ -113,11 +113,28 @@ const COL_SPAN = 8;
                 {racer.localTop3Rate.toFixed(1)}%
               </td>
               <td class="px-2 py-2 text-right font-mono text-xs hidden md:table-cell align-top">
-                #{racer.motorNumber}
-                <span class="text-gray-400"> / </span>
-                {racer.motorTop2Rate.toFixed(1)}
-                <span class="text-gray-400"> / </span>
-                {racer.motorTop3Rate.toFixed(1)}%
+                <div>
+                  #{racer.motorNumber}
+                  <span class="text-gray-400"> / </span>
+                  {racer.motorTop2Rate.toFixed(1)}
+                  <span class="text-gray-400"> / </span>
+                  {racer.motorTop3Rate.toFixed(1)}%
+                </div>
+                {racer.motorStats && (
+                  <div class="text-[10px] text-gray-500 mt-0.5">
+                    {(racer.motorStats.championCount > 0 ||
+                      racer.motorStats.finalAppearances > 0) && (
+                      <span title="優勝回数 / 優出回数">
+                        優{racer.motorStats.championCount}・優出{racer.motorStats.finalAppearances}
+                      </span>
+                    )}
+                    {racer.motorStats.avgLapSec != null && (
+                      <span class="ml-1" title="期内平均ラップ秒">
+                        Lap{racer.motorStats.avgLapSec.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </td>
               <td class="px-2 py-2 text-right font-mono text-xs hidden lg:table-cell align-top">
                 #{racer.boatBodyNumber}

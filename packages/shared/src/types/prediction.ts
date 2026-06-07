@@ -36,6 +36,28 @@ export type RaceRacer = {
   readonly boatTop3Rate: number;
   /** 節間成績 14 スロット（時系列順、未出走含む） */
   readonly sessionResults: readonly SessionResultSlot[];
+  /**
+   * モーター期成績（motor_stats 由来、場×モーター番号で突合）。
+   * 当日 motor_stats が未取得 / 当該場が未収録のレースでは undefined。
+   */
+  readonly motorStats?: MotorStats;
+};
+
+/**
+ * 出走表に表示するモーター期成績（motor_stats の高価値フィールドの射影）。
+ * `RaceRacer.motorStats` にぶら下がる。
+ */
+export type MotorStats = {
+  /** 3連対率 (%) */
+  readonly top3Rate: number;
+  /** 3連対率順位（1 位が最高） */
+  readonly top3Rank: number;
+  /** 優勝回数 */
+  readonly championCount: number;
+  /** 優出回数 */
+  readonly finalAppearances: number;
+  /** 平均ラップ秒。連対実績ゼロは null */
+  readonly avgLapSec: number | null;
 };
 
 /** スタート予想 - 1艇分のエントリ */
