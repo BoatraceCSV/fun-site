@@ -39,6 +39,7 @@ const buildFallbackStartPrediction = (cards: RaceCardRow): StartPrediction => {
     boatNumber: r.boatNumber,
     courseNumber: r.boatNumber,
     startTiming: r.nationalAvgST,
+    exhibitionStartTiming: null,
   }));
   return {
     fromExhibition: false,
@@ -54,10 +55,14 @@ const buildStartPrediction = (cards: RaceCardRow, stt: SttRow | undefined): Star
 
   const entries: StartPredictionEntry[] = stt.boats.map((boat) => {
     const racer = racerByBoat.get(boat.boatNumber);
+    // 展示ST: 0 (空欄=L 等で未計測) は実測なしとして null 化する
+    const exhibitionStartTiming =
+      boat.exhibitionStartTiming === 0 ? null : boat.exhibitionStartTiming;
     return {
       boatNumber: boat.boatNumber,
       courseNumber: boat.courseNumber || boat.boatNumber,
       startTiming: racer?.nationalAvgST ?? 0,
+      exhibitionStartTiming,
     };
   });
 
@@ -122,13 +127,24 @@ const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
     classGrade: r.classGrade,
     age: r.age,
     branch: r.branch,
+    hometown: r.hometown,
+    prizeExcluded: r.prizeExcluded,
+    flyingCount: r.flyingCount,
+    lateCount: r.lateCount,
     nationalAvgST: r.nationalAvgST,
     nationalWinRate: r.nationalWinRate,
     nationalTop2Rate: r.nationalTop2Rate,
+    nationalTop3Rate: r.nationalTop3Rate,
     localWinRate: r.localWinRate,
     localTop2Rate: r.localTop2Rate,
+    localTop3Rate: r.localTop3Rate,
     motorNumber: r.motorNumber,
     motorTop2Rate: r.motorTop2Rate,
+    motorTop3Rate: r.motorTop3Rate,
+    boatBodyNumber: r.boatBodyNumber,
+    boatTop2Rate: r.boatTop2Rate,
+    boatTop3Rate: r.boatTop3Rate,
+    sessionResults: r.sessionResults,
   }));
 
 /**

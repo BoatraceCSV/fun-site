@@ -1,0 +1,52 @@
+---
+import type { SessionResultSlot } from "@fun-site/shared";
+
+interface Props {
+  /** 1 選手の節間 14 スロット（時系列順、未出走含む） */
+  slots: readonly SessionResultSlot[];
+}
+
+const { slots } = Astro.props;
+
+/** 出走済みスロットのみ（未出走 = 着順空 かつ R番号 0 は除外） */
+const played = slots.filter((s) => s.rank !== "" || s.race > 0);
+
+/** 着順トークン → バッジ配色 */
+const rankClass = (rank: string): string => {
+  if (rank === "1") return "bg-blue-600 text-white";
+  if (rank === "2") return "bg-emerald-500 text-white";
+  if (rank === "3") return "bg-amber-400 text-amber-950";
+  if (rank === "4" || rank === "5" || rank === "6") return "bg-gray-200 text-gray-700";
+  // F / L / 欠 / 転 / 妨 / 落 / エ / 不 など
+  return "bg-red-100 text-red-700";
+};
+
+/** ホバー時のツールチップ（日次・走・R・進入・枠・ST） */
+const slotTitle = (s: SessionResultSlot): string => {
+  const parts = [`${s.day}日目${s.run}走`];
+  if (s.race > 0) parts.push(`${s.race}R`);
+  if (s.entryCourse > 0) parts.push(`進入${s.entryCourse}`);
+  if (s.lane > 0) parts.push(`枠${s.lane}`);
+  if (s.st != null) parts.push(`ST${s.st.toFixed(2)}`);
+  parts.push(`着順${s.rank || "—"}`);
+  return parts.join(" / ");
+};
+---
+
+{
+  played.length > 0 ? (
+    <div class="flex flex-wrap items-center gap-1">
+      <span class="text-[10px] text-gray-400 mr-1">今節</span>
+      {played.map((s) => (
+        <span
+          class={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none ${rankClass(s.rank)}`}
+          title={slotTitle(s)}
+        >
+          {s.rank || "·"}
+        </span>
+      ))}
+    </div>
+  ) : (
+    <span class="text-[10px] text-gray-400">今節成績なし</span>
+  )
+}

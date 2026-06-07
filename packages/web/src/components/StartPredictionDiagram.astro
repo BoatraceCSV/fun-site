@@ -50,6 +50,9 @@ const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.cou
 
 // ST 軸の目盛りラベル
 const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
+
+// いずれかの艇に展示ST実測があるか（注記の出し分け用）
+const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != null);
 ---
 
 <figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
@@ -168,16 +171,27 @@ const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
             {entry.boatNumber}
           </text>
 
-          {/* ST 値 */}
+          {/* ST 値（上: 予想/平均ST、下: 展示ST実測） */}
           <text
             x={TRACK_RIGHT + 8}
-            y={cy + 4}
+            y={entry.exhibitionStartTiming != null ? cy - 2 : cy + 4}
             font-size="13"
             fill="#0f172a"
             font-family="monospace"
           >
             {entry.startTiming.toFixed(2)}
           </text>
+          {entry.exhibitionStartTiming != null && (
+            <text
+              x={TRACK_RIGHT + 8}
+              y={cy + 12}
+              font-size="10"
+              fill="#2563eb"
+              font-family="monospace"
+            >
+              展{entry.exhibitionStartTiming.toFixed(2)}
+            </text>
+          )}
         </g>
       );
     })}
@@ -188,5 +202,11 @@ const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
       : "直前情報がまだ届いていないため、進入コースは枠番を仮表示しています。"}
     {" "}
     {stNote ?? "スタートタイミングは選手の全国平均STです。"}
+    {hasExhibitionSt && (
+      <>
+        {" "}
+        <span class="text-blue-600">展xx.xx はスタート展示の実測STです。</span>
+      </>
+    )}
   </figcaption>
 </figure>

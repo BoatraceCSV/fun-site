@@ -6,6 +6,7 @@ import type {
   PredictorSpec,
   RaceCardRacer,
   RaceCardRow,
+  SessionResultSlot,
   SttBoat,
   SttRow,
 } from "@fun-site/shared";
@@ -18,6 +19,33 @@ const toNumber = (v: string | undefined): number => {
   if (v === undefined || v === "") return 0;
   const num = Number(v);
   return Number.isNaN(num) ? 0 : num;
+};
+
+/** 空欄・非数を null にする (展示ST 等、0 と「未計測」を区別したい列向け) */
+const toNumberOrNull = (v: string | undefined): number | null => {
+  if (v === undefined || v.trim() === "") return null;
+  const num = Number(v);
+  return Number.isNaN(num) ? null : num;
+};
+
+/** 艇 N の節間 14 スロット (7日 × 2走) を時系列順に構造化 */
+const parseSessionResults = (f: (field: string) => string): SessionResultSlot[] => {
+  const slots: SessionResultSlot[] = [];
+  for (let day = 1; day <= 7; day++) {
+    for (let run = 1; run <= 2; run++) {
+      const p = `節D${day}走${run}_`;
+      slots.push({
+        day,
+        run,
+        race: toNumber(f(`${p}R番号`)),
+        entryCourse: toNumber(f(`${p}進入`)),
+        lane: toNumber(f(`${p}枠`)),
+        st: toNumberOrNull(f(`${p}ST`)),
+        rank: f(`${p}着順`).trim(),
+      });
+    }
+  }
+  return slots;
 };
 
 const parseCsv = (csvText: string): Record<string, string>[] =>
@@ -41,6 +69,9 @@ const parseRaceCardRacer = (row: Record<string, string>, slot: number): RaceCard
     branch: f("支部").trim(),
     hometown: f("出身地").trim(),
     classGrade: f("級別").trim(),
+    prizeExcluded: f("賞除").trim() !== "",
+    flyingCount: toNumber(f("F本数")),
+    lateCount: toNumber(f("L本数")),
     nationalAvgST: toNumber(f("全国平均ST")),
     nationalWinRate: toNumber(f("全国勝率")),
     nationalTop2Rate: toNumber(f("全国2連対率")),
@@ -54,6 +85,7 @@ const parseRaceCardRacer = (row: Record<string, string>, slot: number): RaceCard
     boatBodyNumber: toNumber(f("ボート番号")),
     boatTop2Rate: toNumber(f("ボート2連対率")),
     boatTop3Rate: toNumber(f("ボート3連対率")),
+    sessionResults: parseSessionResults(f),
   };
 };
 

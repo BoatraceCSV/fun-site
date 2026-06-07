@@ -1,3 +1,30 @@
+/**
+ * 節間成績の 1 スロット（race_cards CSV の `艇N_節D{day}走{run}_*`）。
+ *
+ * 今節の各走の進入・枠・ST・着順を構造化したもの。14 スロット
+ * (7 日 × 2 走) を時系列順（1日目1走→…→7日目2走）に並べる。
+ * 未出走スロットは `rank === ""` かつ `race === 0`。
+ */
+export type SessionResultSlot = {
+  /** 開催日次 (1-7) */
+  readonly day: number;
+  /** その日の何走目か (1-2) */
+  readonly run: number;
+  /** 出走したレース番号 (R番号)。未出走は 0 */
+  readonly race: number;
+  /** 実際の進入コース (1-6)。未出走/不明は 0 */
+  readonly entryCourse: number;
+  /** 枠番 (1-6)。未出走/不明は 0 */
+  readonly lane: number;
+  /** スタートタイミング。負値はフライング。未計測は null */
+  readonly st: number | null;
+  /**
+   * 着順または特殊トークン。半角 1〜6 / F / L / 欠 / 転 / 妨 / 落 / エ / 不。
+   * 未出走は空文字。
+   */
+  readonly rank: string;
+};
+
 /** race_cards CSV 由来の選手情報 */
 export type RaceCardRacer = {
   readonly boatNumber: number;
@@ -7,6 +34,12 @@ export type RaceCardRacer = {
   readonly branch: string;
   readonly hometown: string;
   readonly classGrade: string;
+  /** 賞金除外（補欠出走等）。CSV `賞除` 列が該当のとき true */
+  readonly prizeExcluded: boolean;
+  /** フライング累積本数 */
+  readonly flyingCount: number;
+  /** 出遅れ累積本数 */
+  readonly lateCount: number;
   readonly nationalAvgST: number;
   readonly nationalWinRate: number;
   readonly nationalTop2Rate: number;
@@ -20,6 +53,8 @@ export type RaceCardRacer = {
   readonly boatBodyNumber: number;
   readonly boatTop2Rate: number;
   readonly boatTop3Rate: number;
+  /** 節間成績 14 スロット（時系列順）。未出走スロットも含む */
+  readonly sessionResults: readonly SessionResultSlot[];
 };
 
 /** race_cards CSV 由来のレース行 */

@@ -1,7 +1,7 @@
 import type { ComponentKey } from "../predictors.js";
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
-import type { IndexState } from "./race-card.js";
+import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
 
@@ -13,13 +13,29 @@ export type RaceRacer = {
   readonly classGrade: string;
   readonly age: number;
   readonly branch: string;
+  readonly hometown: string;
+  /** 賞金除外（補欠出走等） */
+  readonly prizeExcluded: boolean;
+  /** フライング累積本数 */
+  readonly flyingCount: number;
+  /** 出遅れ累積本数 */
+  readonly lateCount: number;
   readonly nationalAvgST: number;
   readonly nationalWinRate: number;
   readonly nationalTop2Rate: number;
+  readonly nationalTop3Rate: number;
   readonly localWinRate: number;
   readonly localTop2Rate: number;
+  readonly localTop3Rate: number;
   readonly motorNumber: number;
   readonly motorTop2Rate: number;
+  readonly motorTop3Rate: number;
+  /** ボート（艇）番号 */
+  readonly boatBodyNumber: number;
+  readonly boatTop2Rate: number;
+  readonly boatTop3Rate: number;
+  /** 節間成績 14 スロット（時系列順、未出走含む） */
+  readonly sessionResults: readonly SessionResultSlot[];
 };
 
 /** スタート予想 - 1艇分のエントリ */
@@ -30,6 +46,11 @@ export type StartPredictionEntry = {
   readonly courseNumber: number;
   /** スタートタイミング = race_cards の全国平均ST */
   readonly startTiming: number;
+  /**
+   * スタート展示の実測ST (previews/stt 由来)。
+   * stt 未取得・展示未計測 (空欄→0) の場合は null。負値はフライング側。
+   */
+  readonly exhibitionStartTiming: number | null;
 };
 
 /** スタート予想全体 */

@@ -21,6 +21,7 @@ export type {
   IndexState,
   RaceCardRacer,
   RaceCardRow,
+  SessionResultSlot,
   SttBoat,
   SttRow,
 } from "./race-card.js";

@@ -42,11 +42,12 @@ HTML 骨組み、meta タグ（OGP / Twitter Card）、ヘッダー（トップ 
 
 | コンポーネント | 役割 |
 |---|---|
-| `StartPredictionDiagram.astro` | スタート予想図（進入コース順に並べた SVG）。PredictorCard 内に表示。任意 prop `stNote` で ST 説明文を上書き可（B君の一律 ST 注記用）。A君は全国平均ST、B君は全艇一律 0.15 を渡す |
+| `StartPredictionDiagram.astro` | スタート予想図（進入コース順に並べた SVG）。PredictorCard 内に表示。任意 prop `stNote` で ST 説明文を上書き可（B君の一律 ST 注記用）。A君は全国平均ST、B君は全艇一律 0.15 を渡す。各艇の ST 値ラベルは上段に予想/平均ST、下段に `entry.exhibitionStartTiming`（stt 由来のスタート展示実測ST、`展xx.xx` 青字）を併記。実測が無い艇（stt 未取得 / 展示未計測=0→null）は下段を出さない |
 | `OneMarkPredictionDiagram.astro` | 1 マーク予想（AI 寄与度ベース）の可視化。`aiEvaluation` は各予想者ごとの評価を採用するため A君・B君で図が異なる。PredictorCard 内に表示 |
 | `AiEvaluationChart.astro` | AI 総合評価（枠別 寄与pt を横棒で積み上げ。採用成分は `evaluation.componentKeys` で動的に決まる) |
 | `TrendLineChart.astro` | ゼロ JS のインライン SVG 折れ線。複数予想者を重ね描き。共通 x 軸 `labels` に対し各系列 `values` を同じ長さで揃え、`null` は点を描かない。値は割合を `%` 表記。任意 `refValue` で基準線 (回収率 100% = 1.0) を破線描画。`/stats/` の累積推移で利用 |
-| `RacerTable.astro` | 出走表（選手名・級別・勝率・モーター情報） |
+| `RacerTable.astro` | 出走表（選手名・級別・全国平均ST・全国/当地 勝率/2連/3連・モーター 2連/3連・ボート 2連/3連）。選手名横に F/L 本数・賞除バッジ、支部の隣に出身地（支部と異なる場合のみ）を表示。3連対率・平均STは `RaceRacer` の `nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate` / `boatTop3Rate` / `nationalAvgST`、F/L は `flyingCount` / `lateCount`、賞除は `prizeExcluded`。平均ST・当地列は sm 以上、モーター列は md 以上、ボート列は lg 以上で表示。いずれかの選手に節間成績があるとき、各選手行の下に `SessionResultsGrid` の展開行を colspan で差し込む |
+| `SessionResultsGrid.astro` | 節間成績（今節 14 スロット）の可視化。`RaceRacer.sessionResults`（未出走除外）の着順トークンを色付きバッジで時系列に並べる。1着=青 / 2着=緑 / 3着=黄 / 4-6着=灰 / F・L・欠等=赤。各バッジの `title` に 日次・走・R・進入・枠・ST を出す。`RacerTable` の展開行内で利用 |
 | `PredictorCard.astro` | 1 予想者ぶんの予想カード。表示名・買い目 (BettingPicks) ・回収率 (BetPayoutSummary)・AI 評価チャートを 1 セクションに集約。レース詳細ページは `prediction.predictions[]` をループしてこれを縦並びレンダリングする。任意 prop `startPrediction` / `oneMarkAiEvaluation` が両方渡されたとき（A君=slot1 / B君=slot2 のカード）スタート予想・1マーク予想の 2 図をカード内に 2 カラムグリッドで小さく横並び表示する。`startNote` prop は `StartPredictionDiagram` の `stNote` へ転送。A君は全国平均ST + A君 AI 評価、B君は全艇一律 0.15 + B君 AI 評価を渡す |
 | `BettingPicks.astro` | 当日買い目・直前買い目の三連単フォーメーションと的中可否 (PredictorCard 内部で利用)。`predictorName` prop が渡されると見出しに「{予想者名}当日買い目」「{予想者名}直前買い目」として予想者名をプレフィクスする。`predictorId` prop で買い目しきい値を予想者ごとに切替（`bettingToleranceFor`。既定 ±0.10、`v2_tenkai`=B君予想は着順別 1着0.02 / 2着0.10 / 3着0.20）。説明文のしきい値表記も実値に追従する |
 | `BetPayoutSummary.astro` | 「もし買ったら」セクション。レース 1 件分の 3連単 フォーメーション × 1点¥100 の払戻 / 回収率を当日・直前別に表示 (PredictorCard 内部で利用)。`predictorName` prop で見出しに予想者名プレフィクス対応。`actualSanrentan` が null（= 3連単 払戻未取得）のレースは「確定前」バッジを出し、払戻・回収率は `—` 表示にして外れと区別する |
