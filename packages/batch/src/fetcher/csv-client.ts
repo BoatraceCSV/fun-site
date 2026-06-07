@@ -15,7 +15,16 @@ const INITIAL_DELAY_MS = 1000;
 //
 // 予想者ごとの index CSV (`data/estimate/{predictor_id}/...`) は `fetchIndexCsvText`
 // が PredictorSpec を引数に取って動的にパスを組み立てる。
-export type CsvType = "title" | "race_cards" | "stt" | "tkz" | "sui" | "results" | "payouts";
+export type CsvType =
+  | "title"
+  | "race_cards"
+  | "stt"
+  | "tkz"
+  | "sui"
+  | "recent_national"
+  | "recent_local"
+  | "results"
+  | "payouts";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
@@ -23,6 +32,8 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   stt: "previews/stt",
   tkz: "previews/tkz",
   sui: "previews/sui",
+  recent_national: "programs/recent_national",
+  recent_local: "programs/recent_local",
   results: "results/realtime",
   payouts: "results/payouts",
 };

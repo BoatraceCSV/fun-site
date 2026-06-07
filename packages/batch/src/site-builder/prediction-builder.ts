@@ -14,7 +14,11 @@ import type {
   RacePreview,
   RacePreviewBoat,
   RaceRacer,
+  RaceRecentForm,
   RaceResultRow,
+  RacerRecentForm,
+  RecentFormRow,
+  RecentFormSessionView,
   StartPrediction,
   StartPredictionEntry,
   SttRow,
@@ -157,6 +161,56 @@ const buildRacePreview = (
   return { boats, weather };
 };
 
+/** 空セッション（場名も着順も無い）を除外して表示用 SessionView へ変換 */
+const toSessionViews = (
+  sessions: ReadonlyArray<{
+    startDate: string;
+    endDate: string;
+    stadiumName: string;
+    grade: string;
+    ranks: string;
+  }>,
+): RecentFormSessionView[] =>
+  sessions
+    .filter((s) => s.ranks !== "" || s.stadiumName !== "")
+    .map((s) => ({
+      startDate: s.startDate,
+      endDate: s.endDate,
+      stadiumName: s.stadiumName,
+      grade: s.grade,
+      ranks: s.ranks,
+    }));
+
+/**
+ * recent_national / recent_local から近況5節 RaceRecentForm を構築。
+ * どちらも未取得なら undefined を返す。各艇は艇番で突合する。
+ */
+const buildRecentForm = (
+  national: RecentFormRow | undefined,
+  local: RecentFormRow | undefined,
+): RaceRecentForm | undefined => {
+  if (!(national || local)) return undefined;
+
+  const nationalByBoat = new Map((national?.boats ?? []).map((b) => [b.boatNumber, b]));
+  const localByBoat = new Map((local?.boats ?? []).map((b) => [b.boatNumber, b]));
+  const boatNumbers = new Set<number>([...nationalByBoat.keys(), ...localByBoat.keys()]);
+
+  const boats: RacerRecentForm[] = [...boatNumbers]
+    .toSorted((a, b) => a - b)
+    .map((boatNumber) => {
+      const nb = nationalByBoat.get(boatNumber);
+      const lb = localByBoat.get(boatNumber);
+      return {
+        boatNumber,
+        racerName: nb?.racerName ?? lb?.racerName ?? "",
+        national: toSessionViews(nb?.sessions ?? []),
+        local: toSessionViews(lb?.sessions ?? []),
+      };
+    });
+
+  return { boats };
+};
+
 /** race_cards の racers を出走表用 RaceRacer に詰め直す */
 const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
   cards.racers.map((r) => ({
@@ -241,6 +295,8 @@ export const buildRacePrediction = (
   stt: SttRow | undefined,
   tkz: TkzRow | undefined,
   sui: SuiRow | undefined,
+  recentNational: RecentFormRow | undefined,
+  recentLocal: RecentFormRow | undefined,
   indexRowsByPredictor: ReadonlyMap<
     string,
     { readonly daily?: IndexRow; readonly realtime?: IndexRow }
@@ -279,6 +335,7 @@ export const buildRacePrediction = (
   const betPayout: RaceBetPayoutSummary | undefined = primary?.betPayout;
 
   const preview = buildRacePreview(tkz, sui);
+  const recentForm = buildRecentForm(recentNational, recentLocal);
 
   return {
     raceCode: cards.raceCode,
@@ -294,6 +351,7 @@ export const buildRacePrediction = (
     racers,
     startPrediction: buildStartPrediction(cards, stt),
     ...(preview !== undefined ? { preview } : {}),
+    ...(recentForm !== undefined ? { recentForm } : {}),
     aiEvaluation,
     aiEvaluationDaily,
     aiEvaluationRealtime,
@@ -319,6 +377,8 @@ export const buildAllRacePredictions = (
   stt: readonly SttRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
+  recentNational: readonly RecentFormRow[],
+  recentLocal: readonly RecentFormRow[],
   indexesByPredictor: readonly PredictorIndexFetch[],
   titles: readonly TitleRow[],
   results: readonly RaceResultRow[],
@@ -328,6 +388,8 @@ export const buildAllRacePredictions = (
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const tkzByCode = new Map(tkz.map((t) => [t.raceCode, t]));
   const suiByCode = new Map(sui.map((s) => [s.raceCode, s]));
+  const recentNationalByCode = new Map(recentNational.map((r) => [r.raceCode, r]));
+  const recentLocalByCode = new Map(recentLocal.map((r) => [r.raceCode, r]));
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
@@ -356,6 +418,8 @@ export const buildAllRacePredictions = (
       sttByCode.get(cards.raceCode),
       tkzByCode.get(cards.raceCode),
       suiByCode.get(cards.raceCode),
+      recentNationalByCode.get(cards.raceCode),
+      recentLocalByCode.get(cards.raceCode),
       indexLookup.get(cards.raceCode) ?? new Map(),
       titleByCode.get(cards.raceCode),
       resultByCode.get(cards.raceCode),

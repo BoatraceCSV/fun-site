@@ -153,6 +153,38 @@ export type RacePreview = {
   readonly weather: RaceWeather | null;
 };
 
+/** 近況5節 - 1 節分の表示用データ（recent_national / recent_local 由来） */
+export type RecentFormSessionView = {
+  /** 節開始日 (YYYY-MM-DD) */
+  readonly startDate: string;
+  /** 節終了日 (YYYY-MM-DD) */
+  readonly endDate: string;
+  /** 場名 */
+  readonly stadiumName: string;
+  /** グレード（生文字列） */
+  readonly grade: string;
+  /** 着順時系列の生文字列。UI 側で `tokenizeRankString` により可視化する */
+  readonly ranks: string;
+};
+
+/** 近況5節 - 1 艇分（全国・当地） */
+export type RacerRecentForm = {
+  readonly boatNumber: number;
+  readonly racerName: string;
+  /** 全国近況5節（前1節→前5節）。空セッションは除外済み */
+  readonly national: readonly RecentFormSessionView[];
+  /** 当地近況5節（前1節→前5節）。空セッションは除外済み */
+  readonly local: readonly RecentFormSessionView[];
+};
+
+/**
+ * 近況5節（全国 + 当地）の統合。
+ * recent_national / recent_local のどちらも未取得のレースでは undefined。
+ */
+export type RaceRecentForm = {
+  readonly boats: readonly RacerRecentForm[];
+};
+
 /** レース予想（新スキーマ） */
 export type RacePrediction = {
   readonly raceCode: string;
@@ -182,6 +214,11 @@ export type RacePrediction = {
    * 古い JSON では未設定のため、UI 側は undefined フォールバックすること。
    */
   readonly preview?: RacePreview;
+  /**
+   * 近況5節（全国 + 当地）。programs/recent_national / recent_local のどちらも
+   * 未取得のレースでは undefined。古い JSON では未設定のため undefined フォールバック。
+   */
+  readonly recentForm?: RaceRecentForm;
   /**
    * AI 総合評価（後方互換用）。realtime が利用可能ならそちらを、無ければ daily を採用する。
    * 1マーク予想や AI 評価チャートの既存表示はこの値を参照する。

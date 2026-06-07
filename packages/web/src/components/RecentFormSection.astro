@@ -1,0 +1,108 @@
+---
+import type { RaceRecentForm, RecentFormSessionView } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber, tokenizeRankString } from "@fun-site/shared";
+
+interface Props {
+  recentForm: RaceRecentForm;
+}
+
+const { recentForm } = Astro.props;
+const boats = [...recentForm.boats].sort((a, b) => a.boatNumber - b.boatNumber);
+
+/** 着順マークの配色（SessionResultsGrid と統一） */
+const rankClass = (rank: number): string => {
+  if (rank === 1) return "bg-blue-600 text-white";
+  if (rank === 2) return "bg-emerald-500 text-white";
+  if (rank === 3) return "bg-amber-400 text-amber-950";
+  return "bg-gray-200 text-gray-700";
+};
+
+/** 特殊トークン（F/L/欠 等）の配色 */
+const tokenClass = (token: string): string => {
+  if (token === "F") return "bg-red-100 text-red-700";
+  if (token === "L") return "bg-amber-100 text-amber-800";
+  return "bg-gray-300 text-gray-700";
+};
+
+/** 期間表示 "5/28〜6/2"。日付が無ければ空 */
+const formatPeriod = (s: RecentFormSessionView): string => {
+  const md = (d: string): string => {
+    const m = d.match(/^\d{4}-(\d{2})-(\d{2})$/);
+    return m ? `${Number(m[1])}/${Number(m[2])}` : "";
+  };
+  const a = md(s.startDate);
+  const b = md(s.endDate);
+  if (a && b) return `${a}〜${b}`;
+  return a || b;
+};
+---
+
+<div class="space-y-3">
+  {boats.map((boat) => {
+    const color = isValidBoatNumber(boat.boatNumber) ? BOAT_COLORS[boat.boatNumber] : undefined;
+    // 全国・当地のうち中身のある側だけ表示。両方空ならスキップ。
+    // sessions は前1節=最新の順。左→右を 古い→新しい にするため反転して表示する。
+    const groups = (
+      [
+        ["全国", [...boat.national].reverse()],
+        ["当地", [...boat.local].reverse()],
+      ] as const
+    ).filter(([, sessions]) => sessions.length > 0);
+    if (groups.length === 0) return null;
+    return (
+      <div class="border border-gray-100 rounded-md p-3">
+        <div class="flex items-center gap-2 mb-2">
+          <span
+            class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+            style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${boat.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+          >
+            {boat.boatNumber}
+          </span>
+          <span class="font-medium text-sm">{boat.racerName}</span>
+        </div>
+
+        <div class="space-y-2">
+          {groups.map(([label, sessions]) => (
+            <div class="flex items-start gap-2">
+              <span class="text-[11px] text-gray-400 w-8 shrink-0 pt-1">{label}</span>
+              <div class="flex flex-wrap gap-x-3 gap-y-2">
+                {sessions.map((s) => (
+                  <div class="flex flex-col gap-0.5">
+                    <div class="flex items-center gap-1 text-[10px] text-gray-500">
+                      {s.grade && <span class="font-medium">{s.grade}</span>}
+                      {s.stadiumName && <span>{s.stadiumName}</span>}
+                      {formatPeriod(s) && <span class="text-gray-400">{formatPeriod(s)}</span>}
+                    </div>
+                    <div class="flex flex-wrap items-center gap-0.5">
+                      {tokenizeRankString(s.ranks).map((mark) =>
+                        mark.kind === "separator" ? (
+                          <span class="inline-block w-1.5" />
+                        ) : mark.kind === "rank" ? (
+                          <span
+                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none ${rankClass(mark.rank)} ${mark.yusho ? "ring-1 ring-offset-1 ring-rose-400" : ""}`}
+                            title={mark.yusho ? `優勝戦 ${mark.rank}着` : `${mark.rank}着`}
+                          >
+                            {mark.rank}
+                          </span>
+                        ) : (
+                          <span
+                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none ${tokenClass(mark.token)}`}
+                          >
+                            {mark.token}
+                          </span>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  })}
+  <p class="text-[11px] text-gray-400">
+    直近5節の着順（左が古く右が新しい）。空きは日区切り、赤枠は優勝戦の着順です。
+  </p>
+</div>

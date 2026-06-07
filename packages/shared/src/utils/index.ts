@@ -22,6 +22,7 @@ export {
   type BettingTolerance,
 } from "./one-mark-distance.js";
 export { checkBettingHit, type BetHitStatus } from "./bet-hit.js";
+export { tokenizeRankString, type RankMark } from "./rank-marks.js";
 export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,

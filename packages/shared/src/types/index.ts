@@ -8,11 +8,19 @@ export type {
   RacePreview,
   RacePreviewBoat,
   RaceRacer,
+  RaceRecentForm,
+  RacerRecentForm,
   RaceWeather,
+  RecentFormSessionView,
   StartPrediction,
   StartPredictionEntry,
 } from "./prediction.js";
 export type { SuiRow, TkzBoat, TkzRow } from "./preview.js";
+export type {
+  RecentFormBoat,
+  RecentFormRow,
+  RecentFormSession,
+} from "./recent-form.js";
 export type { BetHitStatus } from "../utils/bet-hit.js";
 export type {
   BetPayoutResult,

@@ -72,7 +72,7 @@ export const runPipeline = async (): Promise<void> => {
     .map((p) => `${p.predictor.id}=${p.rows.length}`)
     .join(",");
   console.info(
-    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.tkz.length} tkz, ${csvData.sui.length} sui, index[${indexSummary}], ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
+    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.tkz.length} tkz, ${csvData.sui.length} sui, ${csvData.recentNational.length} recent_national, ${csvData.recentLocal.length} recent_local, index[${indexSummary}], ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
   );
 
   if (csvData.raceCards.length === 0) {
@@ -88,6 +88,8 @@ export const runPipeline = async (): Promise<void> => {
     csvData.stt,
     csvData.tkz,
     csvData.sui,
+    csvData.recentNational,
+    csvData.recentLocal,
     csvData.indexesByPredictor,
     csvData.titles,
     csvData.results,

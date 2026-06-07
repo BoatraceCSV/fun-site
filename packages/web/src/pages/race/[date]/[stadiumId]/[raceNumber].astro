@@ -10,6 +10,7 @@ import PredictorCard from "../../../../components/PredictorCard.astro";
 import RacePreviewSection from "../../../../components/RacePreviewSection.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
+import RecentFormSection from "../../../../components/RecentFormSection.astro";
 import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../../../../lib/data";
@@ -358,6 +359,14 @@ const B_KUN_START_NOTE = `スタートタイミングは B君予想として全�
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
       <h2 class="font-bold text-lg mb-3">出走表</h2>
       <RacerTable racers={prediction.racers} />
+    </section>
+  )}
+
+  {/* 近況5節（全国・当地）。programs/recent_national / recent_local が未取得のレースでは非表示。 */}
+  {prediction.recentForm && prediction.recentForm.boats.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">近況5節</h2>
+      <RecentFormSection recentForm={prediction.recentForm} />
     </section>
   )}
 
