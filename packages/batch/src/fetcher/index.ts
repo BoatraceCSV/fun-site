@@ -1,6 +1,7 @@
 import type {
   IndexRow,
   MotorStatsRow,
+  OriginalExhibitionRow,
   PredictorSpec,
   RaceCardRow,
   RacePayoutRow,
@@ -15,7 +16,7 @@ import { activePredictors } from "@fun-site/shared";
 import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
-import { parseSui, parseTkz } from "./preview-schemas.js";
+import { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
@@ -41,6 +42,8 @@ export type FetchedCsvData = {
   readonly tkz: readonly TkzRow[];
   /** 直前情報: 水面気象 (previews/sui)。未生成時は空配列。 */
   readonly sui: readonly SuiRow[];
+  /** 直前情報: 場別オリジナル展示 (previews/original_exhibition)。未生成時は空配列。 */
+  readonly originalExhibition: readonly OriginalExhibitionRow[];
   /** 近況5節: 全国 (programs/recent_national)。未生成時は空配列。 */
   readonly recentNational: readonly RecentFormRow[];
   /** 近況5節: 当地 (programs/recent_local)。未生成時は空配列。 */
@@ -124,6 +127,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     stt,
     tkz,
     sui,
+    originalExhibition,
     recentNational,
     recentLocal,
     motorStats,
@@ -136,6 +140,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("stt", date, parseStt),
     fetchAndParse("tkz", date, parseTkz),
     fetchAndParse("sui", date, parseSui),
+    fetchAndParse("original_exhibition", date, parseOriginalExhibition),
     fetchAndParse("recent_national", date, parseRecentForm),
     fetchAndParse("recent_local", date, parseRecentForm),
     fetchAndParse("motor_stats", date, parseMotorStats),
@@ -150,6 +155,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     stt,
     tkz,
     sui,
+    originalExhibition,
     recentNational,
     recentLocal,
     motorStats,
@@ -162,7 +168,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
 export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
-export { parseSui, parseTkz } from "./preview-schemas.js";
+export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";
 export { parseResults } from "./result-schemas.js";

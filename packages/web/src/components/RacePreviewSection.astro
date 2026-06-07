@@ -35,6 +35,20 @@ const fastestExhibition = exhibitionTimes.length > 0 ? Math.min(...exhibitionTim
 const hasExhibition = boats.some(
   (b) => b.exhibitionTime != null || b.weightKg > 0 || b.tilt !== 0,
 );
+
+// オリジナル展示（場別計測項目）。各列ごとに最速（最小値）を強調する。
+const orig = preview.originalExhibition;
+const origBoats = orig ? [...orig.boats].sort((a, b) => a.boatNumber - b.boatNumber) : [];
+const origColumnMins: (number | null)[] = orig
+  ? orig.labels.map((_, col) => {
+      const vals = origBoats
+        .map((b) => b.values[col])
+        .filter((v): v is number => v != null && v > 0);
+      return vals.length > 0 ? Math.min(...vals) : null;
+    })
+  : [];
+const hasOriginalExhibition =
+  orig != null && orig.labels.length > 0 && origBoats.some((b) => b.values.some((v) => v != null));
 ---
 
 <div>
@@ -125,6 +139,57 @@ const hasExhibition = boats.some(
       </table>
       <p class="text-[11px] text-gray-400 mt-2">
         展示タイムは数値が小さいほど速く、最速艇を青字で表示しています。締切5分前のスナップショットです。
+      </p>
+    </div>
+  )}
+
+  {hasOriginalExhibition && orig && (
+    <div class="overflow-x-auto mt-4">
+      <h3 class="text-sm font-semibold text-gray-700 mb-2">オリジナル展示</h3>
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-gray-600">
+            <th scope="col" class="px-2 py-2 text-left">艇</th>
+            {orig.labels.map((label) => (
+              <th scope="col" class="px-2 py-2 text-right">{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {origBoats.map((b) => {
+            const color = isValidBoatNumber(b.boatNumber) ? BOAT_COLORS[b.boatNumber] : undefined;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="px-2 py-2">
+                  <span
+                    class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${b.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {b.boatNumber}
+                  </span>
+                </td>
+                {orig.labels.map((_, col) => {
+                  const v = b.values[col];
+                  const isFastest = v != null && v === origColumnMins[col];
+                  return (
+                    <td class="px-2 py-2 text-right font-mono text-xs">
+                      {v != null ? (
+                        <span class={isFastest ? "font-bold text-blue-600" : ""}>
+                          {v.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span class="text-gray-400">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="text-[11px] text-gray-400 mt-2">
+        計測項目は場により異なります。各項目とも数値が小さいほど速く、最速艇を青字で表示しています。
       </p>
     </div>
   )}

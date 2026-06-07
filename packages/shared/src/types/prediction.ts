@@ -163,16 +163,34 @@ export type RaceWeather = {
   readonly waterTemperature: number;
 };
 
+/** 直前情報 - オリジナル展示の 1 艇分（original_exhibition 由来） */
+export type OriginalExhibitionView = {
+  readonly boatNumber: number;
+  /** 計測項目順の値（`labels` に対応、未計測は null） */
+  readonly values: readonly (number | null)[];
+};
+
+/** 直前情報 - オリジナル展示（場別計測項目） */
+export type OriginalExhibition = {
+  /** 計測項目ラベル（例 ["一周","まわり足","直線"]）。場により異なる */
+  readonly labels: readonly string[];
+  /** 艇番昇順の計測値 */
+  readonly boats: readonly OriginalExhibitionView[];
+};
+
 /**
  * 直前情報（締切5分前スナップショット）の統合。
- * tkz（体重・展示タイム・チルト）と sui（水面気象）を結合したもの。
- * どちらの CSV も未取得のレースでは `preview` 自体が undefined になる。
+ * tkz（体重・展示タイム・チルト）・sui（水面気象）・original_exhibition
+ * （場別オリジナル展示）を結合したもの。
+ * いずれの CSV も未取得のレースでは `preview` 自体が undefined になる。
  */
 export type RacePreview = {
   /** 展示データ（艇番昇順）。tkz 未取得時は空配列 */
   readonly boats: readonly RacePreviewBoat[];
   /** 水面気象。sui 未取得時は null */
   readonly weather: RaceWeather | null;
+  /** オリジナル展示。original_exhibition 未取得時は null */
+  readonly originalExhibition: OriginalExhibition | null;
 };
 
 /** 近況5節 - 1 節分の表示用データ（recent_national / recent_local 由来） */

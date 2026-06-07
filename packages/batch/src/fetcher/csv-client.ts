@@ -21,6 +21,7 @@ export type CsvType =
   | "stt"
   | "tkz"
   | "sui"
+  | "original_exhibition"
   | "recent_national"
   | "recent_local"
   | "motor_stats"
@@ -33,6 +34,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   stt: "previews/stt",
   tkz: "previews/tkz",
   sui: "previews/sui",
+  original_exhibition: "previews/original_exhibition",
   recent_national: "programs/recent_national",
   recent_local: "programs/recent_local",
   motor_stats: "programs/motor_stats",

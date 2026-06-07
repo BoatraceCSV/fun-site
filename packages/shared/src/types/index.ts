@@ -4,6 +4,8 @@ export type {
   AiEvaluationContribution,
   AiEvaluationEntry,
   MotorStats,
+  OriginalExhibition,
+  OriginalExhibitionView,
   PredictorPrediction,
   RacePrediction,
   RacePreview,
@@ -17,7 +19,13 @@ export type {
   StartPredictionEntry,
 } from "./prediction.js";
 export type { MotorStatsRow } from "./motor-stats.js";
-export type { SuiRow, TkzBoat, TkzRow } from "./preview.js";
+export type {
+  OriginalExhibitionBoat,
+  OriginalExhibitionRow,
+  SuiRow,
+  TkzBoat,
+  TkzRow,
+} from "./preview.js";
 export type {
   RecentFormBoat,
   RecentFormRow,

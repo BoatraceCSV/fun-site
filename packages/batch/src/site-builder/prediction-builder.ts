@@ -6,6 +6,8 @@ import type {
   IndexRow,
   MotorStats,
   MotorStatsRow,
+  OriginalExhibition,
+  OriginalExhibitionRow,
   PredictorPrediction,
   PredictorSpec,
   RaceBetPayoutSummary,
@@ -135,8 +137,9 @@ const buildEmptyAiEvaluation = (): AiEvaluation => {
 const buildRacePreview = (
   tkz: TkzRow | undefined,
   sui: SuiRow | undefined,
+  origEx: OriginalExhibitionRow | undefined,
 ): RacePreview | undefined => {
-  if (!(tkz || sui)) return undefined;
+  if (!(tkz || sui || origEx)) return undefined;
 
   const boats: RacePreviewBoat[] = (tkz?.boats ?? [])
     .map((b) => ({
@@ -160,7 +163,18 @@ const buildRacePreview = (
       }
     : null;
 
-  return { boats, weather };
+  // オリジナル展示: 計測項目が 1 つ以上ある場合のみ採用
+  const originalExhibition: OriginalExhibition | null =
+    origEx && origEx.itemLabels.length > 0
+      ? {
+          labels: origEx.itemLabels,
+          boats: origEx.boats
+            .map((b) => ({ boatNumber: b.boatNumber, values: b.values }))
+            .toSorted((a, b) => a.boatNumber - b.boatNumber),
+        }
+      : null;
+
+  return { boats, weather, originalExhibition };
 };
 
 /** 空セッション（場名も着順も無い）を除外して表示用 SessionView へ変換 */
@@ -334,6 +348,7 @@ export const buildRacePrediction = (
   stt: SttRow | undefined,
   tkz: TkzRow | undefined,
   sui: SuiRow | undefined,
+  origEx: OriginalExhibitionRow | undefined,
   recentNational: RecentFormRow | undefined,
   recentLocal: RecentFormRow | undefined,
   motorStatsByKey: ReadonlyMap<string, MotorStats>,
@@ -374,7 +389,7 @@ export const buildRacePrediction = (
   // の ZERO_SUMMARY を再現する形だが、primary は必ず存在する (active 予想者 > 0)。
   const betPayout: RaceBetPayoutSummary | undefined = primary?.betPayout;
 
-  const preview = buildRacePreview(tkz, sui);
+  const preview = buildRacePreview(tkz, sui, origEx);
   const recentForm = buildRecentForm(recentNational, recentLocal);
 
   return {
@@ -417,6 +432,7 @@ export const buildAllRacePredictions = (
   stt: readonly SttRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
+  originalExhibition: readonly OriginalExhibitionRow[],
   recentNational: readonly RecentFormRow[],
   recentLocal: readonly RecentFormRow[],
   motorStats: readonly MotorStatsRow[],
@@ -429,6 +445,7 @@ export const buildAllRacePredictions = (
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const tkzByCode = new Map(tkz.map((t) => [t.raceCode, t]));
   const suiByCode = new Map(sui.map((s) => [s.raceCode, s]));
+  const origExByCode = new Map(originalExhibition.map((o) => [o.raceCode, o]));
   const recentNationalByCode = new Map(recentNational.map((r) => [r.raceCode, r]));
   const recentLocalByCode = new Map(recentLocal.map((r) => [r.raceCode, r]));
   const motorStatsByKey = buildMotorStatsLookup(motorStats);
@@ -460,6 +477,7 @@ export const buildAllRacePredictions = (
       sttByCode.get(cards.raceCode),
       tkzByCode.get(cards.raceCode),
       suiByCode.get(cards.raceCode),
+      origExByCode.get(cards.raceCode),
       recentNationalByCode.get(cards.raceCode),
       recentLocalByCode.get(cards.raceCode),
       motorStatsByKey,
