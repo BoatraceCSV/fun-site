@@ -1,4 +1,5 @@
 import { toJSTDateString } from "@fun-site/shared";
+import { buildPredictorBreakdown } from "./aggregator/predictor-breakdown.js";
 import { buildPredictorStats, datesForActivePredictors } from "./aggregator/predictor-stats.js";
 import {
   fetchCurrentCsvGenerations,
@@ -104,6 +105,21 @@ export const runPipeline = async (): Promise<void> => {
   } catch (error) {
     console.warn(
       `Failed to build predictor stats (non-fatal): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  // Step 2.6: 統計ページ用の分析軸別集計 (直前のみ・7 軸)。書き出し先は
+  // packages/web/src/data/predictors/breakdown.json で、Astro が /stats ページを
+  // 描画する際に読み込む。失敗は非致命 (集計データ無しで /stats が空状態になるだけ)。
+  try {
+    const dates = datesForActivePredictors(raceDate);
+    console.info(`Step 2.6: Aggregating predictor breakdown over ${dates.length} day(s)...`);
+    await buildPredictorBreakdown(dates);
+  } catch (error) {
+    console.warn(
+      `Failed to build predictor breakdown (non-fatal): ${
         error instanceof Error ? error.message : String(error)
       }`,
     );

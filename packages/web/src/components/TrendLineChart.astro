@@ -1,0 +1,130 @@
+---
+/**
+ * ゼロ JS のインライン SVG 折れ線グラフ。複数系列 (予想者) を重ね描きする。
+ *
+ * `labels` (x 軸ラベルの共通配列) に対し、各系列は `values` を同じ長さで揃える。
+ * 値が `null` の位置は点を描かない (その予想者がまだ開始していない日など)。
+ * 値は割合 (0〜∞) を想定し、`%` 表記で描画する (回収率 1.0 = 100%)。
+ */
+interface Series {
+  readonly name: string;
+  readonly color: string;
+  /** `labels` と同じ長さ。データ無しは null。 */
+  readonly values: readonly (number | null)[];
+}
+
+interface Props {
+  labels: readonly string[];
+  series: readonly Series[];
+  /** 基準線 (例: 回収率 100% = 1.0)。省略時は描かない。 */
+  refValue?: number;
+  /** グラフタイトル (任意)。 */
+  caption?: string;
+}
+
+const { labels, series, refValue, caption } = Astro.props;
+
+const W = 720;
+const H = 280;
+const PAD = { top: 16, right: 16, bottom: 36, left: 48 };
+const plotW = W - PAD.left - PAD.right;
+const plotH = H - PAD.top - PAD.bottom;
+
+const allValues = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
+const hasData = allValues.length > 0;
+
+// y 範囲: データ + 基準線を含め、上下に 8% パディング。
+const candidates = refValue !== undefined ? [...allValues, refValue] : allValues;
+let yMin = hasData ? Math.min(...candidates) : 0;
+let yMax = hasData ? Math.max(...candidates) : 1;
+if (yMin === yMax) {
+  yMin -= 0.1;
+  yMax += 0.1;
+}
+const yPad = (yMax - yMin) * 0.08;
+yMin -= yPad;
+yMax += yPad;
+
+const n = labels.length;
+const xAt = (i: number): number => (n <= 1 ? PAD.left + plotW / 2 : PAD.left + (i / (n - 1)) * plotW);
+const yAt = (v: number): number => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * plotH;
+
+const fmtPct = (v: number): string => `${Math.round(v * 100)}%`;
+
+// y 軸目盛 (4 本)。
+const yTicks = Array.from({ length: 4 }, (_, i) => yMin + ((yMax - yMin) * i) / 3);
+
+// x 軸ラベルは最大 6 個に間引き。日付 "YYYY-MM-DD" → "MM-DD"。
+const maxXTicks = 6;
+const xStep = n <= maxXTicks ? 1 : Math.ceil(n / maxXTicks);
+const xTickIdx = labels.map((_, i) => i).filter((i) => i % xStep === 0 || i === n - 1);
+const shortDate = (d: string): string => (d.length >= 10 ? d.slice(5) : d);
+
+// 各系列のポリライン点列 (null を除外)。
+const polylineOf = (s: Series): string =>
+  s.values
+    .map((v, i) => (v === null ? null : `${xAt(i)},${yAt(v)}`))
+    .filter((p): p is string => p !== null)
+    .join(" ");
+---
+
+<figure class="my-2">
+  {caption && <figcaption class="text-sm font-bold text-gray-700 mb-1">{caption}</figcaption>}
+
+  {!hasData ? (
+    <p class="text-xs text-gray-400 py-6 text-center">データなし。</p>
+  ) : (
+    <>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700 mb-1">
+        {series.map((s) => (
+          <span class="inline-flex items-center gap-1.5">
+            <span class="inline-block w-3 h-0.5" style={`background-color: ${s.color};`} aria-hidden="true" />
+            {s.name}
+          </span>
+        ))}
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} class="w-full h-auto" role="img" aria-label={caption ?? "推移グラフ"}>
+        {/* y 軸グリッド + 目盛 */}
+        {yTicks.map((t) => (
+          <g>
+            <line x1={PAD.left} y1={yAt(t)} x2={W - PAD.right} y2={yAt(t)} stroke="#e5e7eb" stroke-width="1" />
+            <text x={PAD.left - 6} y={yAt(t) + 3} text-anchor="end" font-size="10" fill="#6b7280">
+              {fmtPct(t)}
+            </text>
+          </g>
+        ))}
+
+        {/* 基準線 (回収率 100% 等) */}
+        {refValue !== undefined && refValue >= yMin && refValue <= yMax && (
+          <line
+            x1={PAD.left}
+            y1={yAt(refValue)}
+            x2={W - PAD.right}
+            y2={yAt(refValue)}
+            stroke="#9ca3af"
+            stroke-width="1"
+            stroke-dasharray="4 3"
+          />
+        )}
+
+        {/* x 軸目盛ラベル */}
+        {xTickIdx.map((i) => (
+          <text x={xAt(i)} y={H - PAD.bottom + 16} text-anchor="middle" font-size="10" fill="#6b7280">
+            {shortDate(labels[i]!)}
+          </text>
+        ))}
+
+        {/* 系列ごとの折れ線 + 点 */}
+        {series.map((s) => (
+          <g>
+            <polyline points={polylineOf(s)} fill="none" stroke={s.color} stroke-width="2" stroke-linejoin="round" />
+            {s.values.map((v, i) =>
+              v === null ? null : <circle cx={xAt(i)} cy={yAt(v)} r="2.5" fill={s.color} />,
+            )}
+          </g>
+        ))}
+      </svg>
+    </>
+  )}
+</figure>

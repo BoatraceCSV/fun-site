@@ -1,0 +1,196 @@
+---
+import type { Bucket, PredictorBreakdown, PredictorBreakdownReport } from "@fun-site/shared";
+import TrendLineChart from "../../components/TrendLineChart.astro";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+/**
+ * 統計ページ。
+ *
+ * `packages/web/src/data/predictors/breakdown.json` を読み込み、各 active 予想者の
+ * **直前 (realtime)** 回収率・的中率を、時系列推移と 6 つの分析軸 (場別 / グレード別 /
+ * 買い目点数別 / 本命枠番別 / 配当帯別 / 風速別) で表示する。breakdown.json が無い
+ * (初回ビルドや集計失敗) 場合は注意書きのみを表示する。
+ */
+
+// breakdown.json は集計バッチが生成する。未生成でも import エラーで落ちないよう
+// 静的 import ではなく Vite の glob import を使う。
+const modules = import.meta.glob<{ default: PredictorBreakdownReport }>(
+  "../../data/predictors/breakdown.json",
+  { eager: true },
+);
+const report: PredictorBreakdownReport | undefined = Object.values(modules)[0]?.default;
+const predictors = report?.predictors ?? [];
+
+// 予想者ごとの線色 (slot 順)。
+const SERIES_COLORS = ["#2563eb", "#db2777", "#16a34a", "#d97706"];
+const colorFor = (i: number): string => SERIES_COLORS[i % SERIES_COLORS.length]!;
+
+// 時系列: 全予想者の日付の和集合 (昇順) を共通 x 軸にする。
+const allDates = Array.from(
+  new Set(predictors.flatMap((p) => p.timeseries.map((t) => t.date))),
+).toSorted((a, b) => a.localeCompare(b));
+
+const cumulativeByDate = (
+  p: PredictorBreakdown,
+  pick: "recoveryRate" | "hitRate",
+): Map<string, number | null> =>
+  new Map(p.timeseries.map((t) => [t.date, t.cumulative[pick]] as const));
+
+const seriesFor = (pick: "recoveryRate" | "hitRate") =>
+  predictors.map((p, i) => {
+    const byDate = cumulativeByDate(p, pick);
+    return {
+      name: p.predictorName,
+      color: colorFor(i),
+      values: allDates.map((d) => (byDate.has(d) ? (byDate.get(d) ?? null) : null)),
+    };
+  });
+
+const recoverySeries = seriesFor("recoveryRate");
+const hitSeries = seriesFor("hitRate");
+
+// 分析軸テーブルの定義。
+const AXES: readonly { title: string; get: (p: PredictorBreakdown) => readonly Bucket[] }[] = [
+  { title: "場別", get: (p) => p.byStadium },
+  { title: "グレード別", get: (p) => p.byGrade },
+  { title: "買い目点数別", get: (p) => p.byBetCount },
+  { title: "本命枠番別", get: (p) => p.byHonmeiWaku },
+  { title: "配当帯別", get: (p) => p.byPayoutBand },
+  { title: "風速別", get: (p) => p.byWindSpeed },
+];
+
+// n がこの値未満のセルは「参考値」として控えめに表示する。
+const LOW_N = 20;
+
+const fmtPct = (v: number | null): string => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
+const fmtHit = (v: number | null): string => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
+---
+
+<BaseLayout title="統計 | ボートレース予想">
+  <div class="max-w-5xl mx-auto px-4 py-6">
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">統計</h1>
+    <p class="text-sm text-gray-600 mb-2">
+      各予想者の <strong>直前買い目</strong> の回収率・的中率を、時系列推移と各分析軸で表示します。
+      予測ロジックがどの条件で効き、どの条件で外すかの傾向を掴むためのページです。
+    </p>
+    <p class="text-xs text-gray-500 mb-6">
+      回収率 = 払戻 ÷ 購入額 (1 点 ¥100)。すべて直前 (直前情報反映後) の買い目のみを対象。
+      回収率は稀な高配当 1 本に左右されるため、<strong>n (レース数) と的中率を併せて</strong>判断してください。
+      <span class="text-gray-400">n &lt; {LOW_N} のセルは参考値です。</span>
+    </p>
+
+    {!report && (
+      <div class="mb-6 rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+        集計データ (<code class="font-mono text-xs">src/data/predictors/breakdown.json</code>)
+        がまだ生成されていません。集計バッチ完了後に表示されます。
+      </div>
+    )}
+
+    {report && (
+      <>
+        {/* 通算サマリ */}
+        <section class="mb-8">
+          <h2 class="text-lg font-bold text-gray-800 mb-3">直前通算</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm bg-white rounded-lg shadow-sm">
+              <thead>
+                <tr class="text-left text-gray-600 border-b border-gray-200">
+                  <th class="px-3 py-2">予想者</th>
+                  <th class="px-3 py-2 text-right">レース数</th>
+                  <th class="px-3 py-2 text-right">的中率</th>
+                  <th class="px-3 py-2 text-right">回収率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {predictors.map((p, i) => (
+                  <tr class="border-b border-gray-100 text-gray-800">
+                    <td class="px-3 py-2 font-bold">
+                      <span class="inline-block w-3 h-0.5 align-middle mr-2" style={`background-color: ${colorFor(i)};`} />
+                      {p.predictorName}
+                    </td>
+                    <td class="px-3 py-2 text-right font-mono">{p.total.raceCount.toLocaleString()}</td>
+                    <td class="px-3 py-2 text-right font-mono">{fmtHit(p.total.hitRate)}</td>
+                    <td class={`px-3 py-2 text-right font-mono font-bold ${
+                      p.total.recoveryRate !== null && p.total.recoveryRate >= 1 ? "text-green-700" : ""
+                    }`}>
+                      {fmtPct(p.total.recoveryRate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 時系列推移 */}
+        <section class="mb-8">
+          <h2 class="text-lg font-bold text-gray-800 mb-3">時系列推移 (累積)</h2>
+          <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <TrendLineChart labels={allDates} series={recoverySeries} refValue={1} caption="累積回収率 (破線 = 100%)" />
+          </div>
+          <div class="bg-white rounded-lg shadow-sm p-4">
+            <TrendLineChart labels={allDates} series={hitSeries} caption="累積的中率" />
+          </div>
+        </section>
+
+        {/* 予想者ごとの分析軸 */}
+        {predictors.map((p, i) => (
+          <section class="mb-8">
+            <h2 class="text-lg font-bold text-gray-800 mb-3">
+              <span class="inline-block w-3 h-0.5 align-middle mr-2" style={`background-color: ${colorFor(i)};`} />
+              {p.predictorName} — 分析軸別
+            </h2>
+            {p.total.raceCount === 0 ? (
+              <p class="text-xs text-gray-400">直前買い目の集計データがまだありません。</p>
+            ) : (
+              <div class="grid gap-4 md:grid-cols-2">
+                {AXES.map((axis) => (
+                  <article class="bg-white rounded-lg shadow-sm p-3">
+                    <h3 class="text-sm font-bold text-gray-700 mb-2">{axis.title}</h3>
+                    <table class="min-w-full text-xs">
+                      <thead>
+                        <tr class="text-left text-gray-500 border-b border-gray-200">
+                          <th class="px-2 py-1">区分</th>
+                          <th class="px-2 py-1 text-right">n</th>
+                          <th class="px-2 py-1 text-right">的中率</th>
+                          <th class="px-2 py-1 text-right">回収率</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {axis.get(p).map((b) => {
+                          const lowN = b.metrics.raceCount < LOW_N;
+                          return (
+                            <tr class={`border-b border-gray-50 ${lowN ? "text-gray-400" : "text-gray-800"}`}>
+                              <td class="px-2 py-1">
+                                {b.label}
+                                {lowN && <span class="ml-1 text-[10px] text-gray-400">参考</span>}
+                              </td>
+                              <td class="px-2 py-1 text-right font-mono">{b.metrics.raceCount}</td>
+                              <td class="px-2 py-1 text-right font-mono">{fmtHit(b.metrics.hitRate)}</td>
+                              <td class={`px-2 py-1 text-right font-mono ${
+                                !lowN && b.metrics.recoveryRate !== null && b.metrics.recoveryRate >= 1
+                                  ? "font-bold text-green-700"
+                                  : ""
+                              }`}>
+                                {fmtPct(b.metrics.recoveryRate)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ))}
+
+        <p class="text-xs text-gray-500">
+          配当帯別は確定 3連単 配当でレースを区分 (的中の有無に関わらず)。風速別は確定結果の観測風速。
+          いずれもデータ欠損レースは「不明」に含めています。
+        </p>
+      </>
+    )}
+  </div>
+</BaseLayout>

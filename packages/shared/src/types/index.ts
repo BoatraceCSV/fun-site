@@ -25,6 +25,13 @@ export type {
   SttRow,
 } from "./race-card.js";
 export type {
+  Bucket,
+  Metrics,
+  PredictorBreakdown,
+  PredictorBreakdownReport,
+  TimeseriesPoint,
+} from "./predictor-stats.js";
+export type {
   CombinationPayout,
   RacePayoutRow,
   SinglePayout,
