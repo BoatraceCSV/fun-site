@@ -71,6 +71,8 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",
   race_cards: "programs/race_cards",
   stt: "previews/stt",
+  tkz: "previews/tkz",
+  sui: "previews/sui",
   results: "results/realtime",
   payouts: "results/payouts",
 };
@@ -89,7 +91,7 @@ const buildTrackedKeys = (): {
   relativePath: string;
 }[] => {
   const keys: { key: CsvGenerationKey; relativePath: string }[] = (
-    ["title", "race_cards", "stt", "results", "payouts"] as const
+    ["title", "race_cards", "stt", "tkz", "sui", "results", "payouts"] as const
   ).map((type) => ({ key: type, relativePath: CSV_PATH_PREFIX[type] }));
   for (const p of activePredictors()) {
     keys.push({

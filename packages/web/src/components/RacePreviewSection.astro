@@ -1,0 +1,131 @@
+---
+import type { RacePreview } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  preview: RacePreview;
+}
+
+const { preview } = Astro.props;
+const boats = [...preview.boats].sort((a, b) => a.boatNumber - b.boatNumber);
+const weather = preview.weather;
+
+/** 天候コード → ラベル（boatrace 標準: 1晴 2曇 3雨 4雪 5霧） */
+const WEATHER_LABEL: Record<string, string> = {
+  "1": "晴",
+  "2": "曇り",
+  "3": "雨",
+  "4": "雪",
+  "5": "霧",
+};
+const weatherLabel = weather ? (WEATHER_LABEL[weather.weather] ?? weather.weather) : "";
+
+/** 気象観測時刻 HHMM → HH:MM */
+const formatObservedAt = (raw: string): string => {
+  const m = raw.match(/^(\d{2})(\d{2})$/);
+  return m ? `${m[1]}:${m[2]}` : raw;
+};
+
+/** 展示タイムの最速艇（小さいほど速い）を強調するため最小値を求める */
+const exhibitionTimes = boats
+  .map((b) => b.exhibitionTime)
+  .filter((t): t is number => t != null && t > 0);
+const fastestExhibition = exhibitionTimes.length > 0 ? Math.min(...exhibitionTimes) : null;
+
+const hasExhibition = boats.some(
+  (b) => b.exhibitionTime != null || b.weightKg > 0 || b.tilt !== 0,
+);
+---
+
+<div>
+  {weather && (
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 mb-3">
+      {weatherLabel && (
+        <span>
+          <span class="text-gray-400">天候</span>
+          <span class="ml-1 font-medium">{weatherLabel}</span>
+        </span>
+      )}
+      {weather.windSpeed > 0 && (
+        <span>
+          <span class="text-gray-400">風速</span>
+          <span class="ml-1 font-mono">{weather.windSpeed}m</span>
+        </span>
+      )}
+      {weather.waveHeight > 0 && (
+        <span>
+          <span class="text-gray-400">波</span>
+          <span class="ml-1 font-mono">{weather.waveHeight}cm</span>
+        </span>
+      )}
+      {weather.airTemperature !== 0 && (
+        <span>
+          <span class="text-gray-400">気温</span>
+          <span class="ml-1 font-mono">{weather.airTemperature}℃</span>
+        </span>
+      )}
+      {weather.waterTemperature !== 0 && (
+        <span>
+          <span class="text-gray-400">水温</span>
+          <span class="ml-1 font-mono">{weather.waterTemperature}℃</span>
+        </span>
+      )}
+      {weather.observedAt && (
+        <span class="text-gray-400">({formatObservedAt(weather.observedAt)} 計測)</span>
+      )}
+    </div>
+  )}
+
+  {hasExhibition && (
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-gray-600">
+            <th scope="col" class="px-2 py-2 text-left">艇</th>
+            <th scope="col" class="px-2 py-2 text-right">展示タイム</th>
+            <th scope="col" class="px-2 py-2 text-right">体重</th>
+            <th scope="col" class="px-2 py-2 text-right hidden sm:table-cell">体重調整</th>
+            <th scope="col" class="px-2 py-2 text-right">チルト</th>
+          </tr>
+        </thead>
+        <tbody>
+          {boats.map((b) => {
+            const color = isValidBoatNumber(b.boatNumber) ? BOAT_COLORS[b.boatNumber] : undefined;
+            const isFastest = b.exhibitionTime != null && b.exhibitionTime === fastestExhibition;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="px-2 py-2">
+                  <span
+                    class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${b.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {b.boatNumber}
+                  </span>
+                </td>
+                <td class="px-2 py-2 text-right font-mono text-xs">
+                  {b.exhibitionTime != null ? (
+                    <span class={isFastest ? "font-bold text-blue-600" : ""}>
+                      {b.exhibitionTime.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span class="text-gray-400">—</span>
+                  )}
+                </td>
+                <td class="px-2 py-2 text-right font-mono text-xs">
+                  {b.weightKg > 0 ? `${b.weightKg.toFixed(1)}kg` : "—"}
+                </td>
+                <td class="px-2 py-2 text-right font-mono text-xs hidden sm:table-cell">
+                  {b.weightAdjustKg > 0 ? `+${b.weightAdjustKg.toFixed(1)}` : "—"}
+                </td>
+                <td class="px-2 py-2 text-right font-mono text-xs">{b.tilt.toFixed(1)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p class="text-[11px] text-gray-400 mt-2">
+        展示タイムは数値が小さいほど速く、最速艇を青字で表示しています。締切5分前のスナップショットです。
+      </p>
+    </div>
+  )}
+</div>

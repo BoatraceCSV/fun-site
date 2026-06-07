@@ -5,10 +5,14 @@ export type {
   AiEvaluationEntry,
   PredictorPrediction,
   RacePrediction,
+  RacePreview,
+  RacePreviewBoat,
   RaceRacer,
+  RaceWeather,
   StartPrediction,
   StartPredictionEntry,
 } from "./prediction.js";
+export type { SuiRow, TkzBoat, TkzRow } from "./preview.js";
 export type { BetHitStatus } from "../utils/bet-hit.js";
 export type {
   BetPayoutResult,

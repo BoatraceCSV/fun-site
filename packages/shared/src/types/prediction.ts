@@ -112,6 +112,47 @@ export type PredictorPrediction = {
   readonly betHitStatus: BetHitStatus;
 };
 
+/** 直前情報 - 1 艇分の展示データ（tkz 由来） */
+export type RacePreviewBoat = {
+  readonly boatNumber: number;
+  /** 体重 (kg) */
+  readonly weightKg: number;
+  /** 体重調整 (kg) */
+  readonly weightAdjustKg: number;
+  /** 展示タイム (秒)。未計測は null */
+  readonly exhibitionTime: number | null;
+  /** チルト角度 */
+  readonly tilt: number;
+};
+
+/** 直前情報 - 水面気象（sui 由来） */
+export type RaceWeather = {
+  /** 気象観測時刻 (HHMM) */
+  readonly observedAt: string;
+  /** 天候コード (1=晴 / 2=曇 / 3=雨 / 4=雪 / 5=霧 など、生値) */
+  readonly weather: string;
+  /** 風速 (m/s) */
+  readonly windSpeed: number;
+  /** 波高 (cm) */
+  readonly waveHeight: number;
+  /** 気温 (℃) */
+  readonly airTemperature: number;
+  /** 水温 (℃) */
+  readonly waterTemperature: number;
+};
+
+/**
+ * 直前情報（締切5分前スナップショット）の統合。
+ * tkz（体重・展示タイム・チルト）と sui（水面気象）を結合したもの。
+ * どちらの CSV も未取得のレースでは `preview` 自体が undefined になる。
+ */
+export type RacePreview = {
+  /** 展示データ（艇番昇順）。tkz 未取得時は空配列 */
+  readonly boats: readonly RacePreviewBoat[];
+  /** 水面気象。sui 未取得時は null */
+  readonly weather: RaceWeather | null;
+};
+
 /** レース予想（新スキーマ） */
 export type RacePrediction = {
   readonly raceCode: string;
@@ -135,6 +176,12 @@ export type RacePrediction = {
   readonly votingDeadline: string;
   readonly racers: readonly RaceRacer[];
   readonly startPrediction: StartPrediction;
+  /**
+   * 直前情報（締切5分前の展示・気象スナップショット）。
+   * previews/tkz / previews/sui のどちらも未取得のレースでは undefined。
+   * 古い JSON では未設定のため、UI 側は undefined フォールバックすること。
+   */
+  readonly preview?: RacePreview;
   /**
    * AI 総合評価（後方互換用）。realtime が利用可能ならそちらを、無ければ daily を採用する。
    * 1マーク予想や AI 評価チャートの既存表示はこの値を参照する。

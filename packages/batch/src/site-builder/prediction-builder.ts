@@ -11,12 +11,16 @@ import type {
   RaceCardRow,
   RacePayoutRow,
   RacePrediction,
+  RacePreview,
+  RacePreviewBoat,
   RaceRacer,
   RaceResultRow,
   StartPrediction,
   StartPredictionEntry,
   SttRow,
+  SuiRow,
   TitleRow,
+  TkzRow,
 } from "@fun-site/shared";
 import {
   activePredictors,
@@ -118,6 +122,41 @@ const buildEmptyAiEvaluation = (): AiEvaluation => {
   };
 };
 
+/**
+ * tkz（展示・体重・チルト）と sui（気象）から直前情報 RacePreview を構築。
+ * どちらも未取得なら undefined を返す（RacePrediction.preview を省略する）。
+ */
+const buildRacePreview = (
+  tkz: TkzRow | undefined,
+  sui: SuiRow | undefined,
+): RacePreview | undefined => {
+  if (!(tkz || sui)) return undefined;
+
+  const boats: RacePreviewBoat[] = (tkz?.boats ?? [])
+    .map((b) => ({
+      boatNumber: b.boatNumber,
+      weightKg: b.weightKg,
+      weightAdjustKg: b.weightAdjustKg,
+      // 展示タイム 0 は未計測（L 等）として null 化する
+      exhibitionTime: b.exhibitionTime === 0 ? null : b.exhibitionTime,
+      tilt: b.tilt,
+    }))
+    .toSorted((a, b) => a.boatNumber - b.boatNumber);
+
+  const weather = sui
+    ? {
+        observedAt: sui.observedAt,
+        weather: sui.weather,
+        windSpeed: sui.windSpeed,
+        waveHeight: sui.waveHeight,
+        airTemperature: sui.airTemperature,
+        waterTemperature: sui.waterTemperature,
+      }
+    : null;
+
+  return { boats, weather };
+};
+
 /** race_cards の racers を出走表用 RaceRacer に詰め直す */
 const toRaceRacers = (cards: RaceCardRow): RaceRacer[] =>
   cards.racers.map((r) => ({
@@ -200,6 +239,8 @@ const buildPredictorPrediction = (
 export const buildRacePrediction = (
   cards: RaceCardRow,
   stt: SttRow | undefined,
+  tkz: TkzRow | undefined,
+  sui: SuiRow | undefined,
   indexRowsByPredictor: ReadonlyMap<
     string,
     { readonly daily?: IndexRow; readonly realtime?: IndexRow }
@@ -237,6 +278,8 @@ export const buildRacePrediction = (
   // の ZERO_SUMMARY を再現する形だが、primary は必ず存在する (active 予想者 > 0)。
   const betPayout: RaceBetPayoutSummary | undefined = primary?.betPayout;
 
+  const preview = buildRacePreview(tkz, sui);
+
   return {
     raceCode: cards.raceCode,
     raceDate: cards.raceDate,
@@ -250,6 +293,7 @@ export const buildRacePrediction = (
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers,
     startPrediction: buildStartPrediction(cards, stt),
+    ...(preview !== undefined ? { preview } : {}),
     aiEvaluation,
     aiEvaluationDaily,
     aiEvaluationRealtime,
@@ -273,6 +317,8 @@ export const buildRacePrediction = (
 export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
+  tkz: readonly TkzRow[],
+  sui: readonly SuiRow[],
   indexesByPredictor: readonly PredictorIndexFetch[],
   titles: readonly TitleRow[],
   results: readonly RaceResultRow[],
@@ -280,6 +326,8 @@ export const buildAllRacePredictions = (
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
+  const tkzByCode = new Map(tkz.map((t) => [t.raceCode, t]));
+  const suiByCode = new Map(sui.map((s) => [s.raceCode, s]));
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
@@ -306,6 +354,8 @@ export const buildAllRacePredictions = (
     buildRacePrediction(
       cards,
       sttByCode.get(cards.raceCode),
+      tkzByCode.get(cards.raceCode),
+      suiByCode.get(cards.raceCode),
       indexLookup.get(cards.raceCode) ?? new Map(),
       titleByCode.get(cards.raceCode),
       resultByCode.get(cards.raceCode),

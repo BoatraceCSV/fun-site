@@ -5,11 +5,14 @@ import type {
   RacePayoutRow,
   RaceResultRow,
   SttRow,
+  SuiRow,
   TitleRow,
+  TkzRow,
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 import { parsePayouts } from "./payout-schemas.js";
+import { parseSui, parseTkz } from "./preview-schemas.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
@@ -30,6 +33,10 @@ export type FetchedCsvData = {
   readonly titles: readonly TitleRow[];
   readonly raceCards: readonly RaceCardRow[];
   readonly stt: readonly SttRow[];
+  /** 直前情報: 体重・展示タイム・チルト (previews/tkz)。未生成時は空配列。 */
+  readonly tkz: readonly TkzRow[];
+  /** 直前情報: 水面気象 (previews/sui)。未生成時は空配列。 */
+  readonly sui: readonly SuiRow[];
   /** Active な全予想者の index CSV (失敗した予想者は空 rows で含まれる)。 */
   readonly indexesByPredictor: readonly PredictorIndexFetch[];
   /**
@@ -101,20 +108,24 @@ const fetchAndParseIndex = async (
  */
 export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => {
   const predictors = activePredictors();
-  const [titles, raceCards, stt, indexesByPredictor, results, payouts] = await Promise.all([
-    fetchAndParse("title", date, parseTitles),
-    fetchAndParse("race_cards", date, parseRaceCards),
-    fetchAndParse("stt", date, parseStt),
-    Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
-    fetchAndParse("results", date, parseResults),
-    fetchAndParse("payouts", date, parsePayouts),
-  ]);
+  const [titles, raceCards, stt, tkz, sui, indexesByPredictor, results, payouts] =
+    await Promise.all([
+      fetchAndParse("title", date, parseTitles),
+      fetchAndParse("race_cards", date, parseRaceCards),
+      fetchAndParse("stt", date, parseStt),
+      fetchAndParse("tkz", date, parseTkz),
+      fetchAndParse("sui", date, parseSui),
+      Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
+      fetchAndParse("results", date, parseResults),
+      fetchAndParse("payouts", date, parsePayouts),
+    ]);
 
-  return { titles, raceCards, stt, indexesByPredictor, results, payouts };
+  return { titles, raceCards, stt, tkz, sui, indexesByPredictor, results, payouts };
 };
 
 export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
+export { parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseResults } from "./result-schemas.js";
 export { parseTitles } from "./schemas.js";
