@@ -92,8 +92,8 @@ export type IndexState = "realtime" | "daily";
 /**
  * index CSV 由来の枠別 AI 評価。
  *
- * 採用成分は predictor によって異なる(`v1_basic` は 5 成分、将来の
- * `v2_tenkai` は 6 成分など)。`components` / `contributions` は
+ * 採用成分は predictor によって異なる(現状は `v1_basic`・`v2_tenkai` とも
+ * 5 成分)。`components` / `contributions` は
  * `predictor.componentKeys` をキーに持つ。
  */
 export type IndexEntry = {

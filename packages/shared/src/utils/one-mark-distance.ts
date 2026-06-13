@@ -65,14 +65,13 @@ export const DEFAULT_BETTING_TOLERANCE: BettingTolerance = {
  * 予想者 ID ごとのしきい値オーバーライド。未登録の予想者は
  * `DEFAULT_BETTING_TOLERANCE`（±0.10）を使う。
  *
- * - `v2_tenkai`（B君予想）: 2026-05 の A君(v1_basic)実績を用いた回収率最適化の
- *   ロバスト解 `1着0.02 / 2着0.10 / 3着0.20`。「1着は絞り 3着は広げる」方向。
- *   B君固有データが十分溜まったら再探索すること
- *   （`notebooks/threshold_optimization.ipynb`）。
+ * 現在オーバーライドは無し（全予想者が ±0.10）。
+ * 以前は `v2_tenkai`（B君予想）に `1着0.02 / 2着0.10 / 3着0.20` を設定していたが、
+ * 展開予想の撤去に伴い B君予想を A君予想（control）と同一 recipe に揃えるため
+ * 2026-06-13 に削除した。予想者別に再最適化する場合はここへ追記する
+ * （`notebooks/threshold_optimization.ipynb`）。
  */
-export const BETTING_TOLERANCE_BY_PREDICTOR: Readonly<Record<string, BettingTolerance>> = {
-  v2_tenkai: { first: 0.02, second: 0.1, third: 0.2 },
-};
+export const BETTING_TOLERANCE_BY_PREDICTOR: Readonly<Record<string, BettingTolerance>> = {};
 
 /** 予想者 ID に対応するしきい値を返す。未登録／未指定なら既定値。 */
 export const bettingToleranceFor = (predictorId?: string): BettingTolerance =>
@@ -86,9 +85,9 @@ export const bettingToleranceFor = (predictorId?: string): BettingTolerance =>
  *
  * 各着のしきい値窓を独立に取った後、**有効な三連単フォーメーション
  * （1-2-3 着で同一艇を使わない出目）に 1 つも登場しない艇を各着候補から
- * 除外する**。これにより、しきい値が着順別（特に B君 v2_tenkai の
- * 1着0.02 / 3着0.20）のとき、1着の本命艇が窓の広い 3着候補に重複表示
- * される不具合を解消する。
+ * 除外する**。これにより、しきい値が着順別（例: 1着0.02 / 3着0.20 のように
+ * 1着を絞り 3着を広げる設定）のとき、1着の本命艇が窓の広い 3着候補に重複
+ * 表示される不具合を解消する。
  *
  * 除外するのは「どの有効出目にも使えないデッド候補」のみなので、買える
  * 組合せの集合は変わらず、`countFormationCombinations` /

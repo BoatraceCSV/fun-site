@@ -123,7 +123,7 @@ describe("computeBettingPicks", () => {
     expect(picks.third).toEqual([1, 2, 3]); // 0.35 ±0.1
   });
 
-  it("着順別しきい値: 1着は絞り 3着は広げる (B君 v2_tenkai 相当)", () => {
+  it("着順別しきい値: 1着は絞り 3着は広げる", () => {
     // 距離: 1=0.40, 2=0.39, 3=0.20, 4=0.35, 5=0.10, 6=0.05
     // 降順: 1(0.40), 2(0.39), 4(0.35), 3(0.20), 5(0.10), 6(0.05)
     const entries = [
@@ -135,7 +135,7 @@ describe("computeBettingPicks", () => {
       entry(6, 0.05),
     ];
     // first=0.02, second=0.10, third=0.20
-    const picks = computeBettingPicks(entries, bettingToleranceFor("v2_tenkai"));
+    const picks = computeBettingPicks(entries, { first: 0.02, second: 0.1, third: 0.2 });
     // 1着基準=0.40 ±0.02 → 1のみ (2=差0.01 OK)。2=0.39は差0.01 ≤ 0.02 なので含む
     expect(picks.first).toEqual([1, 2]);
     // 2着基準=0.39 ±0.10 → 1,2,4 (4=差0.04, 3=差0.19 NG)
@@ -144,7 +144,7 @@ describe("computeBettingPicks", () => {
     expect(picks.third).toEqual([1, 2, 3, 4]);
   });
 
-  it("1着候補が1艇だけのとき、その艇は下位着のデッド候補として除外する (B君 3着窓の逆流)", () => {
+  it("1着候補が1艇だけのとき、その艇は下位着のデッド候補として除外する (3着窓の逆流)", () => {
     // 本命1艇が突出し、3着窓(±0.20)だけが1着艇まで届くケース
     // (boatrace-fun.net 2026-05-31/06/12R で観測された不具合の再現)。
     // 距離: 1=0.60(突出), 2=0.42, 3=0.41, 4=0.40, 5=0.39, 6=0.27
@@ -156,7 +156,7 @@ describe("computeBettingPicks", () => {
       entry(5, 0.39),
       entry(6, 0.27),
     ];
-    const picks = computeBettingPicks(entries, bettingToleranceFor("v2_tenkai"));
+    const picks = computeBettingPicks(entries, { first: 0.02, second: 0.1, third: 0.2 });
     // 1着基準=0.60 ±0.02 → 1 のみ
     expect(picks.first).toEqual([1]);
     // 2着基準=0.42 ±0.10 → [0.32,0.52]: 2,3,4,5 (1=0.60 は範囲外)
@@ -184,9 +184,10 @@ describe("computeBettingPicks", () => {
     expect(picks.third).toEqual([2, 3, 4]);
   });
 
-  it("bettingToleranceFor: 未登録予想者は既定 ±0.10、B君は着順別", () => {
+  it("bettingToleranceFor: 現状オーバーライド無しで全予想者 既定 ±0.10", () => {
     expect(bettingToleranceFor("v1_basic")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     expect(bettingToleranceFor(undefined)).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
-    expect(bettingToleranceFor("v2_tenkai")).toEqual({ first: 0.02, second: 0.1, third: 0.2 });
+    // 展開予想撤去で B君予想を A君予想に揃えたため v2_tenkai も既定値。
+    expect(bettingToleranceFor("v2_tenkai")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
   });
 });
