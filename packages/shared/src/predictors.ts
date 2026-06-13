@@ -16,13 +16,21 @@
  */
 
 /** 各予想者で採用しうる特徴量成分のキー。 */
-export type ComponentKey = "waku" | "racer" | "motor" | "exhibit" | "weather" | "tenkai";
+export type ComponentKey =
+  | "waku"
+  | "racer"
+  | "motor"
+  | "motor2rate"
+  | "exhibit"
+  | "weather"
+  | "tenkai";
 
 /** Component key → 日本語ラベル (CSV 列名から成分への逆引きにも使う)。 */
 export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
   waku: "枠番pt",
   racer: "選手pt",
   motor: "モーターpt",
+  motor2rate: "モーター2連率pt",
   exhibit: "展示pt",
   weather: "気象pt",
   tenkai: "展開優位pt",
@@ -33,6 +41,7 @@ export const COMPONENT_SHORT_LABELS: Readonly<Record<ComponentKey, string>> = {
   waku: "枠番",
   racer: "選手",
   motor: "モーター",
+  motor2rate: "M2連率",
   exhibit: "展示",
   weather: "気象",
   tenkai: "展開",
@@ -43,6 +52,7 @@ export const COMPONENT_COLORS: Readonly<Record<ComponentKey, string>> = {
   waku: "#3b82f6",
   racer: "#22c55e",
   motor: "#f97316",
+  motor2rate: "#14b8a6",
   exhibit: "#a855f7",
   weather: "#06b6d4",
   tenkai: "#ec4899",
@@ -89,9 +99,9 @@ export type PredictorSpec = {
  * 予想者レジストリ本体。
  *
  * v1_basic = "A君予想" (5 成分、control)。
- * v2_tenkai = "B君予想"。展開優位pt (tenkai) を加えた 6 成分版を試したが
- * control を回収率で下回ったため、2026-06-13 に A君予想と同一 recipe へ戻した。
- * 別の特徴量を試す実験スロットとして引き続き利用する。
+ * v2_tenkai = "B君予想" (実験スロット)。展開優位pt (tenkai) 版が control を
+ * 下回ったため 2026-06-13 に撤去し、同日 motor2rate (公式モーター2連率) を加えた
+ * 6 成分構成を投入。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
  */
 export const PREDICTORS: readonly PredictorSpec[] = [
   {
@@ -109,12 +119,13 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     status: "active",
     // boatracecsv 側 registry.py と同期。
     // 展開優位pt (tenkai) を加えた版は A君予想 (control) を回収率で下回ったため
-    // 2026-06-13 に撤去し、A君予想と同一 recipe (5 成分) の baseline に戻した。
+    // 2026-06-13 に撤去。同日、次の実験として A君予想の 5 成分に motor2rate
+    // (公式モーター2連率) を加えた 6 成分構成を投入した。motor2rate は
+    // おかぺん評価との順位相関検証 (boatracecsv notebooks/) で有望だった指標。
     // recipe が変わったので started_at をこの日にリセットし、累計回収率を
-    // 当日から再計測する (展開予想時代 5/30〜6/12 の成績は累計に含めない)。
-    // 別の特徴量を探る実験スロットとして id は v2_tenkai のまま据え置く。
+    // 当日から再計測する。実験スロットとして id は v2_tenkai のまま据え置く。
     startedAt: "2026-06-13",
-    componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "motor2rate"],
   },
 ];
 
