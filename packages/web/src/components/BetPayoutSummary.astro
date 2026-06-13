@@ -4,13 +4,13 @@ import type { RaceBetPayoutSummary } from "@fun-site/shared";
 interface Props {
   /** 3連単 戦略の払戻結果。当日 / 直前 それぞれの計算結果を持つ。 */
   summary?: RaceBetPayoutSummary;
-  /** ラベルの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  /** ラベルの先頭に付ける予想者名（例: "本命予想"）。未指定なら付けない。 */
   predictorName?: string;
 }
 
 const { summary, predictorName } = Astro.props;
 
-/** "A君予想" → "A君"。 予想 サフィックスを剥がしてラベルに使う。 */
+/** "本命予想" → "本命"。 予想 サフィックスを剥がしてラベルに使う。 */
 const labelPrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 
 type SectionKind = "daily" | "realtime";

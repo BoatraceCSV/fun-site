@@ -6,12 +6,12 @@ interface Props {
   result: RaceResultRow;
   /** 当日買い目 / 直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
-  /** 的中バッジの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  /** 的中バッジの先頭に付ける予想者名（例: "本命予想"）。未指定なら付けない。 */
   predictorName?: string;
 }
 
 const { result, hitStatus, predictorName } = Astro.props;
-/** "A君予想" → "A君"。 予想 サフィックスを剥がしてバッジに使う。 */
+/** "本命予想" → "本命"。 予想 サフィックスを剥がしてバッジに使う。 */
 const badgePrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 
 const sortedFinishes = [...result.finishes].sort((a, b) => a.rank - b.rank);

@@ -50,11 +50,11 @@ const buildCards = (a: SeriesBetPayoutAggregate): Card[] => {
     }
     if (ordered.length > 0) return ordered;
   }
-  // 旧 JSON フォールバック: トップフィールドを primary (A君) として 1 枚だけ表示。
+  // 旧 JSON フォールバック: トップフィールドを primary (本命予想) として 1 枚だけ表示。
   return [
     {
       key: "primary",
-      title: "A君成績",
+      title: "本命成績",
       stats: {
         settledRaceCount: a.settledRaceCount,
         hitCount: a.hitCount,

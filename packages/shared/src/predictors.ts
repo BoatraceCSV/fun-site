@@ -83,7 +83,7 @@ export type PredictorStatus = "active" | "retired";
 export type PredictorSpec = {
   /** 予想者の固有 ID。退役後も再利用しない。 */
   readonly id: string;
-  /** UI 表示名 (例: "A君予想")。 */
+  /** UI 表示名 (例: "本命予想")。 */
   readonly displayName: string;
   /** active な予想者の中での表示順。低いほど先頭に出る。 */
   readonly slot: number;
@@ -98,15 +98,15 @@ export type PredictorSpec = {
 /**
  * 予想者レジストリ本体。
  *
- * v1_basic = "A君予想" (5 成分、control)。
- * v2_tenkai = "B君予想" (実験スロット)。展開優位pt (tenkai) 版が control を
+ * v1_basic = "本命予想" (5 成分、control)。
+ * v2_tenkai = "モーター評価変更予想" (実験スロット)。展開優位pt (tenkai) 版が control を
  * 下回ったため 2026-06-13 に撤去し、同日 motor2rate (公式モーター2連率) を加えた
  * 6 成分構成を投入。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
  */
 export const PREDICTORS: readonly PredictorSpec[] = [
   {
     id: "v1_basic",
-    displayName: "A君予想",
+    displayName: "本命予想",
     slot: 1,
     status: "active",
     startedAt: "2026-05-01",
@@ -114,12 +114,12 @@ export const PREDICTORS: readonly PredictorSpec[] = [
   },
   {
     id: "v2_tenkai",
-    displayName: "B君予想",
+    displayName: "モーター評価変更予想",
     slot: 2,
     status: "active",
     // boatracecsv 側 registry.py と同期。
-    // 展開優位pt (tenkai) を加えた版は A君予想 (control) を回収率で下回ったため
-    // 2026-06-13 に撤去。同日、次の実験として A君予想の 5 成分に motor2rate
+    // 展開優位pt (tenkai) を加えた版は 本命予想 (control) を回収率で下回ったため
+    // 2026-06-13 に撤去。同日、次の実験として 本命予想の 5 成分に motor2rate
     // (公式モーター2連率) を加えた 6 成分構成を投入した。motor2rate は
     // おかぺん評価との順位相関検証 (boatracecsv notebooks/) で有望だった指標。
     // recipe が変わったので started_at をこの日にリセットし、累計回収率を

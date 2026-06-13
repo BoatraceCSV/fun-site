@@ -120,7 +120,7 @@ export type AiEvaluation = {
 export type PredictorPrediction = {
   /** 予想者 ID (例: "v1_basic", "v2_tenkai")。 */
   readonly predictorId: string;
-  /** UI 表示名 (レジストリから注入。例: "A君予想")。 */
+  /** UI 表示名 (レジストリから注入。例: "本命予想")。 */
   readonly predictorName: string;
   /** 表示順 (active 予想者の中での slot。低いほど先頭)。 */
   readonly slot: number;

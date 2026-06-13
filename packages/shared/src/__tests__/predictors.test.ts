@@ -16,17 +16,17 @@ describe("predictor registry", () => {
   it("has v1_basic active as the default predictor", () => {
     const v1 = predictorById("v1_basic");
     expect(v1).toBeDefined();
-    expect(v1?.displayName).toBe("A君予想");
+    expect(v1?.displayName).toBe("本命予想");
     expect(v1?.slot).toBe(1);
     expect(v1?.status).toBe("active");
     expect(v1?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
   });
 
-  it("has v2_tenkai active with motor2rate experiment (A君 5成分 + motor2rate)", () => {
+  it("has v2_tenkai active with motor2rate experiment (本命 5成分 + motor2rate)", () => {
     // 展開優位pt 撤去後、次の実験として motor2rate を加えた 6 成分構成。
     const v2 = predictorById("v2_tenkai");
     expect(v2).toBeDefined();
-    expect(v2?.displayName).toBe("B君予想");
+    expect(v2?.displayName).toBe("モーター評価変更予想");
     expect(v2?.slot).toBe(2);
     expect(v2?.status).toBe("active");
     expect(v2?.componentKeys).toEqual([
@@ -38,7 +38,7 @@ describe("predictor registry", () => {
       "motor2rate",
     ]);
     expect(v2?.componentKeys).not.toContain("tenkai");
-    // A君予想 (control) の 5 成分 + motor2rate になっていること。
+    // 本命予想 (control) の 5 成分 + motor2rate になっていること。
     expect(v2?.componentKeys.slice(0, 5)).toEqual(predictorById("v1_basic")?.componentKeys);
   });
 

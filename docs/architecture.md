@@ -82,7 +82,7 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 | `estimate/{predictor_id}` | 各 active 予想者の AI 総合評価 (componentKeys ぶんの寄与pt) |
 | `results/realtime` | 当日確定直後のレース結果（着順・決まり手・ST） |
 
-予想者 (predictor) は固有 ID (`v1_basic` = A君予想、将来の `v2_tenkai` = B君予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
+予想者 (predictor) は固有 ID (`v1_basic` = 本命予想、`v2_tenkai` = モーター評価変更予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
 
 レース 1 件あたり `RacePrediction` JSON を 1 ファイル生成し、`packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に配置する。`RacePrediction.predictions[]` に active 予想者ぶんの `PredictorPrediction` (AI 評価・買い目・回収率) が slot 昇順で並ぶ。Astro はこれを `getStaticPaths()` 内で読み込んで静的ページを生成する。
 
@@ -120,3 +120,4 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 2026-06: 第 2 予想者 `v2_tenkai` (B君予想) を投入。v1_basic の 5 成分に **展開優位pt (`tenkai`)** を加えた 6 成分構成。展開優位pt はスタート展示の進入コースと枠番デフォルトコースの長期勝率差を場別標準化したもので、preview 由来成分のため朝バッチ (`state=daily`) では 50 (中立) に固定される。
 - 2026-06-13: 展開優位pt を加えた `v2_tenkai` (B君予想) が control である A君予想 (`v1_basic`) を回収率で下回ったため、展開予想を撤去。B君予想を A君予想と同一 recipe（5 成分 + 買い目しきい値 既定 ±0.10）に揃え、`startedAt` を当日へリセットして累計回収率を再計測。`v2_tenkai` は別の特徴量を探る実験スロットとして ID を据え置く。`BETTING_TOLERANCE_BY_PREDICTOR` の v2_tenkai 専用しきい値も削除。
 - 2026-06-13: 次の実験として `v2_tenkai` (B君予想) に **`motor2rate`(公式モーター2連率)成分** を追加(A君予想の 5 成分 + motor2rate の 6 成分)。`motor2rate` は `race_cards` の `艇N_モーター2連対率` を場別偏差値化したもので、おかぺん評価(平和島の公開モーター評価)との順位相関検証(boatracecsv `notebooks/motor_pt_okapen_validation.ipynb`)で、着順ベースの `motor`(相関ほぼ 0)に対し公式 2連対率が ρ≈0.6 と有望だったことを受けた追加。preview 非依存で朝バッチでも取得可。control の A君予想と回収率で比較する。
+- 2026-06-13: UI 表示名を変更。`v1_basic` を **本命予想**(旧 A君予想)、`v2_tenkai` を **モーター評価変更予想**(旧 B君予想)に改称。レース詳細ページのモーター評価変更予想カードには本命予想からの recipe 差分(motor2rate を加えた旨)を説明する注記を `PredictorCard` の `recipeNote` prop で表示する。

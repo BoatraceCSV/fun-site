@@ -19,7 +19,7 @@ interface Props {
   aiEvaluation?: AiEvaluation;
   /** 結果確定後の的中状況。未指定なら的中バッジは表示しない。 */
   hitStatus?: BetHitStatus;
-  /** 見出しの先頭に付ける予想者名（例: "A君予想"）。未指定なら付けない。 */
+  /** 見出しの先頭に付ける予想者名（例: "本命予想"）。未指定なら付けない。 */
   predictorName?: string;
   /** 買い目しきい値を予想者ごとに切り替えるための ID。未指定なら既定の ±0.10。 */
   predictorId?: string;
@@ -44,7 +44,7 @@ const toleranceLabel =
     : `1着 ±${tolerance.first} / 2着 ±${tolerance.second} / 3着 ±${tolerance.third}`;
 
 /** 見出し: "{shortName}当日買い目" / "{shortName}直前買い目"。
- *  predictorName 末尾の「予想」サフィックスは除去する ("A君予想" → "A君")。
+ *  predictorName 末尾の「予想」サフィックスは除去する ("本命予想" → "本命")。
  *  predictorName 省略時はプレフィクス無し。 */
 const headingPrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
 

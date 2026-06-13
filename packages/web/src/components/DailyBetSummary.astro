@@ -14,7 +14,7 @@ interface Props {
 
 const { predictions } = Astro.props;
 
-/** "A君予想" → "A君"。 予想 サフィックスを剥がしてプレフィクスに使う。 */
+/** "本命予想" → "本命"。 予想 サフィックスを剥がしてプレフィクスに使う。 */
 const shortName = (displayName: string): string => displayName.replace(/予想$/, "");
 
 const formatYen = (n: number): string => `¥${n.toLocaleString("ja-JP")}`;

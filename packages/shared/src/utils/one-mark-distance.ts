@@ -66,8 +66,8 @@ export const DEFAULT_BETTING_TOLERANCE: BettingTolerance = {
  * `DEFAULT_BETTING_TOLERANCE`（±0.10）を使う。
  *
  * 現在オーバーライドは無し（全予想者が ±0.10）。
- * 以前は `v2_tenkai`（B君予想）に `1着0.02 / 2着0.10 / 3着0.20` を設定していたが、
- * 展開予想の撤去に伴い B君予想を A君予想（control）と同一 recipe に揃えるため
+ * 以前は `v2_tenkai`（現 モーター評価変更予想）に `1着0.02 / 2着0.10 / 3着0.20` を設定していたが、
+ * 展開予想の撤去に伴い同予想者を本命予想（control）と同一 recipe に揃えるため
  * 2026-06-13 に削除した。予想者別に再最適化する場合はここへ追記する
  * （`notebooks/threshold_optimization.ipynb`）。
  */

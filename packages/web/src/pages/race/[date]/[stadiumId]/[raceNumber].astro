@@ -22,7 +22,7 @@ type RaceNavItem = {
   isConfirmed: boolean;
   /** A君（slot=1, primary predictor）の直前買い目が的中したか。🎯 アイコン表示用。 */
   aRealtimeHit: boolean;
-  /** B君（slot=2）の直前買い目が的中したか。🔥 アイコン表示用。B君予想が存在しない場合は false。 */
+  /** モーター評価変更予想（slot=2）の直前買い目が的中したか。🔥 アイコン表示用。存在しない場合は false。 */
   bRealtimeHit: boolean;
 };
 
@@ -168,12 +168,12 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   }`}>
                     確定
                   </span>
-                  {/* A君直前買い目的中 → 🎯 (amber)、B君直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
+                  {/* 本命予想の直前買い目的中 → 🎯 (amber)、モーター評価変更予想の直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
                   {aRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="A君直前買い目が的中"
-                      aria-label="A君直前買い目が的中"
+                      title="本命予想の直前買い目が的中"
+                      aria-label="本命予想の直前買い目が的中"
                     >
                       🎯
                     </span>
@@ -181,8 +181,8 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   {bRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="B君直前買い目が的中"
-                      aria-label="B君直前買い目が的中"
+                      title="モーター評価変更予想の直前買い目が的中"
+                      aria-label="モーター評価変更予想の直前買い目が的中"
                     >
                       🔥
                     </span>
@@ -218,7 +218,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                 class={tileClass}
                 aria-label={`${n}R ${meta?.raceName ?? ""}${
                   isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
-                }${hasAnyHit ? ` (${[aRealtimeHit ? "A君直前買い目的中" : "", bRealtimeHit ? "B君直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
+                }${hasAnyHit ? ` (${[aRealtimeHit ? "本命予想の直前買い目的中" : "", bRealtimeHit ? "モーター評価変更予想の直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -273,7 +273,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       <RaceResultSection
         result={prediction.raceResult}
         hitStatus={prediction.betHitStatus}
-        predictorName={prediction.predictions?.[0]?.predictorName ?? "A君予想"}
+        predictorName={prediction.predictions?.[0]?.predictorName ?? "本命予想"}
       />
     </section>
   )}
@@ -282,7 +282,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
   {(() => {
     // 新スキーマで predictions[] が存在すればそれを使う。
     // 旧 JSON (predictions 未設定) では aiEvaluation 単体から仮想 PredictorPrediction
-    // を 1 件だけ組み立て (= A君予想相当) して同じ UI を流用する。
+    // を 1 件だけ組み立て (= 本命予想相当) して同じ UI を流用する。
     const fromArray: readonly PredictorPrediction[] = prediction.predictions ?? [];
     const fallback: readonly PredictorPrediction[] =
       fromArray.length > 0
@@ -290,7 +290,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         : [
             {
               predictorId: "v1_basic",
-              predictorName: "A君予想",
+              predictorName: "本命予想",
               slot: 1,
               aiEvaluationDaily: prediction.aiEvaluationDaily,
               aiEvaluationRealtime: prediction.aiEvaluationRealtime,
@@ -308,7 +308,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       {/* スタート予想・1マーク予想を各予想者カード内に小さく横並びで表示する。
            スタート予想は全予想者共通で全国平均ST。1マーク予想は予想者ごとの
            AI 評価 (realtime 優先) を採用するため図が異なる。
-           現状 B君予想 (slot=2) は A君予想 (slot=1) と同一 recipe のため両カードは一致する。 */}
+           モーター評価変更予想 (slot=2) は本命予想 (slot=1) に motor2rate を加えた構成。 */}
       <PredictorCard
         prediction={pp}
         racers={prediction.racers}
@@ -321,6 +321,11 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
             : pp.slot === 2
               ? (pp.aiEvaluationRealtime ?? pp.aiEvaluationDaily)
               : undefined
+        }
+        recipeNote={
+          pp.predictorId === "v2_tenkai"
+            ? "本命予想の5成分に、公式モーター2連対率pt（M2連率）を加えた6成分構成です。"
+            : undefined
         }
       />
     </section>

@@ -15,7 +15,7 @@ interface Props {
   showChart?: boolean;
   /**
    * スタート予想図。予想者非依存の共通情報 (全国平均ST + 進入コース) だが、
-   * primary predictor (A君) のカード内にまとめて表示するため任意 prop で受け取る。
+   * primary predictor (本命予想 / slot=1) のカード内にまとめて表示するため任意 prop で受け取る。
    * 渡された場合のみ 1マーク予想と横並びで描画する。
    */
   startPrediction?: StartPrediction;
@@ -25,10 +25,16 @@ interface Props {
    */
   oneMarkAiEvaluation?: AiEvaluation;
   /**
-   * スタート予想図の ST 説明文の上書き。B君予想のように ST を一律固定値で
+   * スタート予想図の ST 説明文の上書き。モーター評価変更予想のように ST を一律固定値で
    * 表示する場合に注記を差し替えるため `StartPredictionDiagram` へ転送する。
    */
   startNote?: string;
+  /**
+   * 予想者カード見出し直下に出す注記。本命予想からどの成分をどう変更したか等、
+   * recipe の差分を読み手に説明するために使う (例: モーター評価変更予想)。
+   * 未指定なら何も描画しない。
+   */
+  recipeNote?: string;
 }
 
 const {
@@ -38,6 +44,7 @@ const {
   startPrediction,
   oneMarkAiEvaluation,
   startNote,
+  recipeNote,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -61,6 +68,12 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
     </h2>
     <span class="text-[11px] text-gray-400 font-mono">{prediction.predictorId}</span>
   </header>
+
+  {recipeNote && (
+    <p class="px-4 py-2 bg-amber-50 border-b border-amber-100 text-[12px] leading-snug text-amber-900">
+      {recipeNote}
+    </p>
+  )}
 
   <div class="p-4 space-y-4">
     {/* 買い目 */}
