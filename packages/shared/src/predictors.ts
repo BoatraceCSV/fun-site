@@ -100,8 +100,9 @@ export type PredictorSpec = {
  *
  * v1_basic = "本命予想" (5 成分、control)。
  * v2_tenkai = "モーター評価変更予想" (実験スロット)。展開優位pt (tenkai) 版が control を
- * 下回ったため 2026-06-13 に撤去し、同日 motor2rate (公式モーター2連率) を加えた
- * 6 成分構成を投入。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
+ * 下回ったため 2026-06-13 に撤去し、同日、着順ベースの motor を motor2rate
+ * (公式モーター2連率) に置き換えた 5 成分構成を投入(成分数は control と同じで
+ * motor 指標だけ差し替え)。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
  */
 export const PREDICTORS: readonly PredictorSpec[] = [
   {
@@ -119,13 +120,14 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     status: "active",
     // boatracecsv 側 registry.py と同期。
     // 展開優位pt (tenkai) を加えた版は 本命予想 (control) を回収率で下回ったため
-    // 2026-06-13 に撤去。同日、次の実験として 本命予想の 5 成分に motor2rate
-    // (公式モーター2連率) を加えた 6 成分構成を投入した。motor2rate は
+    // 2026-06-13 に撤去。同日、次の実験として 本命予想の 5 成分のうち着順ベースの
+    // motor を motor2rate (公式モーター2連率) に置き換えた 5 成分構成を投入した
+    // (成分数は control と同じで motor 指標だけ差し替え)。motor2rate は
     // おかぺん評価との順位相関検証 (boatracecsv notebooks/) で有望だった指標。
     // recipe が変わったので started_at をこの日にリセットし、累計回収率を
     // 当日から再計測する。実験スロットとして id は v2_tenkai のまま据え置く。
     startedAt: "2026-06-13",
-    componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "motor2rate"],
+    componentKeys: ["waku", "racer", "motor2rate", "exhibit", "weather"],
   },
 ];
 

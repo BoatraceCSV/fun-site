@@ -22,24 +22,23 @@ describe("predictor registry", () => {
     expect(v1?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
   });
 
-  it("has v2_tenkai active with motor2rate experiment (本命 5成分 + motor2rate)", () => {
-    // 展開優位pt 撤去後、次の実験として motor2rate を加えた 6 成分構成。
+  it("has v2_tenkai active with motor replaced by motor2rate (5成分, motor 差し替え)", () => {
+    // 展開優位pt 撤去後、次の実験として着順ベース motor を motor2rate に
+    // 置き換えた 5 成分構成(成分数は control と同じで motor 指標だけ差し替え)。
     const v2 = predictorById("v2_tenkai");
     expect(v2).toBeDefined();
     expect(v2?.displayName).toBe("モーター評価変更予想");
     expect(v2?.slot).toBe(2);
     expect(v2?.status).toBe("active");
-    expect(v2?.componentKeys).toEqual([
-      "waku",
-      "racer",
-      "motor",
-      "exhibit",
-      "weather",
-      "motor2rate",
-    ]);
+    expect(v2?.componentKeys).toEqual(["waku", "racer", "motor2rate", "exhibit", "weather"]);
     expect(v2?.componentKeys).not.toContain("tenkai");
-    // 本命予想 (control) の 5 成分 + motor2rate になっていること。
-    expect(v2?.componentKeys.slice(0, 5)).toEqual(predictorById("v1_basic")?.componentKeys);
+    // 着順ベースの motor は使わない(motor2rate に置換済み)。
+    expect(v2?.componentKeys).not.toContain("motor");
+    expect(v2?.componentKeys).toContain("motor2rate");
+    // control (本命予想) と同じ 5 成分で、motor の位置だけ motor2rate に差し替え。
+    const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
+    expect(v2?.componentKeys.length).toBe(v1Keys.length);
+    expect(v2?.componentKeys).toEqual(v1Keys.map((k) => (k === "motor" ? "motor2rate" : k)));
   });
 
   it("matches the boatracecsv registry started_at", () => {

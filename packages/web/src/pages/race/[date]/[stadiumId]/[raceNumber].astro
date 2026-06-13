@@ -308,7 +308,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       {/* スタート予想・1マーク予想を各予想者カード内に小さく横並びで表示する。
            スタート予想は全予想者共通で全国平均ST。1マーク予想は予想者ごとの
            AI 評価 (realtime 優先) を採用するため図が異なる。
-           モーター評価変更予想 (slot=2) は本命予想 (slot=1) に motor2rate を加えた構成。 */}
+           モーター評価変更予想 (slot=2) は本命予想 (slot=1) の motor を motor2rate に置き換えた構成。 */}
       <PredictorCard
         prediction={pp}
         racers={prediction.racers}
@@ -324,7 +324,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         }
         recipeNote={
           pp.predictorId === "v2_tenkai"
-            ? "本命予想の5成分に、公式モーター2連対率pt（M2連率）を加えた6成分構成です。"
+            ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
             : undefined
         }
       />

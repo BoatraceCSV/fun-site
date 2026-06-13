@@ -43,7 +43,7 @@ HTML 骨組み、meta タグ（OGP / Twitter Card）、ヘッダー（トップ 
 | コンポーネント | 役割 |
 |---|---|
 | `StartPredictionDiagram.astro` | スタート予想図（進入コース順に並べた SVG）。PredictorCard 内に表示。全予想者共通で全国平均STを渡す。任意 prop `stNote` で ST 説明文を上書き可（既定は「スタートタイミングは選手の全国平均STです。」）。各艇の ST 値ラベルは上段に予想/平均ST、下段に `entry.exhibitionStartTiming`（stt 由来のスタート展示実測ST、`展xx.xx` 青字）を併記。実測が無い艇（stt 未取得 / 展示未計測=0→null）は下段を出さない |
-| `OneMarkPredictionDiagram.astro` | 1 マーク予想（AI 寄与度ベース）の可視化。`aiEvaluation` は各予想者ごとの評価を採用するため予想者間で図が異なり得る（モーター評価変更予想は本命予想に motor2rate を加えた構成のため図が異なり得る）。PredictorCard 内に表示 |
+| `OneMarkPredictionDiagram.astro` | 1 マーク予想（AI 寄与度ベース）の可視化。`aiEvaluation` は各予想者ごとの評価を採用するため予想者間で図が異なり得る（モーター評価変更予想は本命予想の motor を motor2rate に置き換えた構成のため図が異なり得る）。PredictorCard 内に表示 |
 | `AiEvaluationChart.astro` | AI 総合評価（枠別 寄与pt を横棒で積み上げ。採用成分は `evaluation.componentKeys` で動的に決まる) |
 | `TrendLineChart.astro` | ゼロ JS のインライン SVG 折れ線。複数予想者を重ね描き。共通 x 軸 `labels` に対し各系列 `values` を同じ長さで揃え、`null` は点を描かない。値は割合を `%` 表記。任意 `refValue` で基準線 (回収率 100% = 1.0) を破線描画。`/stats/` の累積推移で利用 |
 | `RacerTable.astro` | 出走表（選手名・級別・全国平均ST・全国/当地 勝率/2連/3連・モーター 2連/3連・ボート 2連/3連）。選手名横に F/L 本数・賞除バッジ、支部の隣に出身地（支部と異なる場合のみ）を表示。3連対率・平均STは `RaceRacer` の `nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate` / `boatTop3Rate` / `nationalAvgST`、F/L は `flyingCount` / `lateCount`、賞除は `prizeExcluded`。モーター列には `motorStats` があれば優勝/優出回数・平均ラップ（期成績）を 2 行目に小さく併記。平均ST・当地列は sm 以上、モーター列は md 以上、ボート列は lg 以上で表示。いずれかの選手に節間成績があるとき、各選手行の下に `SessionResultsGrid` の展開行を colspan で差し込む |
