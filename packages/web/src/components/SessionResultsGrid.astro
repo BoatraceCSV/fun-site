@@ -1,5 +1,6 @@
 ---
 import type { SessionResultSlot } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   /** 1 選手の節間 14 スロット（時系列順、未出走含む） */
@@ -11,14 +12,12 @@ const { slots } = Astro.props;
 /** 出走済みスロットのみ（未出走 = 着順空 かつ R番号 0 は除外） */
 const played = slots.filter((s) => s.rank !== "" || s.race > 0);
 
-/** 着順トークン → バッジ配色 */
-const rankClass = (rank: string): string => {
-  if (rank === "1") return "bg-blue-600 text-white";
-  if (rank === "2") return "bg-emerald-500 text-white";
-  if (rank === "3") return "bg-amber-400 text-amber-950";
-  if (rank === "4" || rank === "5" || rank === "6") return "bg-gray-200 text-gray-700";
-  // F / L / 欠 / 転 / 妨 / 落 / エ / 不 など
-  return "bg-red-100 text-red-700";
+/** 対象レースの枠番 → バッジ配色（艇番カラー）。枠番不明はグレー */
+const laneStyle = (lane: number): string => {
+  if (!isValidBoatNumber(lane)) return "background-color: #e5e7eb; color: #374151;";
+  const c = BOAT_COLORS[lane];
+  const border = lane === 1 ? " border: 1px solid #cbd5e1;" : "";
+  return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
 };
 
 /** ホバー時のツールチップ（日次・走・R・進入・枠・ST） */
@@ -39,7 +38,8 @@ const slotTitle = (s: SessionResultSlot): string => {
       <span class="text-[10px] text-gray-400 mr-1">今節</span>
       {played.map((s) => (
         <span
-          class={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none ${rankClass(s.rank)}`}
+          class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none"
+          style={laneStyle(s.lane)}
           title={slotTitle(s)}
         >
           {s.rank || "·"}
