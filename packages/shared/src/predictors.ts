@@ -103,6 +103,8 @@ export type PredictorSpec = {
  * 下回ったため 2026-06-13 に撤去し、同日、着順ベースの motor を motor2rate
  * (公式モーター2連率) に置き換えた 5 成分構成を投入(成分数は control と同じで
  * motor 指標だけ差し替え)。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
+ * v3_tenkai = "展開予想"。control の 5 成分に展開優位pt (tenkai) を加えた 6 成分版
+ * (2026-06-20〜、独立スロット)。
  */
 export const PREDICTORS: readonly PredictorSpec[] = [
   {
@@ -128,6 +130,19 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     // 当日から再計測する。実験スロットとして id は v2_tenkai のまま据え置く。
     startedAt: "2026-06-13",
     componentKeys: ["waku", "racer", "motor2rate", "exhibit", "weather"],
+  },
+  {
+    id: "v3_tenkai",
+    displayName: "展開予想",
+    slot: 3,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 本命予想 (control, v1_basic) の 5 成分に展開優位pt (tenkai) を加えた
+    // 6 成分版を独立スロットとして 2026-06-20 に投入。tenkai は 2026-05-30〜06-13 に
+    // v2_tenkai で試行したが、独立スロットでの累計回収率計測のため v3_tenkai として
+    // 改めて投入した。tenkai はスタート展示の進入コース由来 (PREVIEW_DERIVED_COMPONENTS)。
+    startedAt: "2026-06-20",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "tenkai"],
   },
 ];
 

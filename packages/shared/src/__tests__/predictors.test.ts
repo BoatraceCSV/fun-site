@@ -41,12 +41,29 @@ describe("predictor registry", () => {
     expect(v2?.componentKeys).toEqual(v1Keys.map((k) => (k === "motor" ? "motor2rate" : k)));
   });
 
+  it("has v3_tenkai active as the 6-component 展開予想 (control + tenkai)", () => {
+    // control (v1_basic) の 5 成分に展開優位pt (tenkai) を加えた 6 成分版。
+    const v3 = predictorById("v3_tenkai");
+    expect(v3).toBeDefined();
+    expect(v3?.displayName).toBe("展開予想");
+    expect(v3?.slot).toBe(3);
+    expect(v3?.status).toBe("active");
+    expect(v3?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather", "tenkai"]);
+    expect(v3?.componentKeys).toContain("tenkai");
+    // control (本命予想) の 5 成分に tenkai を 1 つ足しただけ。
+    const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
+    expect(v3?.componentKeys.length).toBe(v1Keys.length + 1);
+    expect(v3?.componentKeys.slice(0, v1Keys.length)).toEqual(v1Keys);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
     expect(predictorById("v1_basic")?.startedAt).toBe("2026-05-01");
     // 展開予想撤去で recipe が変わったため 2026-06-13 にリセット。
     expect(predictorById("v2_tenkai")?.startedAt).toBe("2026-06-13");
+    // 展開予想 (v3_tenkai) は 2026-06-20 投入。
+    expect(predictorById("v3_tenkai")?.startedAt).toBe("2026-06-20");
   });
 
   it("returns active predictors sorted by slot", () => {

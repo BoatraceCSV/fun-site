@@ -82,7 +82,7 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 | `estimate/{predictor_id}` | 各 active 予想者の AI 総合評価 (componentKeys ぶんの寄与pt) |
 | `results/realtime` | 当日確定直後のレース結果（着順・決まり手・ST） |
 
-予想者 (predictor) は固有 ID (`v1_basic` = 本命予想、`v2_tenkai` = モーター評価変更予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
+予想者 (predictor) は固有 ID (`v1_basic` = 本命予想、`v2_tenkai` = モーター評価変更予想、`v3_tenkai` = 展開予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
 
 レース 1 件あたり `RacePrediction` JSON を 1 ファイル生成し、`packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に配置する。`RacePrediction.predictions[]` に active 予想者ぶんの `PredictorPrediction` (AI 評価・買い目・回収率) が slot 昇順で並ぶ。Astro はこれを `getStaticPaths()` 内で読み込んで静的ページを生成する。
 
@@ -121,3 +121,4 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 2026-06-13: 展開優位pt を加えた `v2_tenkai` (B君予想) が control である A君予想 (`v1_basic`) を回収率で下回ったため、展開予想を撤去。B君予想を A君予想と同一 recipe（5 成分 + 買い目しきい値 既定 ±0.10）に揃え、`startedAt` を当日へリセットして累計回収率を再計測。`v2_tenkai` は別の特徴量を探る実験スロットとして ID を据え置く。`BETTING_TOLERANCE_BY_PREDICTOR` の v2_tenkai 専用しきい値も削除。
 - 2026-06-13: 次の実験として `v2_tenkai` (B君予想) の着順ベース `motor` を **`motor2rate`(公式モーター2連率)** に**置き換え**(A君予想の 5 成分のうち motor 指標だけを差し替えた 5 成分。成分数は control と同じ)。`motor2rate` は `race_cards` の `艇N_モーター2連対率` を場別偏差値化したもので、おかぺん評価(平和島の公開モーター評価)との順位相関検証(boatracecsv `notebooks/motor_pt_okapen_validation.ipynb`)で、着順ベースの `motor`(相関ほぼ 0)に対し公式 2連対率が ρ≈0.6 と有望だったことを受けた差し替え。preview 非依存で朝バッチでも取得可。control の A君予想と回収率で比較する。
 - 2026-06-13: UI 表示名を変更。`v1_basic` を **本命予想**(旧 A君予想)、`v2_tenkai` を **モーター評価変更予想**(旧 B君予想)に改称。レース詳細ページのモーター評価変更予想カードには本命予想からの recipe 差分(motor を motor2rate に置き換えた旨)を説明する注記を `PredictorCard` の `recipeNote` prop で表示する。
+- 2026-06-20: 第 3 予想者 `v3_tenkai`(**展開予想**)を独立スロット (slot=3) として投入。本命予想 (`v1_basic`) の 5 成分に **展開優位pt (`tenkai`)** を加えた 6 成分構成(モーター指標は control と同じ着順ベース `motor`。`tenkai` の有無だけが control との差分)。展開優位pt は 2026-05〜06-13 に `v2_tenkai` で試行した成分だが、独立スロットで累計回収率を計測するため新 ID で再投入した。`tenkai` は preview 由来成分のため朝バッチ (`state=daily`) では 50 (中立) に固定される。買い目しきい値は既定 ±0.10。レース詳細カードは `recipeNote` で本命予想からの差分(展開優位pt 追加)を表示し、スタート予想・1マーク予想図も slot=3 で表示する。
