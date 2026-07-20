@@ -16,10 +16,12 @@ export {
   computeBettingPicks,
   bettingToleranceFor,
   effectiveAvgST,
+  predictedST,
   BETTING_TOLERANCE_BY_PREDICTOR,
   DEFAULT_BETTING_TOLERANCE,
   NO_RECORD_ST_FALLBACK,
   type OneMarkDistanceEntry,
+  type OneMarkDistanceOptions,
   type BettingPicks,
   type BettingTolerance,
 } from "./one-mark-distance.js";

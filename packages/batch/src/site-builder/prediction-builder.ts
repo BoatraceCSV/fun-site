@@ -11,7 +11,6 @@ import type {
   PredictorPrediction,
   PredictorSpec,
   RaceBetPayoutSummary,
-  RaceCardRacer,
   RaceCardRow,
   RacePayoutRow,
   RacePrediction,
@@ -21,6 +20,7 @@ import type {
   RaceRecentForm,
   RaceResultRow,
   RacerRecentForm,
+  RacerStRow,
   RecentFormRow,
   RecentFormSessionView,
   StartPrediction,
@@ -45,25 +45,47 @@ import type { PredictorIndexFetch } from "../fetcher/index.js";
 
 const BOAT_COUNT = 6;
 
+/**
+ * 予測 ST。通常版 (useEstimated=false) は全国平均 ST (従来どおり)。
+ * 推定 ST 版 (useEstimated=true) は AI 推定 ST (estimate/racer_st) を優先し、
+ * 無い枠は全国平均 ST。0.00 = 実績なしの補完は描画側 / 距離計算側の共通
+ * フォールバック (`NO_RECORD_ST_FALLBACK`) に委ねる。
+ */
+const startTimingFor = (racer: RaceRacer | undefined, useEstimated: boolean): number =>
+  (useEstimated ? (racer?.estimatedST ?? racer?.nationalAvgST) : racer?.nationalAvgST) ?? 0;
+
 /** stt が無い場合の進入コース＝枠番のフォールバック */
-const buildFallbackStartPrediction = (cards: RaceCardRow): StartPrediction => {
-  const entries: StartPredictionEntry[] = cards.racers.map((r) => ({
+const buildFallbackStartPrediction = (
+  racers: readonly RaceRacer[],
+  useEstimated: boolean,
+): StartPrediction => {
+  const entries: StartPredictionEntry[] = racers.map((r) => ({
     boatNumber: r.boatNumber,
     courseNumber: r.boatNumber,
-    startTiming: r.nationalAvgST,
+    startTiming: startTimingFor(r, useEstimated),
     exhibitionStartTiming: null,
   }));
   return {
     fromExhibition: false,
+    ...(useEstimated ? { usesEstimatedST: true } : {}),
     entries: entries.toSorted((a, b) => a.courseNumber - b.courseNumber),
   };
 };
 
-/** stt + race_cards からスタート予想を構築 */
-const buildStartPrediction = (cards: RaceCardRow, stt: SttRow | undefined): StartPrediction => {
-  if (!stt) return buildFallbackStartPrediction(cards);
+/**
+ * stt + 出走表からスタート予想を構築する。
+ * useEstimated=false: 従来どおり全国平均 ST (`RacePrediction.startPrediction`)。
+ * useEstimated=true: AI 推定 ST 版 (`RacePrediction.startPredictionEstimated`。
+ * v5_slit のカードが表示する)。
+ */
+const buildStartPrediction = (
+  racers: readonly RaceRacer[],
+  stt: SttRow | undefined,
+  useEstimated: boolean,
+): StartPrediction => {
+  if (!stt) return buildFallbackStartPrediction(racers, useEstimated);
 
-  const racerByBoat = new Map<number, RaceCardRacer>(cards.racers.map((r) => [r.boatNumber, r]));
+  const racerByBoat = new Map<number, RaceRacer>(racers.map((r) => [r.boatNumber, r]));
 
   const entries: StartPredictionEntry[] = stt.boats.map((boat) => {
     const racer = racerByBoat.get(boat.boatNumber);
@@ -73,13 +95,14 @@ const buildStartPrediction = (cards: RaceCardRow, stt: SttRow | undefined): Star
     return {
       boatNumber: boat.boatNumber,
       courseNumber: boat.courseNumber || boat.boatNumber,
-      startTiming: racer?.nationalAvgST ?? 0,
+      startTiming: startTimingFor(racer, useEstimated),
       exhibitionStartTiming,
     };
   });
 
   return {
     fromExhibition: true,
+    ...(useEstimated ? { usesEstimatedST: true } : {}),
     entries: entries.toSorted((a, b) => a.courseNumber - b.courseNumber),
   };
 };
@@ -262,8 +285,13 @@ const toRaceRacers = (
   cards: RaceCardRow,
   stadiumCode: string,
   motorStatsByKey: ReadonlyMap<string, MotorStats>,
-): RaceRacer[] =>
-  cards.racers.map((r) => ({
+  racerSt: RacerStRow | undefined,
+): RaceRacer[] => {
+  const estimatedByBoat = new Map<number, number>();
+  for (const e of racerSt?.entries ?? []) {
+    if (e.estimatedST !== null) estimatedByBoat.set(e.boatNumber, e.estimatedST);
+  }
+  return cards.racers.map((r) => ({
     boatNumber: r.boatNumber,
     registrationNumber: r.registrationNumber,
     racerName: r.racerName,
@@ -291,7 +319,11 @@ const toRaceRacers = (
     ...(motorStatsByKey.has(motorStatsKey(stadiumCode, r.motorNumber))
       ? { motorStats: motorStatsByKey.get(motorStatsKey(stadiumCode, r.motorNumber)) }
       : {}),
+    ...(estimatedByBoat.has(r.boatNumber)
+      ? { estimatedST: estimatedByBoat.get(r.boatNumber) }
+      : {}),
   }));
+};
 
 /**
  * 1 レース × 1 予想者ぶんの PredictorPrediction を組み立てる。
@@ -312,11 +344,16 @@ const buildPredictorPrediction = (
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
 
   const tolerance = bettingToleranceFor(predictor.id);
+  // v5_slit のみ AI 推定 ST を距離計算に使う (他予想者は従来どおり全国平均 ST)
+  const stOptions = { useEstimatedST: predictor.useEstimatedST === true };
   const dailyPicks = aiEvaluationDaily
-    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily), tolerance)
+    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily, stOptions), tolerance)
     : undefined;
   const realtimePicks = aiEvaluationRealtime
-    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationRealtime), tolerance)
+    ? computeBettingPicks(
+        computeOneMarkDistances(racers, aiEvaluationRealtime, stOptions),
+        tolerance,
+      )
     : undefined;
   const betHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
   const betPayout = computeRaceBetPayoutSummary(dailyPicks, realtimePicks, result, payout);
@@ -346,6 +383,7 @@ const buildPredictorPrediction = (
 export const buildRacePrediction = (
   cards: RaceCardRow,
   stt: SttRow | undefined,
+  racerSt: RacerStRow | undefined,
   tkz: TkzRow | undefined,
   sui: SuiRow | undefined,
   origEx: OriginalExhibitionRow | undefined,
@@ -367,7 +405,7 @@ export const buildRacePrediction = (
   const stadiumName =
     stadium?.name ?? title?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
 
-  const racers = toRaceRacers(cards, parsed.stadiumId, motorStatsByKey);
+  const racers = toRaceRacers(cards, parsed.stadiumId, motorStatsByKey, racerSt);
 
   // active 予想者ごとに PredictorPrediction を作成
   const predictors = activePredictors();
@@ -404,7 +442,10 @@ export const buildRacePrediction = (
     grade: title?.grade ?? "",
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers,
-    startPrediction: buildStartPrediction(cards, stt),
+    startPrediction: buildStartPrediction(racers, stt, false),
+    ...(racers.some((r) => r.estimatedST !== undefined)
+      ? { startPredictionEstimated: buildStartPrediction(racers, stt, true) }
+      : {}),
     ...(preview !== undefined ? { preview } : {}),
     ...(recentForm !== undefined ? { recentForm } : {}),
     aiEvaluation,
@@ -430,6 +471,7 @@ export const buildRacePrediction = (
 export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
+  racerSt: readonly RacerStRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
   originalExhibition: readonly OriginalExhibitionRow[],
@@ -443,6 +485,7 @@ export const buildAllRacePredictions = (
   generatedAt: string,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
+  const racerStByCode = new Map(racerSt.map((r) => [r.raceCode, r]));
   const tkzByCode = new Map(tkz.map((t) => [t.raceCode, t]));
   const suiByCode = new Map(sui.map((s) => [s.raceCode, s]));
   const origExByCode = new Map(originalExhibition.map((o) => [o.raceCode, o]));
@@ -475,6 +518,7 @@ export const buildAllRacePredictions = (
     buildRacePrediction(
       cards,
       sttByCode.get(cards.raceCode),
+      racerStByCode.get(cards.raceCode),
       tkzByCode.get(cards.raceCode),
       suiByCode.get(cards.raceCode),
       origExByCode.get(cards.raceCode),

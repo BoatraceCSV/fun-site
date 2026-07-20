@@ -100,6 +100,12 @@ export type PredictorSpec = {
   readonly startedAt: string;
   /** この予想者が使う特徴量キー (順序が CSV 列順)。 */
   readonly componentKeys: readonly ComponentKey[];
+  /**
+   * 1 マーク走行距離計算・スリット図の予測 ST に AI 推定 ST
+   * (estimate/racer_st、実測 ST 履歴ベース) を使うか。未指定 (false) は
+   * 従来どおり全国平均 ST。現状 v5_slit のみ true。
+   */
+  readonly useEstimatedST?: boolean;
 };
 
 /**
@@ -112,6 +118,8 @@ export type PredictorSpec = {
  * 2026-07-19 退役 (control に有意差なし)。
  * v4_motor = "モーター予想" (実験スロット)。control の motor をエキスパート評価で
  * チューニングした motor4 に差し替えた 5 成分版 (2026-07-20〜)。
+ * v5_slit = "スリット予想" (実験スロット)。control と同一の 5 成分で、1 マーク距離
+ * 計算・スリット図の予測 ST だけを AI 推定 ST (racer_st) に差し替えた版 (2026-07-21〜)。
  *
  * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
  * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
@@ -164,6 +172,21 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     // 朝バッチでも取得可。control と回収率を A/B 比較する実験スロット。
     startedAt: "2026-07-20",
     componentKeys: ["waku", "racer", "motor4", "exhibit", "weather"],
+  },
+  {
+    id: "v5_slit",
+    displayName: "スリット予想",
+    slot: 5,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 本命予想 (control, v1_basic) と同一の 5 成分 (index / 強さpt は同値) で、
+    // 1 マーク走行距離計算とスリット図の予測 ST だけを全国平均 ST から
+    // AI 推定 ST (estimate/racer_st。実測 ST 履歴の EWMA + コース/F 補正) に
+    // 差し替えた実験スロット。ST 推定の改善単独の回収率効果を control と
+    // A/B 比較する (boatracecsv docs/design/st_estimation.md)。
+    startedAt: "2026-07-21",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+    useEstimatedST: true,
   },
 ];
 

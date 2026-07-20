@@ -72,7 +72,7 @@ export const runPipeline = async (): Promise<void> => {
     .map((p) => `${p.predictor.id}=${p.rows.length}`)
     .join(",");
   console.info(
-    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.tkz.length} tkz, ${csvData.sui.length} sui, ${csvData.originalExhibition.length} orig_exhibition, ${csvData.recentNational.length} recent_national, ${csvData.recentLocal.length} recent_local, ${csvData.motorStats.length} motor_stats, index[${indexSummary}], ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
+    `Fetched: ${csvData.titles.length} titles, ${csvData.raceCards.length} race_cards, ${csvData.stt.length} stt, ${csvData.tkz.length} tkz, ${csvData.sui.length} sui, ${csvData.originalExhibition.length} orig_exhibition, ${csvData.recentNational.length} recent_national, ${csvData.recentLocal.length} recent_local, ${csvData.motorStats.length} motor_stats, ${csvData.racerSt.length} racer_st, index[${indexSummary}], ${csvData.results.length} results, ${csvData.payouts.length} payouts`,
   );
 
   if (csvData.raceCards.length === 0) {
@@ -86,6 +86,7 @@ export const runPipeline = async (): Promise<void> => {
   const predictions = buildAllRacePredictions(
     csvData.raceCards,
     csvData.stt,
+    csvData.racerSt,
     csvData.tkz,
     csvData.sui,
     csvData.originalExhibition,

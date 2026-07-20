@@ -309,8 +309,10 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
   })().map((pp) => (
     <section class="mb-6">
       {/* スタート予想・1マーク予想を各予想者カード内に小さく横並びで表示する。
-           スタート予想は全予想者共通で全国平均ST。1マーク予想は予想者ごとの
-           AI 評価 (realtime 優先) を採用するため図が異なる。
+           スタート予想は slot=1〜4 は全国平均ST の共通図。スリット予想 (v5_slit,
+           slot=5) のみ AI 推定 ST 版 (startPredictionEstimated。無ければ共通図に
+           フォールバック) を表示し、1マーク距離の予測 ST も AI 推定 ST を使う。
+           1マーク予想は予想者ごとの AI 評価 (realtime 優先) を採用するため図が異なる。
            モーター予想 (slot=4, 現行) は本命予想 (slot=1) の motor を motor4 に置き換えた構成。
            退役済み: モーター評価変更予想 (slot=2, motor→motor2rate) / 展開予想 (slot=3, +展開優位pt)。
            過去日ページには退役予想者も残るため slot=2/3 の分岐も維持する。 */}
@@ -318,25 +320,30 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         prediction={pp}
         racers={prediction.racers}
         startPrediction={
-          pp.slot === 1 || pp.slot === 2 || pp.slot === 3 || pp.slot === 4
-            ? prediction.startPrediction
-            : undefined
+          pp.predictorId === "v5_slit"
+            ? (prediction.startPredictionEstimated ?? prediction.startPrediction)
+            : pp.slot === 1 || pp.slot === 2 || pp.slot === 3 || pp.slot === 4
+              ? prediction.startPrediction
+              : undefined
         }
         oneMarkAiEvaluation={
           pp.slot === 1
             ? prediction.aiEvaluation
-            : pp.slot === 2 || pp.slot === 3 || pp.slot === 4
+            : pp.slot === 2 || pp.slot === 3 || pp.slot === 4 || pp.slot === 5
               ? (pp.aiEvaluationRealtime ?? pp.aiEvaluationDaily)
               : undefined
         }
+        useOneMarkEstimatedST={pp.predictorId === "v5_slit"}
         recipeNote={
           pp.predictorId === "v4_motor"
             ? "本命予想の5成分のうち、モーターpt をエキスパート評価でチューニングしたモーター能力指数に置き換えた構成です。"
-            : pp.predictorId === "v2_tenkai"
-              ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
-              : pp.predictorId === "v3_tenkai"
-                ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
-                : undefined
+            : pp.predictorId === "v5_slit"
+              ? "本命予想と同じ5成分ですが、スタート予想・1マーク予想の予測STを全国平均STから実測ST履歴ベースのAI推定STに置き換えた構成です。"
+              : pp.predictorId === "v2_tenkai"
+                ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
+                : pp.predictorId === "v3_tenkai"
+                  ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
+                  : undefined
         }
       />
     </section>

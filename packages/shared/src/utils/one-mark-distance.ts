@@ -17,32 +17,59 @@ export const NO_RECORD_ST_FALLBACK = 0.25;
 export const effectiveAvgST = (nationalAvgST: number | undefined): number =>
   !nationalAvgST ? NO_RECORD_ST_FALLBACK : nationalAvgST;
 
+/**
+ * 予測 ST を返す。AI 推定 ST(estimate/racer_st 由来、実測 ST 履歴ベース)が
+ * あればそれを優先し、無ければ全国平均 ST(0.00 は `NO_RECORD_ST_FALLBACK`
+ * 補完)にフォールバックする。**AI 推定 ST を採用する予想者 (v5_slit)** の
+ * スタート予想図と 1 マーク走行距離計算の共通ロジック。
+ */
+export const predictedST = (racer: Pick<RaceRacer, "estimatedST" | "nationalAvgST">): number =>
+  racer.estimatedST ?? effectiveAvgST(racer.nationalAvgST);
+
 /** 1艇分の走行距離計算結果 */
 export type OneMarkDistanceEntry = {
   readonly boatNumber: number;
-  /** 計算に使った実効平均ST(実績なしは `NO_RECORD_ST_FALLBACK` 補完後の値) */
+  /**
+   * 計算に使った予測 ST。AI 推定 ST があればその値、無ければ実効平均 ST
+   * (実績なしは `NO_RECORD_ST_FALLBACK` 補完後の値)。
+   */
   readonly avgST: number;
   readonly strengthPt: number;
-  /** 走行距離 = (1 - 平均ST) + 強さpt / 50 - 1.6 */
+  /** 走行距離 = (1 - 予測ST) + 強さpt / 50 - 1.6 */
   readonly distance: number;
+};
+
+/** `computeOneMarkDistances` のオプション。 */
+export type OneMarkDistanceOptions = {
+  /**
+   * true なら予測 ST に AI 推定 ST (`RaceRacer.estimatedST`) を優先して使う
+   * (`predictedST`)。false / 未指定なら従来どおり全国平均 ST (`effectiveAvgST`)。
+   * 予想者の `PredictorSpec.useEstimatedST` を渡す (現状 v5_slit のみ true)。
+   */
+  readonly useEstimatedST?: boolean;
 };
 
 /**
  * 1マーク予想の走行距離を全艇分計算する。
- * distance = (1 - 全国平均ST) + 強さpt / 50 - 1.6
+ * distance = (1 - 予測ST) + 強さpt / 50 - 1.6
  *
- * 全国平均ST = 0.00(実績なし)の艇は `NO_RECORD_ST_FALLBACK`(0.25)で補完する。
- * 補完しないと 0.00 = 最速スタート扱いとなり、実績なし艇の距離が過大評価される
- * (スタート予想図の描画側フォールバックと同じ値に統一)。
+ * 予測 ST は既定で全国平均 ST。`options.useEstimatedST` が true の予想者
+ * (v5_slit) のみ AI 推定 ST(estimate/racer_st)を優先する(`predictedST`)。
+ * 全国平均 ST = 0.00(実績なし)の艇は `NO_RECORD_ST_FALLBACK`(0.25)で
+ * 補完する。補完しないと 0.00 = 最速スタート扱いとなり、実績なし艇の距離が
+ * 過大評価される(スタート予想図の描画側フォールバックと同じ値に統一)。
  */
 export const computeOneMarkDistances = (
   racers: readonly RaceRacer[],
   aiEvaluation: AiEvaluation,
+  options?: OneMarkDistanceOptions,
 ): readonly OneMarkDistanceEntry[] => {
   const aiByBoat = new Map(aiEvaluation.entries.map((e) => [e.boatNumber, e]));
   return racers.map((racer) => {
     const ai = aiByBoat.get(racer.boatNumber);
-    const avgST = effectiveAvgST(racer.nationalAvgST);
+    const avgST = options?.useEstimatedST
+      ? predictedST(racer)
+      : effectiveAvgST(racer.nationalAvgST);
     const strengthPt = ai?.strengthPt ?? 0;
     const distance = 1 - avgST + strengthPt / 50 - 1.6;
     return { boatNumber: racer.boatNumber, avgST, strengthPt, distance };

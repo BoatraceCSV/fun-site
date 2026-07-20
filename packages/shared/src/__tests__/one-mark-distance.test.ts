@@ -7,6 +7,7 @@ import {
   computeBettingPicks,
   computeOneMarkDistances,
   effectiveAvgST,
+  predictedST,
 } from "../utils/one-mark-distance.js";
 
 const makeRacer = (boatNumber: number, avgST: number): RaceRacer => ({
@@ -84,6 +85,35 @@ describe("effectiveAvgST", () => {
   it("0.00 / undefined は NO_RECORD_ST_FALLBACK を返す", () => {
     expect(effectiveAvgST(0)).toBe(NO_RECORD_ST_FALLBACK);
     expect(effectiveAvgST(undefined)).toBe(NO_RECORD_ST_FALLBACK);
+  });
+});
+
+describe("predictedST", () => {
+  it("AI 推定 ST があれば優先する", () => {
+    expect(predictedST({ estimatedST: 0.13, nationalAvgST: 0.18 })).toBe(0.13);
+  });
+
+  it("AI 推定 ST が無ければ実効平均 ST にフォールバック", () => {
+    expect(predictedST({ nationalAvgST: 0.18 })).toBe(0.18);
+    expect(predictedST({ nationalAvgST: 0 })).toBe(NO_RECORD_ST_FALLBACK);
+  });
+
+  it("computeOneMarkDistances は useEstimatedST 指定時のみ estimatedST を使う", () => {
+    const racers: RaceRacer[] = [{ ...makeRacer(1, 0.18), estimatedST: 0.13 }, makeRacer(2, 0.18)];
+    const ai = makeAi([
+      { boatNumber: 1, strengthPt: 50 },
+      { boatNumber: 2, strengthPt: 50 },
+    ]);
+    // opt-in (v5_slit): AI 推定 ST を使用
+    const result = computeOneMarkDistances(racers, ai, { useEstimatedST: true });
+    // 艇1: (1-0.13) + 1 - 1.6 = 0.27 / 艇2: (1-0.18) + 1 - 1.6 = 0.22
+    expect(result[0]?.avgST).toBe(0.13);
+    expect(result[0]?.distance).toBeCloseTo(0.27, 5);
+    expect(result[1]?.distance).toBeCloseTo(0.22, 5);
+    // 既定 (他予想者): estimatedST は無視して全国平均 ST を使う
+    const plain = computeOneMarkDistances(racers, ai);
+    expect(plain[0]?.avgST).toBe(0.18);
+    expect(plain[0]?.distance).toBeCloseTo(0.22, 5);
   });
 });
 

@@ -69,6 +69,22 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v4_motor")).toBe(true);
   });
 
+  it("has v5_slit active with control-identical components and AI-estimated ST", () => {
+    // control (v1_basic) と同一の 5 成分 (index / 強さpt は同値)。差分は
+    // 1 マーク距離計算・スリット図の予測 ST のみ (全国平均ST → AI 推定 ST)。
+    const v5 = predictorById("v5_slit");
+    expect(v5).toBeDefined();
+    expect(v5?.displayName).toBe("スリット予想");
+    expect(v5?.slot).toBe(5);
+    expect(v5?.status).toBe("active");
+    expect(v5?.componentKeys).toEqual(predictorById("v1_basic")?.componentKeys);
+    expect(v5?.useEstimatedST).toBe(true);
+    // 他の予想者は予測 ST を差し替えない (既存処理へ影響なし)。
+    expect(predictorById("v1_basic")?.useEstimatedST).toBeUndefined();
+    expect(predictorById("v4_motor")?.useEstimatedST).toBeUndefined();
+    expect(activePredictors().some((p) => p.id === "v5_slit")).toBe(true);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
@@ -78,6 +94,8 @@ describe("predictor registry", () => {
     expect(predictorById("v3_tenkai")?.startedAt).toBe("2026-06-20");
     // モーター予想 (v4_motor) は 2026-07-20 投入。
     expect(predictorById("v4_motor")?.startedAt).toBe("2026-07-20");
+    // スリット予想 (v5_slit) は 2026-07-21 投入。
+    expect(predictorById("v5_slit")?.startedAt).toBe("2026-07-21");
   });
 
   it("returns active predictors sorted by slot", () => {

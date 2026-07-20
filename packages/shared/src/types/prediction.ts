@@ -37,6 +37,13 @@ export type RaceRacer = {
   /** 節間成績 14 スロット（時系列順、未出走含む） */
   readonly sessionResults: readonly SessionResultSlot[];
   /**
+   * AI 推定 ST（estimate/racer_st 由来。実測 ST 履歴ベース）。
+   * racer_st CSV が未生成・当該枠が空欄のレースでは undefined。
+   * `useEstimatedST` な予想者 (v5_slit) のスタート予想図と 1 マーク走行距離
+   * 計算のみが本値を使う。他の予想者は従来どおり全国平均 ST。
+   */
+  readonly estimatedST?: number;
+  /**
    * モーター期成績（motor_stats 由来、場×モーター番号で突合）。
    * 当日 motor_stats が未取得 / 当該場が未収録のレースでは undefined。
    */
@@ -66,7 +73,11 @@ export type StartPredictionEntry = {
   readonly boatNumber: number;
   /** 進入コース (1-6)。stt 未取得時は枠番と同一 */
   readonly courseNumber: number;
-  /** スタートタイミング = race_cards の全国平均ST */
+  /**
+   * 予測スタートタイミング。通常版 (`RacePrediction.startPrediction`) は
+   * race_cards の全国平均ST、推定 ST 版 (`startPredictionEstimated`) は
+   * AI 推定 ST（無い枠は全国平均ST フォールバック）。
+   */
   readonly startTiming: number;
   /**
    * スタート展示の実測ST (previews/stt 由来)。
@@ -79,6 +90,11 @@ export type StartPredictionEntry = {
 export type StartPrediction = {
   /** stt CSV から進入コースを取得できたか。false の場合は枠番=コースの仮表示 */
   readonly fromExhibition: boolean;
+  /**
+   * startTiming に AI 推定 ST（racer_st CSV）を使ったか。false は全国平均 ST。
+   * 古い JSON では未設定のため、UI 側は false フォールバックすること。
+   */
+  readonly usesEstimatedST?: boolean;
   /** 進入コース順に並んだエントリ */
   readonly entries: readonly StartPredictionEntry[];
 };
@@ -247,7 +263,14 @@ export type RacePrediction = {
   readonly grade: string;
   readonly votingDeadline: string;
   readonly racers: readonly RaceRacer[];
+  /** スタート予想 (通常版: 全国平均 ST)。v5_slit 以外の予想者カードが表示する。 */
   readonly startPrediction: StartPrediction;
+  /**
+   * スタート予想 (AI 推定 ST 版)。racer_st CSV が取得できたレースのみセットされ、
+   * `useEstimatedST` な予想者 (v5_slit) のカードが表示する。未生成時は undefined
+   * (UI 側は `startPrediction` にフォールバックすること)。
+   */
+  readonly startPredictionEstimated?: StartPrediction;
   /**
    * 直前情報（締切5分前の展示・気象スナップショット）。
    * previews/tkz / previews/sui のどちらも未取得のレースでは undefined。

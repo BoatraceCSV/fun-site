@@ -5,9 +5,14 @@ import { BOAT_COLORS, computeOneMarkDistances, isValidBoatNumber } from "@fun-si
 interface Props {
   racers: readonly RaceRacer[];
   aiEvaluation: AiEvaluation;
+  /**
+   * true なら予測 ST に AI 推定 ST (racer_st) を使う (v5_slit のカード)。
+   * 未指定 (false) は従来どおり全国平均 ST。
+   */
+  useEstimatedST?: boolean;
 }
 
-const { racers, aiEvaluation } = Astro.props;
+const { racers, aiEvaluation, useEstimatedST = false } = Astro.props;
 
 // 表示順 (top → bottom 固定)
 const DISPLAY_ORDER = [5, 3, 6, 1, 4, 2] as const;
@@ -39,8 +44,9 @@ const distToX = (d: number): number => {
 // 1マーク基準線の x 座標（distance=0 の位置）
 const baselineX = distToX(0);
 
-// 走行距離を共通関数で算出し、表示順 (5,3,6,1,4,2) に並べ替える
-const distanceEntries = computeOneMarkDistances(racers, aiEvaluation);
+// 走行距離を共通関数で算出し、表示順 (5,3,6,1,4,2) に並べ替える。
+// 予測 ST は useEstimatedST な予想者 (v5_slit) のみ AI 推定 ST、他は全国平均 ST。
+const distanceEntries = computeOneMarkDistances(racers, aiEvaluation, { useEstimatedST });
 const distanceByBoat = new Map(distanceEntries.map((e) => [e.boatNumber, e]));
 const rows = DISPLAY_ORDER.map((boatNumber) => {
   const e = distanceByBoat.get(boatNumber);
@@ -144,7 +150,7 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
       font-size="10"
       fill="#64748b"
     >
-      1マークからの進行距離（(1 - 平均ST) + 強さpt/50 - 1.6）
+      1マークからの進行距離（(1 - 予測ST) + 強さpt/50 - 1.6）
     </text>
 
     {/* レーン行（5,3,6,1,4,2 固定） */}
@@ -197,6 +203,8 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
     })}
   </svg>
   <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
-    各艇の進行距離 = (1 − 全国平均ST) + 強さpt ÷ 50 − 1.6（表示範囲 0.00〜0.50）。レーン並びは 5・3・6・1・4・2 で固定表示しています。
+    各艇の進行距離 = (1 − 予測ST) + 強さpt ÷ 50 − 1.6（表示範囲 0.00〜0.50）。予測STは{
+      useEstimatedST ? "実測ST履歴から算出したAI推定ST" : "選手の全国平均ST"
+    }です。レーン並びは 5・3・6・1・4・2 で固定表示しています。
   </figcaption>
 </figure>

@@ -6,6 +6,7 @@ import type {
   RaceCardRow,
   RacePayoutRow,
   RaceResultRow,
+  RacerStRow,
   RecentFormRow,
   SttRow,
   SuiRow,
@@ -18,6 +19,7 @@ import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
 import { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 import { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
+import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
@@ -50,6 +52,11 @@ export type FetchedCsvData = {
   readonly recentLocal: readonly RecentFormRow[];
   /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
   readonly motorStats: readonly MotorStatsRow[];
+  /**
+   * 選手別 推定ST (estimate/racer_st)。1 レース 1 行。未生成時は空配列
+   * (その場合スタート予想・1マーク距離は全国平均 ST にフォールバックする)。
+   */
+  readonly racerSt: readonly RacerStRow[];
   /** Active な全予想者の index CSV (失敗した予想者は空 rows で含まれる)。 */
   readonly indexesByPredictor: readonly PredictorIndexFetch[];
   /**
@@ -131,6 +138,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentNational,
     recentLocal,
     motorStats,
+    racerSt,
     indexesByPredictor,
     results,
     payouts,
@@ -144,6 +152,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("recent_national", date, parseRecentForm),
     fetchAndParse("recent_local", date, parseRecentForm),
     fetchAndParse("motor_stats", date, parseMotorStats),
+    fetchAndParse("racer_st", date, parseRacerSt),
     Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
     fetchAndParse("results", date, parseResults),
     fetchAndParse("payouts", date, parsePayouts),
@@ -159,6 +168,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentNational,
     recentLocal,
     motorStats,
+    racerSt,
     indexesByPredictor,
     results,
     payouts,
@@ -168,6 +178,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
 export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
+export { parseRacerSt } from "./racer-st-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";

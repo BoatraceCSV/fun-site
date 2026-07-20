@@ -42,7 +42,7 @@ HTML 骨組み、meta タグ（OGP / Twitter Card）、ヘッダー（トップ 
 
 | コンポーネント | 役割 |
 |---|---|
-| `StartPredictionDiagram.astro` | スタート予想図（進入コース順に並べた SVG）。PredictorCard 内に表示。全予想者共通で全国平均STを渡す(0.00=実績なしは shared の `effectiveAvgST` により `NO_RECORD_ST_FALLBACK`=0.25 で遅め描画。1マーク距離計算と共通の補完)。任意 prop `stNote` で ST 説明文を上書き可（既定は「スタートタイミングは選手の全国平均STです。」）。各艇の ST 値ラベルは上段に予想/平均ST、下段に `entry.exhibitionStartTiming`（stt 由来のスタート展示実測ST、`展xx.xx` 青字）を併記。実測が無い艇（stt 未取得 / 展示未計測=0→null）は下段を出さない |
+| `StartPredictionDiagram.astro` | スタート予想図（進入コース順に並べた SVG）。PredictorCard 内に表示。slot=1〜4 のカードには全国平均ST の共通図 (`startPrediction`)、スリット予想 (v5_slit) には AI 推定 ST 版 (`startPredictionEstimated`、無ければ共通図フォールバック) を渡す (0.00=実績なしは shared の `effectiveAvgST` により `NO_RECORD_ST_FALLBACK`=0.25 で遅め描画)。凡例は `start.usesEstimatedST` で「AI推定ST」/「全国平均ST」を出し分け。任意 prop `stNote` で ST 説明文を上書き可（既定は「スタートタイミングは選手の全国平均STです。」）。各艇の ST 値ラベルは上段に予想/平均ST、下段に `entry.exhibitionStartTiming`（stt 由来のスタート展示実測ST、`展xx.xx` 青字）を併記。実測が無い艇（stt 未取得 / 展示未計測=0→null）は下段を出さない |
 | `OneMarkPredictionDiagram.astro` | 1 マーク予想（AI 寄与度ベース）の可視化。`aiEvaluation` は各予想者ごとの評価を採用するため予想者間で図が異なり得る（モーター予想は本命予想の motor を motor4 に置き換えた構成のため図が異なり得る）。PredictorCard 内に表示 |
 | `AiEvaluationChart.astro` | AI 総合評価（枠別 寄与pt を横棒で積み上げ。採用成分は `evaluation.componentKeys` で動的に決まる) |
 | `TrendLineChart.astro` | ゼロ JS のインライン SVG 折れ線。複数予想者を重ね描き。共通 x 軸 `labels` に対し各系列 `values` を同じ長さで揃え、`null` は点を描かない。値は割合を `%` 表記。任意 `refValue` で基準線 (回収率 100% = 1.0) を破線描画。`/stats/` の累積推移で利用 |

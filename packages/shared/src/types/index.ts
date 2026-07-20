@@ -19,6 +19,7 @@ export type {
   StartPredictionEntry,
 } from "./prediction.js";
 export type { MotorStatsRow } from "./motor-stats.js";
+export type { RacerStEntry, RacerStRow } from "./racer-st.js";
 export type {
   OriginalExhibitionBoat,
   OriginalExhibitionRow,

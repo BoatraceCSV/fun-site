@@ -5,8 +5,9 @@ import { BOAT_COLORS, effectiveAvgST, isValidBoatNumber } from "@fun-site/shared
 interface Props {
   start: StartPrediction;
   /**
-   * ST 値の説明文を差し替える。未指定時は「選手の全国平均ST」を表示。
-   * モーター評価変更予想のように ST を一律固定値で表示する場合に注記を上書きするため使う。
+   * ST 値の説明文を差し替える。未指定時は `start.usesEstimatedST` に応じて
+   * 「AI推定ST」/「選手の全国平均ST」を出し分ける。
+   * ST を一律固定値で表示するような特殊ケースで注記を上書きするために使う。
    */
   stNote?: string;
 }
@@ -201,7 +202,10 @@ const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != nul
       ? "進入コースは直前情報のスタート展示を基準に表示しています。"
       : "直前情報がまだ届いていないため、進入コースは枠番を仮表示しています。"}
     {" "}
-    {stNote ?? "スタートタイミングは選手の全国平均STです。"}
+    {stNote ??
+      (start.usesEstimatedST
+        ? "スタートタイミングは実測ST履歴から算出したAI推定STです。"
+        : "スタートタイミングは選手の全国平均STです。")}
     {hasExhibitionSt && (
       <>
         {" "}
