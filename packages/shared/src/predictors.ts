@@ -18,6 +18,7 @@
 /** 各予想者で採用しうる特徴量成分のキー。 */
 export type ComponentKey =
   | "waku"
+  | "course"
   | "racer"
   | "motor"
   | "motor2rate"
@@ -29,6 +30,10 @@ export type ComponentKey =
 /** Component key → 日本語ラベル (CSV 列名から成分への逆引きにも使う)。 */
 export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
   waku: "枠番pt",
+  // v6_course で採用。場×レース番号×コース別の収縮済み1着率
+  // (data/estimate/stadium/course_win_rate.csv) を実進入コース (daily は枠番) で
+  // 引いた値。waku の代替成分。列名は N枠_コースpt。boatracecsv 側 registry.py と同期。
+  course: "コースpt",
   racer: "選手pt",
   motor: "モーターpt",
   motor2rate: "モーター2連率pt",
@@ -44,6 +49,7 @@ export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
 /** Component key → 短縮表示ラベル(UI バー凡例等で使う)。 */
 export const COMPONENT_SHORT_LABELS: Readonly<Record<ComponentKey, string>> = {
   waku: "枠番",
+  course: "コース",
   racer: "選手",
   motor: "モーター",
   motor2rate: "M2連率",
@@ -56,6 +62,7 @@ export const COMPONENT_SHORT_LABELS: Readonly<Record<ComponentKey, string>> = {
 /** Component key → バー / 凡例の色 (UI 描画専用)。 */
 export const COMPONENT_COLORS: Readonly<Record<ComponentKey, string>> = {
   waku: "#3b82f6",
+  course: "#6366f1",
   racer: "#22c55e",
   motor: "#f97316",
   motor2rate: "#14b8a6",
@@ -120,6 +127,8 @@ export type PredictorSpec = {
  * チューニングした motor4 に差し替えた 5 成分版 (2026-07-20〜)。
  * v5_slit = "スリット予想" (実験スロット)。control と同一の 5 成分で、1 マーク距離
  * 計算・スリット図の予測 ST だけを AI 推定 ST (racer_st) に差し替えた版 (2026-07-21〜)。
+ * v6_course = "コース予想" (実験スロット)。control の waku を場×レース番号×コース別の
+ * コース強度 (course) に差し替えた 5 成分版 (2026-07-22〜)。
  *
  * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
  * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
@@ -187,6 +196,21 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-07-21",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
     useEstimatedST: true,
+  },
+  {
+    id: "v6_course",
+    displayName: "コース予想",
+    slot: 6,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 本命予想 (control, v1_basic) の枠番pt (waku、場×季節×コース) を、
+    // 場×レース番号×コース別の収縮済み1着率テーブルに基づくコースpt (course) に
+    // 差し替えた 5 成分構成。テーブル定義の優劣だけを control と回収率で A/B
+    // 比較する実験スロット。course は waku 同様 daily でも値を持つ
+    // (PREVIEW_DERIVED_COMPONENTS には含めない)。
+    // 設計: boatracecsv docs/design/course_strength_v6.md
+    startedAt: "2026-07-22",
+    componentKeys: ["course", "racer", "motor", "exhibit", "weather"],
   },
 ];
 

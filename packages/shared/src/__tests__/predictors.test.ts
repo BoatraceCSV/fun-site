@@ -7,6 +7,7 @@ import {
   activePredictors,
   allPredictors,
   indexCsvTypeFor,
+  isPreviewDerivedComponent,
   predictorById,
   predictorCsvPath,
   predictorFromIndexCsvType,
@@ -85,6 +86,22 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v5_slit")).toBe(true);
   });
 
+  it("has v6_course active with waku swapped for course", () => {
+    // コース予想 (v6_course): 本命予想の waku を場×レース番号×コース別の
+    // course に差し替えた 5 成分の実験スロット (2026-07-22 投入)。
+    // boatracecsv docs/design/course_strength_v6.md
+    const v6 = predictorById("v6_course");
+    expect(v6?.status).toBe("active");
+    expect(v6?.slot).toBe(6);
+    expect(v6?.componentKeys).toEqual(["course", "racer", "motor", "exhibit", "weather"]);
+    // control との差分は waku → course の 1 成分のみ。
+    const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
+    expect(v6?.componentKeys).toEqual(v1Keys.map((k) => (k === "waku" ? "course" : k)));
+    // course は daily でも値を持つ (preview 由来成分ではない)。
+    expect(isPreviewDerivedComponent("course")).toBe(false);
+    expect(activePredictors().some((p) => p.id === "v6_course")).toBe(true);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
@@ -96,6 +113,8 @@ describe("predictor registry", () => {
     expect(predictorById("v4_motor")?.startedAt).toBe("2026-07-20");
     // スリット予想 (v5_slit) は 2026-07-21 投入。
     expect(predictorById("v5_slit")?.startedAt).toBe("2026-07-21");
+    // コース予想 (v6_course) は 2026-07-22 投入。
+    expect(predictorById("v6_course")?.startedAt).toBe("2026-07-22");
   });
 
   it("returns active predictors sorted by slot", () => {
@@ -131,6 +150,8 @@ describe("component constants", () => {
     expect(COMPONENT_LABELS.weather).toBe("気象pt");
     expect(COMPONENT_LABELS.tenkai).toBe("展開優位pt");
     expect(COMPONENT_LABELS.motor2rate).toBe("モーター2連率pt");
+    // v6_course: waku の代替。意味が変わるため「枠番pt」を流用しない。
+    expect(COMPONENT_LABELS.course).toBe("コースpt");
     // motor4 は CSV 列名互換のため motor と同じラベル (ファイルは predictor_id ごとに分離)。
     expect(COMPONENT_LABELS.motor4).toBe("モーターpt");
   });
