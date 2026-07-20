@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
 import {
+  NO_RECORD_ST_FALLBACK,
   type OneMarkDistanceEntry,
   bettingToleranceFor,
   computeBettingPicks,
   computeOneMarkDistances,
+  effectiveAvgST,
 } from "../utils/one-mark-distance.js";
 
 const makeRacer = (boatNumber: number, avgST: number): RaceRacer => ({
@@ -56,6 +58,32 @@ describe("computeOneMarkDistances", () => {
     // 艇2: (1-0.20) + 25/50 - 1.6 = 0.80 + 0.5 - 1.6 = -0.30
     expect(result[0]?.distance).toBeCloseTo(0.25, 5);
     expect(result[1]?.distance).toBeCloseTo(-0.3, 5);
+  });
+
+  it("全国平均ST=0.00 (実績なし) は NO_RECORD_ST_FALLBACK (0.25) で補完する", () => {
+    // 平均ST 0.00 をそのまま使うと「最速スタート扱い」で距離が過大評価される
+    const racers: RaceRacer[] = [makeRacer(1, 0), makeRacer(2, 0.25)];
+    const ai = makeAi([
+      { boatNumber: 1, strengthPt: 50 },
+      { boatNumber: 2, strengthPt: 50 },
+    ]);
+    const result = computeOneMarkDistances(racers, ai);
+    // 艇1: avgST=0.00 → 0.25 補完。艇2 (avgST=0.25) と同じ距離になる
+    expect(result[0]?.avgST).toBe(NO_RECORD_ST_FALLBACK);
+    expect(result[0]?.distance).toBeCloseTo(result[1]?.distance ?? Number.NaN, 5);
+    // 補完後: (1-0.25) + 50/50 - 1.6 = 0.15
+    expect(result[0]?.distance).toBeCloseTo(0.15, 5);
+  });
+});
+
+describe("effectiveAvgST", () => {
+  it("実績あり (>0) はそのまま返す", () => {
+    expect(effectiveAvgST(0.14)).toBe(0.14);
+  });
+
+  it("0.00 / undefined は NO_RECORD_ST_FALLBACK を返す", () => {
+    expect(effectiveAvgST(0)).toBe(NO_RECORD_ST_FALLBACK);
+    expect(effectiveAvgST(undefined)).toBe(NO_RECORD_ST_FALLBACK);
   });
 });
 

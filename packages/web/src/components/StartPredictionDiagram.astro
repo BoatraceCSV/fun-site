@@ -1,6 +1,6 @@
 ---
 import type { StartPrediction } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import { BOAT_COLORS, effectiveAvgST, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   start: StartPrediction;
@@ -41,9 +41,9 @@ const stToX = (st: number): number => {
 // スタートラインの x 座標（ST=0 の位置）
 const startLineX = stToX(0);
 
-// 全国平均STが 0.00（=実績なし）の場合、描画上は遅め（0.25）として扱う
-const NO_RECORD_ST_FOR_DRAW = 0.25;
-const stForDraw = (st: number): number => (st === 0 ? NO_RECORD_ST_FOR_DRAW : st);
+// 全国平均STが 0.00（=実績なし）の場合は遅め（NO_RECORD_ST_FALLBACK = 0.25）として
+// 描画する。1マーク距離計算（computeOneMarkDistances）と共通の補完ロジック。
+const stForDraw = (st: number): number => effectiveAvgST(st);
 
 // 進入コースごとに 1〜6 の lane を割り当て
 const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.courseNumber);
