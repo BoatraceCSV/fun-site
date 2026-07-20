@@ -187,7 +187,9 @@ describe("computeBettingPicks", () => {
   it("bettingToleranceFor: 現状オーバーライド無しで全予想者 既定 ±0.10", () => {
     expect(bettingToleranceFor("v1_basic")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     expect(bettingToleranceFor(undefined)).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
-    // 展開予想撤去で B君予想を A君予想に揃えたため v2_tenkai も既定値。
+    // 現行 active のモーター予想 (v4_motor) もオーバーライド無しで既定値。
+    expect(bettingToleranceFor("v4_motor")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
+    // 退役済み予想者を渡しても既定値 (bettingToleranceFor は status に依らず解決)。
     expect(bettingToleranceFor("v2_tenkai")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
   });
 });

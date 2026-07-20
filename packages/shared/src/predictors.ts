@@ -21,6 +21,7 @@ export type ComponentKey =
   | "racer"
   | "motor"
   | "motor2rate"
+  | "motor4"
   | "exhibit"
   | "weather"
   | "tenkai";
@@ -31,6 +32,10 @@ export const COMPONENT_LABELS: Readonly<Record<ComponentKey, string>> = {
   racer: "選手pt",
   motor: "モーターpt",
   motor2rate: "モーター2連率pt",
+  // v4_motor で採用。エキスパート評価 (平和島/唐津/大村/鳴門) でチューニングした
+  // モーター能力指数。CSV 列名は motor と同じ「モーターpt」(ファイルは predictor_id
+  // ごとに分かれるため衝突しない)。boatracecsv 側 registry.py と同期。
+  motor4: "モーターpt",
   exhibit: "展示pt",
   weather: "気象pt",
   tenkai: "展開優位pt",
@@ -42,6 +47,7 @@ export const COMPONENT_SHORT_LABELS: Readonly<Record<ComponentKey, string>> = {
   racer: "選手",
   motor: "モーター",
   motor2rate: "M2連率",
+  motor4: "モーター",
   exhibit: "展示",
   weather: "気象",
   tenkai: "展開",
@@ -53,6 +59,7 @@ export const COMPONENT_COLORS: Readonly<Record<ComponentKey, string>> = {
   racer: "#22c55e",
   motor: "#f97316",
   motor2rate: "#14b8a6",
+  motor4: "#ea580c",
   exhibit: "#a855f7",
   weather: "#06b6d4",
   tenkai: "#ec4899",
@@ -98,13 +105,18 @@ export type PredictorSpec = {
 /**
  * 予想者レジストリ本体。
  *
- * v1_basic = "本命予想" (5 成分、control)。
- * v2_tenkai = "モーター評価変更予想" (実験スロット)。展開優位pt (tenkai) 版が control を
- * 下回ったため 2026-06-13 に撤去し、同日、着順ベースの motor を motor2rate
- * (公式モーター2連率) に置き換えた 5 成分構成を投入(成分数は control と同じで
- * motor 指標だけ差し替え)。motor2rate はおかぺん評価との順位相関検証で有望だった指標。
- * v3_tenkai = "展開予想"。control の 5 成分に展開優位pt (tenkai) を加えた 6 成分版
- * (2026-06-20〜、独立スロット)。
+ * v1_basic = "本命予想" (5 成分、control)。現行 active な control。
+ * v2_tenkai = "モーター評価変更予想" (実験スロット)。着順ベースの motor を motor2rate
+ * (公式モーター2連率) に置き換えた 5 成分構成。2026-07-19 退役 (control に有意差なし)。
+ * v3_tenkai = "展開予想"。control の 5 成分に展開優位pt (tenkai) を加えた 6 成分版。
+ * 2026-07-19 退役 (control に有意差なし)。
+ * v4_motor = "モーター予想" (実験スロット)。control の motor をエキスパート評価で
+ * チューニングした motor4 に差し替えた 5 成分版 (2026-07-20〜)。
+ *
+ * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
+ * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
+ * (累計回収率の同一性のため)。`activePredictors()` から除外されるので fetcher /
+ * build-state / 各集計の対象から自動的に外れる。boatracecsv 側 registry.py と同期。
  */
 export const PREDICTORS: readonly PredictorSpec[] = [
   {
@@ -119,15 +131,11 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v2_tenkai",
     displayName: "モーター評価変更予想",
     slot: 2,
-    status: "active",
-    // boatracecsv 側 registry.py と同期。
-    // 展開優位pt (tenkai) を加えた版は 本命予想 (control) を回収率で下回ったため
-    // 2026-06-13 に撤去。同日、次の実験として 本命予想の 5 成分のうち着順ベースの
-    // motor を motor2rate (公式モーター2連率) に置き換えた 5 成分構成を投入した
-    // (成分数は control と同じで motor 指標だけ差し替え)。motor2rate は
-    // おかぺん評価との順位相関検証 (boatracecsv notebooks/) で有望だった指標。
-    // recipe が変わったので started_at をこの日にリセットし、累計回収率を
-    // 当日から再計測する。実験スロットとして id は v2_tenkai のまま据え置く。
+    // 2026-07-19 退役。control (v1_basic) に対し有意な回収率差が得られなかった。
+    // boatracecsv 側 registry.py と同期。エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
+    // 着順ベースの motor を motor2rate (公式モーター2連率) に置き換えた 5 成分構成
+    // (2026-06-13〜)。当初 (2026-05-30〜06-13) は展開優位pt (tenkai) を加えた 6 成分版だった。
     startedAt: "2026-06-13",
     componentKeys: ["waku", "racer", "motor2rate", "exhibit", "weather"],
   },
@@ -135,14 +143,27 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v3_tenkai",
     displayName: "展開予想",
     slot: 3,
-    status: "active",
-    // boatracecsv 側 registry.py と同期。
+    // 2026-07-19 退役。control (v1_basic) に対し有意な回収率差が得られなかった。
+    // boatracecsv 側 registry.py と同期。エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // 本命予想 (control, v1_basic) の 5 成分に展開優位pt (tenkai) を加えた
-    // 6 成分版を独立スロットとして 2026-06-20 に投入。tenkai は 2026-05-30〜06-13 に
-    // v2_tenkai で試行したが、独立スロットでの累計回収率計測のため v3_tenkai として
-    // 改めて投入した。tenkai はスタート展示の進入コース由来 (PREVIEW_DERIVED_COMPONENTS)。
+    // 6 成分版 (2026-06-20〜)。tenkai はスタート展示の進入コース由来 (PREVIEW_DERIVED_COMPONENTS)。
     startedAt: "2026-06-20",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather", "tenkai"],
+  },
+  {
+    id: "v4_motor",
+    displayName: "モーター予想",
+    slot: 4,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 本命予想 (control, v1_basic) の着順ベース motor を、エキスパート評価
+    // (平和島/唐津/大村/鳴門 の 4 場) との順位相関でチューニングした motor4 に
+    // 差し替えた 5 成分構成 (成分数は control と同じで motor 指標だけ差し替え)。
+    // motor4 = スコア表 v4 (凸カーブ) + ペナルティ -50 + 直近 5 節。preview 非依存で
+    // 朝バッチでも取得可。control と回収率を A/B 比較する実験スロット。
+    startedAt: "2026-07-20",
+    componentKeys: ["waku", "racer", "motor4", "exhibit", "weather"],
   },
 ];
 

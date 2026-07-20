@@ -22,7 +22,8 @@ type RaceNavItem = {
   isConfirmed: boolean;
   /** A君（slot=1, primary predictor）の直前買い目が的中したか。🎯 アイコン表示用。 */
   aRealtimeHit: boolean;
-  /** モーター評価変更予想（slot=2）の直前買い目が的中したか。🔥 アイコン表示用。存在しない場合は false。 */
+  /** 副予想者（実験スロット）の直前買い目が的中したか。🔥 アイコン表示用。存在しない場合は false。
+   *  現行はモーター予想（slot=4）。過去日は退役済みのモーター評価変更予想（slot=2）を拾う。 */
   bRealtimeHit: boolean;
 };
 
@@ -46,14 +47,16 @@ export async function getStaticPaths() {
       // 文字列も併用判定する (上流 CSV の `電話投票締切予定` 列は確定後に "確定" に置き換わる)。
       const isConfirmed =
         prediction.raceResult !== undefined || prediction.votingDeadline === "確定";
-      // A君 (slot=1) / B君 (slot=2) ぶんの直前買い目的中。
+      // primary (slot=1) / 副予想者 (実験スロット) ぶんの直前買い目的中。
       // 新スキーマでは predictions[] が slot 昇順で並ぶ。
-      // 旧 JSON (predictions 未設定) では legacy `betHitStatus` を A君ぶんとして採用、B君は無し扱い。
+      // 旧 JSON (predictions 未設定) では legacy `betHitStatus` を primary ぶんとして採用、副予想者は無し扱い。
+      // 副予想者は現行がモーター予想 (slot=4)。過去日には退役済みの
+      // モーター評価変更予想 (slot=2) が入るため、slot=4 → slot=2 の順にフォールバックする。
       const predictorsBySlot = new Map(
         (prediction.predictions ?? []).map((p) => [p.slot, p] as const),
       );
       const aPred = predictorsBySlot.get(1);
-      const bPred = predictorsBySlot.get(2);
+      const bPred = predictorsBySlot.get(4) ?? predictorsBySlot.get(2);
       const aRealtimeHit =
         aPred?.betHitStatus.realtimeHit ?? prediction.betHitStatus?.realtimeHit ?? false;
       const bRealtimeHit = bPred?.betHitStatus.realtimeHit ?? false;
@@ -168,7 +171,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   }`}>
                     確定
                   </span>
-                  {/* 本命予想の直前買い目的中 → 🎯 (amber)、モーター評価変更予想の直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
+                  {/* 本命予想の直前買い目的中 → 🎯 (amber)、モーター予想の直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
                   {aRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
@@ -181,8 +184,8 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                   {bRealtimeHit && (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="モーター評価変更予想の直前買い目が的中"
-                      aria-label="モーター評価変更予想の直前買い目が的中"
+                      title="モーター予想の直前買い目が的中"
+                      aria-label="モーター予想の直前買い目が的中"
                     >
                       🔥
                     </span>
@@ -218,7 +221,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                 class={tileClass}
                 aria-label={`${n}R ${meta?.raceName ?? ""}${
                   isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
-                }${hasAnyHit ? ` (${[aRealtimeHit ? "本命予想の直前買い目的中" : "", bRealtimeHit ? "モーター評価変更予想の直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
+                }${hasAnyHit ? ` (${[aRealtimeHit ? "本命予想の直前買い目的中" : "", bRealtimeHit ? "モーター予想の直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -308,29 +311,32 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       {/* スタート予想・1マーク予想を各予想者カード内に小さく横並びで表示する。
            スタート予想は全予想者共通で全国平均ST。1マーク予想は予想者ごとの
            AI 評価 (realtime 優先) を採用するため図が異なる。
-           モーター評価変更予想 (slot=2) は本命予想 (slot=1) の motor を motor2rate に置き換えた構成。
-           展開予想 (slot=3) は本命予想の 5 成分に展開優位pt を加えた構成。 */}
+           モーター予想 (slot=4, 現行) は本命予想 (slot=1) の motor を motor4 に置き換えた構成。
+           退役済み: モーター評価変更予想 (slot=2, motor→motor2rate) / 展開予想 (slot=3, +展開優位pt)。
+           過去日ページには退役予想者も残るため slot=2/3 の分岐も維持する。 */}
       <PredictorCard
         prediction={pp}
         racers={prediction.racers}
         startPrediction={
-          pp.slot === 1 || pp.slot === 2 || pp.slot === 3
+          pp.slot === 1 || pp.slot === 2 || pp.slot === 3 || pp.slot === 4
             ? prediction.startPrediction
             : undefined
         }
         oneMarkAiEvaluation={
           pp.slot === 1
             ? prediction.aiEvaluation
-            : pp.slot === 2 || pp.slot === 3
+            : pp.slot === 2 || pp.slot === 3 || pp.slot === 4
               ? (pp.aiEvaluationRealtime ?? pp.aiEvaluationDaily)
               : undefined
         }
         recipeNote={
-          pp.predictorId === "v2_tenkai"
-            ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
-            : pp.predictorId === "v3_tenkai"
-              ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
-              : undefined
+          pp.predictorId === "v4_motor"
+            ? "本命予想の5成分のうち、モーターpt をエキスパート評価でチューニングしたモーター能力指数に置き換えた構成です。"
+            : pp.predictorId === "v2_tenkai"
+              ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
+              : pp.predictorId === "v3_tenkai"
+                ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
+                : undefined
         }
       />
     </section>

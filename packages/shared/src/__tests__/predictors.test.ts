@@ -22,48 +22,62 @@ describe("predictor registry", () => {
     expect(v1?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
   });
 
-  it("has v2_tenkai active with motor replaced by motor2rate (5成分, motor 差し替え)", () => {
-    // 展開優位pt 撤去後、次の実験として着順ベース motor を motor2rate に
-    // 置き換えた 5 成分構成(成分数は control と同じで motor 指標だけ差し替え)。
+  it("keeps v2_tenkai as a retired entry (motor→motor2rate, past data preserved)", () => {
+    // 2026-07-19 退役 (control に有意差なし)。エントリと成分定義は保持し ID は再利用しない。
     const v2 = predictorById("v2_tenkai");
     expect(v2).toBeDefined();
     expect(v2?.displayName).toBe("モーター評価変更予想");
     expect(v2?.slot).toBe(2);
-    expect(v2?.status).toBe("active");
+    expect(v2?.status).toBe("retired");
+    // recipe (componentKeys) は退役後も履歴解釈のため保持。
     expect(v2?.componentKeys).toEqual(["waku", "racer", "motor2rate", "exhibit", "weather"]);
-    expect(v2?.componentKeys).not.toContain("tenkai");
-    // 着順ベースの motor は使わない(motor2rate に置換済み)。
-    expect(v2?.componentKeys).not.toContain("motor");
     expect(v2?.componentKeys).toContain("motor2rate");
-    // control (本命予想) と同じ 5 成分で、motor の位置だけ motor2rate に差し替え。
-    const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
-    expect(v2?.componentKeys.length).toBe(v1Keys.length);
-    expect(v2?.componentKeys).toEqual(v1Keys.map((k) => (k === "motor" ? "motor2rate" : k)));
+    // 退役済みなので active には含まれない。
+    expect(activePredictors().some((p) => p.id === "v2_tenkai")).toBe(false);
   });
 
-  it("has v3_tenkai active as the 6-component 展開予想 (control + tenkai)", () => {
-    // control (v1_basic) の 5 成分に展開優位pt (tenkai) を加えた 6 成分版。
+  it("keeps v3_tenkai as a retired entry (control + tenkai, past data preserved)", () => {
+    // 2026-07-19 退役 (control に有意差なし)。エントリと成分定義は保持し ID は再利用しない。
     const v3 = predictorById("v3_tenkai");
     expect(v3).toBeDefined();
     expect(v3?.displayName).toBe("展開予想");
     expect(v3?.slot).toBe(3);
-    expect(v3?.status).toBe("active");
+    expect(v3?.status).toBe("retired");
     expect(v3?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather", "tenkai"]);
     expect(v3?.componentKeys).toContain("tenkai");
-    // control (本命予想) の 5 成分に tenkai を 1 つ足しただけ。
+    expect(activePredictors().some((p) => p.id === "v3_tenkai")).toBe(false);
+  });
+
+  it("has v4_motor active with motor replaced by motor4 (5成分, motor 差し替え)", () => {
+    // control (v1_basic) の着順ベース motor をチューニング版 motor4 に差し替えた
+    // 5 成分構成 (成分数は control と同じで motor 指標だけ差し替え)。
+    const v4 = predictorById("v4_motor");
+    expect(v4).toBeDefined();
+    expect(v4?.displayName).toBe("モーター予想");
+    expect(v4?.slot).toBe(4);
+    expect(v4?.status).toBe("active");
+    expect(v4?.componentKeys).toEqual(["waku", "racer", "motor4", "exhibit", "weather"]);
+    expect(v4?.componentKeys).not.toContain("tenkai");
+    // 着順ベースの motor は使わない (motor4 に置換済み)。
+    expect(v4?.componentKeys).not.toContain("motor");
+    expect(v4?.componentKeys).toContain("motor4");
+    // control (本命予想) と同じ 5 成分で、motor の位置だけ motor4 に差し替え。
     const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
-    expect(v3?.componentKeys.length).toBe(v1Keys.length + 1);
-    expect(v3?.componentKeys.slice(0, v1Keys.length)).toEqual(v1Keys);
+    expect(v4?.componentKeys.length).toBe(v1Keys.length);
+    expect(v4?.componentKeys).toEqual(v1Keys.map((k) => (k === "motor" ? "motor4" : k)));
+    // active predictor として含まれる。
+    expect(activePredictors().some((p) => p.id === "v4_motor")).toBe(true);
   });
 
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
     expect(predictorById("v1_basic")?.startedAt).toBe("2026-05-01");
-    // 展開予想撤去で recipe が変わったため 2026-06-13 にリセット。
+    // 退役済みだが起点は当時のまま保持 (過去データ解釈のため)。
     expect(predictorById("v2_tenkai")?.startedAt).toBe("2026-06-13");
-    // 展開予想 (v3_tenkai) は 2026-06-20 投入。
     expect(predictorById("v3_tenkai")?.startedAt).toBe("2026-06-20");
+    // モーター予想 (v4_motor) は 2026-07-20 投入。
+    expect(predictorById("v4_motor")?.startedAt).toBe("2026-07-20");
   });
 
   it("returns active predictors sorted by slot", () => {
@@ -99,6 +113,8 @@ describe("component constants", () => {
     expect(COMPONENT_LABELS.weather).toBe("気象pt");
     expect(COMPONENT_LABELS.tenkai).toBe("展開優位pt");
     expect(COMPONENT_LABELS.motor2rate).toBe("モーター2連率pt");
+    // motor4 は CSV 列名互換のため motor と同じラベル (ファイルは predictor_id ごとに分離)。
+    expect(COMPONENT_LABELS.motor4).toBe("モーターpt");
   });
 
   it("uses 30 for racer fallback (新人 / 長期離脱明け対策)", () => {

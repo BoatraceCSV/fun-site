@@ -82,7 +82,7 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 | `estimate/{predictor_id}` | 各 active 予想者の AI 総合評価 (componentKeys ぶんの寄与pt) |
 | `results/realtime` | 当日確定直後のレース結果（着順・決まり手・ST） |
 
-予想者 (predictor) は固有 ID (`v1_basic` = 本命予想、`v2_tenkai` = モーター評価変更予想、`v3_tenkai` = 展開予想 等) を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。boatracecsv 側のレジストリ ID と同期させること。
+予想者 (predictor) は固有 ID を持ち、レジストリ [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) で宣言する。現行 active は `v1_basic` = 本命予想 と `v4_motor` = モーター予想 の 2 者。退役済みは `v2_tenkai` = モーター評価変更予想、`v3_tenkai` = 展開予想（エントリと過去データは保持、ID 再利用なし）。boatracecsv 側のレジストリ ID と同期させること。
 
 レース 1 件あたり `RacePrediction` JSON を 1 ファイル生成し、`packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に配置する。`RacePrediction.predictions[]` に active 予想者ぶんの `PredictorPrediction` (AI 評価・買い目・回収率) が slot 昇順で並ぶ。Astro はこれを `getStaticPaths()` 内で読み込んで静的ページを生成する。
 
@@ -122,3 +122,5 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 2026-06-13: 次の実験として `v2_tenkai` (B君予想) の着順ベース `motor` を **`motor2rate`(公式モーター2連率)** に**置き換え**(A君予想の 5 成分のうち motor 指標だけを差し替えた 5 成分。成分数は control と同じ)。`motor2rate` は `race_cards` の `艇N_モーター2連対率` を場別偏差値化したもので、おかぺん評価(平和島の公開モーター評価)との順位相関検証(boatracecsv `notebooks/motor_pt_okapen_validation.ipynb`)で、着順ベースの `motor`(相関ほぼ 0)に対し公式 2連対率が ρ≈0.6 と有望だったことを受けた差し替え。preview 非依存で朝バッチでも取得可。control の A君予想と回収率で比較する。
 - 2026-06-13: UI 表示名を変更。`v1_basic` を **本命予想**(旧 A君予想)、`v2_tenkai` を **モーター評価変更予想**(旧 B君予想)に改称。レース詳細ページのモーター評価変更予想カードには本命予想からの recipe 差分(motor を motor2rate に置き換えた旨)を説明する注記を `PredictorCard` の `recipeNote` prop で表示する。
 - 2026-06-20: 第 3 予想者 `v3_tenkai`(**展開予想**)を独立スロット (slot=3) として投入。本命予想 (`v1_basic`) の 5 成分に **展開優位pt (`tenkai`)** を加えた 6 成分構成(モーター指標は control と同じ着順ベース `motor`。`tenkai` の有無だけが control との差分)。展開優位pt は 2026-05〜06-13 に `v2_tenkai` で試行した成分だが、独立スロットで累計回収率を計測するため新 ID で再投入した。`tenkai` は preview 由来成分のため朝バッチ (`state=daily`) では 50 (中立) に固定される。買い目しきい値は既定 ±0.10。レース詳細カードは `recipeNote` で本命予想からの差分(展開優位pt 追加)を表示し、スタート予想・1マーク予想図も slot=3 で表示する。
+- 2026-07-19: `v2_tenkai` (モーター評価変更予想) / `v3_tenkai` (展開予想) をいずれも退役 (`status: "retired"`)。control (`v1_basic`) に対し有意な回収率差が得られなかったため。退役後もエントリと過去データ (`data/estimate/{id}/…`)・成分定義 (`tenkai` / `motor2rate`) は保持し、命名規則どおり ID は再利用しない。`activePredictors()` から除外されるため fetcher / build-state / 各集計の対象から自動的に外れる。boatracecsv 側 registry.py と同期。
+- 2026-07-20: 第 4 予想者 `v4_motor`(**モーター予想**)を slot=4 で投入。本命予想 (`v1_basic`) の着順ベース `motor` を、エキスパート評価 4 場(平和島/唐津/大村/鳴門)との順位相関でチューニングしたモーター能力指数 **`motor4`** に差し替えた 5 成分構成(成分数は control と同じで motor 指標だけ差し替え)。`motor4` はスコア表 v4(凸カーブ)+ ペナルティ -50 + 直近 5 節で算出し、CSV 列名は `motor` と同じ「モーターpt」(ファイルは predictor_id ごとに分離)。preview 非依存で朝バッチでも取得可。買い目しきい値は既定 ±0.10。レース詳細カードは `recipeNote` で本命予想からの差分(motor4 差し替え)を表示し、スタート予想・1マーク予想図も slot=4 で表示する。トップページの 1R-12R リンクバーの副予想者 🔥 アイコンは slot=4 を参照する(過去日は退役済み slot=2 にフォールバック)。
