@@ -1,5 +1,6 @@
 import type { RaceResultRow } from "../types/race-result.js";
 import type { BettingPicks } from "./one-mark-distance.js";
+import { extractTopThree } from "./race-result.js";
 
 /**
  * 買い目の的中状態。
@@ -14,18 +15,6 @@ export type BetHitStatus = {
 };
 
 const BET_HIT_STATUS_NONE: BetHitStatus = { dailyHit: false, realtimeHit: false };
-
-/** 1〜3 着の艇番を [1着, 2着, 3着] のタプルで取り出す。揃っていなければ undefined を返す */
-const extractTopThree = (result: RaceResultRow): readonly [number, number, number] | undefined => {
-  const byRank = new Map<number, number>(
-    result.finishes.map((f) => [f.rank, f.boatNumber] as const),
-  );
-  const first = byRank.get(1);
-  const second = byRank.get(2);
-  const third = byRank.get(3);
-  if (first === undefined || second === undefined || third === undefined) return undefined;
-  return [first, second, third] as const;
-};
 
 /**
  * 三連単フォーメーション（買い目の `first` × `second` × `third`）が

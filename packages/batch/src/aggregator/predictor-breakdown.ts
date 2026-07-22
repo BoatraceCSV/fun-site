@@ -10,7 +10,7 @@ import type {
   RacePrediction,
   TimeseriesPoint,
 } from "@fun-site/shared";
-import { STADIUMS, allPredictors } from "@fun-site/shared";
+import { STADIUMS, allPredictors, isSettledResult } from "@fun-site/shared";
 import { fetchHistoricalPredictions } from "../site-builder/data-writer.js";
 
 /**
@@ -200,6 +200,8 @@ export const aggregatePredictorBreakdown = (
   for (const p of known) accById.set(p.id, newPredictorAcc());
 
   for (const pred of predictions) {
+    // 未確定レース（結果未着・中止・不成立）は母数・購入額・分子から一括除外。
+    if (!isSettledResult(pred.raceResult)) continue;
     const windSpeed = pred.raceResult?.weather.windSpeed;
     const grade = pred.grade?.trim() ? pred.grade.trim() : UNKNOWN_KEY;
     for (const pp of pred.predictions ?? []) {

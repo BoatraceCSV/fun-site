@@ -5,7 +5,7 @@ import type {
   PredictorSpec,
   RacePrediction,
 } from "@fun-site/shared";
-import { activePredictors, aggregateDailyBetPayout } from "@fun-site/shared";
+import { activePredictors, aggregateDailyBetPayout, isSettledResult } from "@fun-site/shared";
 
 interface Props {
   /** 当日の全レース予想。確定済みかつフォーメーションが計算できたレースだけが集計対象に入る。 */
@@ -33,6 +33,8 @@ const collectRealtimeResults = (
 ): BetPayoutResult[] => {
   const out: BetPayoutResult[] = [];
   for (const p of preds) {
+    // 未確定レース（結果未着・中止・不成立）は母数・購入額から除外する。
+    if (!isSettledResult(p.raceResult)) continue;
     const fromArray = p.predictions?.find((pp) => pp.predictorId === predictorId);
     if (fromArray) {
       out.push(fromArray.betPayout.realtime);

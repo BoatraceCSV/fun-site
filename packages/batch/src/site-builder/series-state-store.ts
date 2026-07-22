@@ -1,5 +1,5 @@
 import type { DailyBetPayoutSnapshot, RacePrediction } from "@fun-site/shared";
-import { buildDailySnapshot } from "@fun-site/shared";
+import { buildDailySnapshot, isSettledResult } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
 
 /**
@@ -145,8 +145,10 @@ export const extractDailySnapshotsByStadium = (
     }
   >();
   for (const [stadiumId, group] of grouped) {
+    // 未確定レース（結果未着・中止・不成立）は母数・購入額から除外する。
+    const settled = group.filter((p) => isSettledResult(p.raceResult));
     // primary (後方互換): 既存の betPayout?.realtime をそのまま使う
-    const realtimeResults = group
+    const realtimeResults = settled
       .map((p) => p.betPayout?.realtime)
       .filter((r): r is NonNullable<typeof r> => r !== undefined);
     const snapshot = buildDailySnapshot(date, realtimeResults);
@@ -156,7 +158,7 @@ export const extractDailySnapshotsByStadium = (
       string,
       NonNullable<RacePrediction["betPayout"]>["realtime"][]
     >();
-    for (const p of group) {
+    for (const p of settled) {
       for (const pp of p.predictions ?? []) {
         const rt = pp.betPayout?.realtime;
         if (!rt) continue;

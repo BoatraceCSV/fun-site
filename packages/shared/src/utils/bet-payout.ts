@@ -1,6 +1,7 @@
 import type { CombinationPayout, RacePayoutRow } from "../types/race-payout.js";
 import type { RaceResultRow } from "../types/race-result.js";
 import type { BettingPicks } from "./one-mark-distance.js";
+import { extractTopThree } from "./race-result.js";
 
 /** 1 点あたりの賭け金 (円)。回収率算出の母数に使う。 */
 export const BET_UNIT_YEN = 100 as const;
@@ -52,18 +53,6 @@ const ZERO_RESULT: BetPayoutResult = {
   payoutYen: 0,
   hit: false,
   actualSanrentan: null,
-};
-
-/** 1〜3 着が揃っていれば `[1着, 2着, 3着]` を返す（ヘルパ） */
-const extractTopThree = (result: RaceResultRow): readonly [number, number, number] | undefined => {
-  const byRank = new Map<number, number>(
-    result.finishes.map((f) => [f.rank, f.boatNumber] as const),
-  );
-  const first = byRank.get(1);
-  const second = byRank.get(2);
-  const third = byRank.get(3);
-  if (first === undefined || second === undefined || third === undefined) return undefined;
-  return [first, second, third] as const;
 };
 
 /** フォーメーション内に `[1着, 2着, 3着]` が含まれるか（同着除外） */
@@ -154,7 +143,11 @@ export const computeRaceBetPayoutSummary = (
 
 /** 当日 1 日分の 3連単 戦略集計。`daily` / `realtime` 別に持つ。 */
 export type DailyBetPayoutAggregate = {
-  /** 結果が確定したレース数（母数）。 */
+  /**
+   * 母数となるレース数（＝確定済みかつ買い目が組めたレース数）。
+   * 未確定レース（結果未着・中止・不成立）は呼び出し側で
+   * `isSettledResult` により除外済みである前提。
+   */
   readonly settledRaceCount: number;
   /** 的中したレース数。 */
   readonly hitCount: number;
@@ -184,12 +177,14 @@ const ZERO_AGGREGATE: DailyBetPayoutAggregate = {
 };
 
 /**
- * 1 日分 (= 締切済み 全レース) の `BetPayoutResult` 配列から集計を生成する。
+ * 1 日分の `BetPayoutResult` 配列から集計を生成する。
  *
- * `betCount === 0` のレース（フォーメーションが計算できない / 結果未確定）は
- * 母数 (`settledRaceCount`) にも分子 (`hitCount` / `totalPayoutYen`) にも
- * 含めない。これにより「当日買い目しか出ていないが直前は未取得」のケースで
- * 直前側の母数が水増しされない。
+ * `betCount === 0` のレース（フォーメーションが計算できない）は母数
+ * (`settledRaceCount`) にも分子 (`hitCount` / `totalPayoutYen`) にも含めない。
+ *
+ * **未確定レース（結果未着・中止・不成立）は呼び出し側で `isSettledResult`
+ * により除外してから渡す契約** とする。的中数・払戻（分子）と母数・購入額
+ * （分母）の対象レースを揃えるため。
  */
 export const aggregateDailyBetPayout = (
   results: readonly BetPayoutResult[],

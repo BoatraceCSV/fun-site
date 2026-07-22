@@ -32,6 +32,31 @@ const makePrediction = (args: {
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
     entries: [],
   },
+  // 集計対象は確定済みレースのみ。1〜3 着が揃う結果を付与する (isSettledResult=true)。
+  raceResult: {
+    raceCode: args.raceCode,
+    raceDate: `${args.raceCode.slice(0, 4)}-${args.raceCode.slice(4, 6)}-${args.raceCode.slice(6, 8)}`,
+    stadiumId: args.stadiumId,
+    raceNumber: args.raceNumber,
+    votingDeadline: "",
+    fetchedAt: "",
+    recordedAt: "",
+    kimarite: "",
+    finishes: [
+      { rank: 1, boatNumber: 1, racerName: "", raceTime: "" },
+      { rank: 2, boatNumber: 2, racerName: "", raceTime: "" },
+      { rank: 3, boatNumber: 3, racerName: "", raceTime: "" },
+    ],
+    courses: [],
+    weather: {
+      weather: "1",
+      windDirection: "北",
+      windSpeed: 3,
+      waveHeight: 2,
+      airTemperature: 20,
+      waterTemperature: 20,
+    },
+  },
   betPayout: args.betPayoutRealtime
     ? {
         daily: {
@@ -238,6 +263,31 @@ describe("computeSeriesSummary", () => {
         state: "daily",
         componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
         entries: [],
+      },
+      // 確定済みレース (1〜3 着が揃う) = 集計対象。
+      raceResult: {
+        raceCode: "202605211201",
+        raceDate: "2026-05-21",
+        stadiumId: "12",
+        raceNumber: 1,
+        votingDeadline: "",
+        fetchedAt: "",
+        recordedAt: "",
+        kimarite: "",
+        finishes: [
+          { rank: 1, boatNumber: 1, racerName: "", raceTime: "" },
+          { rank: 2, boatNumber: 2, racerName: "", raceTime: "" },
+          { rank: 3, boatNumber: 3, racerName: "", raceTime: "" },
+        ],
+        courses: [],
+        weather: {
+          weather: "1",
+          windDirection: "北",
+          windSpeed: 3,
+          waveHeight: 2,
+          airTemperature: 20,
+          waterTemperature: 20,
+        },
       },
       betPayout: {
         daily: {

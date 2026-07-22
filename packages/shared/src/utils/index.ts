@@ -26,6 +26,7 @@ export {
   type BettingTolerance,
 } from "./one-mark-distance.js";
 export { checkBettingHit, type BetHitStatus } from "./bet-hit.js";
+export { extractTopThree, isSettledResult } from "./race-result.js";
 export { tokenizeRankString, type RankMark } from "./rank-marks.js";
 export {
   BET_UNIT_YEN,

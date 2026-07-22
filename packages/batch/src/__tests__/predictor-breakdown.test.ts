@@ -42,6 +42,8 @@ const makePred = (args: {
   windSpeed?: number;
   realtime?: RealtimeBet;
   strengthByBoat?: Record<number, number>;
+  /** false で結果未確定 (raceResult 無し) を表現。既定 true。 */
+  settled?: boolean;
 }): RacePrediction => {
   const date = `${args.raceCode.slice(0, 4)}-${args.raceCode.slice(4, 6)}-${args.raceCode.slice(6, 8)}`;
   const rt = args.realtime;
@@ -60,7 +62,7 @@ const makePred = (args: {
     startPrediction: { fromExhibition: false, entries: [] },
     aiEvaluation: { state: "realtime", componentKeys: [], entries: [] },
     raceResult:
-      args.windSpeed === undefined
+      args.settled === false
         ? undefined
         : {
             raceCode: args.raceCode,
@@ -71,9 +73,14 @@ const makePred = (args: {
             fetchedAt: "",
             recordedAt: "",
             kimarite: "",
-            finishes: [],
+            // 確定済み: 1〜3 着が揃う (isSettledResult=true)。
+            finishes: [
+              { rank: 1, boatNumber: 1, racerName: "", raceTime: "" },
+              { rank: 2, boatNumber: 2, racerName: "", raceTime: "" },
+              { rank: 3, boatNumber: 3, racerName: "", raceTime: "" },
+            ],
             courses: [],
-            weather: weather(args.windSpeed),
+            weather: weather(args.windSpeed ?? 3),
           },
     predictions: rt
       ? [
@@ -139,6 +146,28 @@ describe("aggregatePredictorBreakdown", () => {
     expect(A(report).total.raceCount).toBe(1);
   });
 
+  it("未確定レース (結果なし) は母数・購入額から除外", () => {
+    const report = aggregatePredictorBreakdown([
+      // 買い目はあるが結果未確定 → 除外。
+      makePred({
+        raceCode: "202605021201",
+        stadiumId: "12",
+        settled: false,
+        realtime: { betCount: 2, betCostYen: 200, payoutYen: 0, hit: false },
+      }),
+      // 確定済み → 集計対象。
+      makePred({
+        raceCode: "202605021202",
+        stadiumId: "12",
+        realtime: { betCount: 1, betCostYen: 100, payoutYen: 800, hit: true },
+      }),
+    ]);
+    const a = A(report).total;
+    expect(a.raceCount).toBe(1);
+    expect(a.betCostYen).toBe(100);
+    expect(a.hitCount).toBe(1);
+  });
+
   it("total の回収率・的中率を直前のみで算出", () => {
     const report = aggregatePredictorBreakdown([
       makePred({
@@ -186,9 +215,9 @@ describe("aggregatePredictorBreakdown", () => {
     }
   });
 
-  it("配当帯・風速は不明バケット込みで total と一致", () => {
+  it("配当帯は不明バケット込みで total と一致・風速は確定済みなので不明なし", () => {
     const report = aggregatePredictorBreakdown([
-      // 配当・風速あり
+      // 配当あり・風速 7
       makePred({
         raceCode: "202605021201",
         stadiumId: "12",
@@ -201,7 +230,7 @@ describe("aggregatePredictorBreakdown", () => {
           sanrentanPayout: 12000,
         },
       }),
-      // 配当なし (sanrentanPayout 未指定 → 不明) / 風速なし (raceResult 無し → 不明)
+      // 配当なし (sanrentanPayout 未指定 → 不明バンド)。確定済みなので風速は既定 3 で既知。
       makePred({
         raceCode: "202605021202",
         stadiumId: "12",
@@ -211,12 +240,15 @@ describe("aggregatePredictorBreakdown", () => {
     const a = A(report);
     expect(sumRaceCount(a.byPayoutBand)).toBe(a.total.raceCount);
     expect(sumRaceCount(a.byWindSpeed)).toBe(a.total.raceCount);
+    // 配当は欠損しうるので不明バケットが立つ。
     expect(a.byPayoutBand.some((b) => b.key === "unknown")).toBe(true);
-    expect(a.byWindSpeed.some((b) => b.key === "unknown")).toBe(true);
+    // 集計対象は確定済みレースのみ = 風速は必ず存在するため不明バケットは立たない。
+    expect(a.byWindSpeed.some((b) => b.key === "unknown")).toBe(false);
     // 12000円 は 1万円〜 バンドへ。
     expect(a.byPayoutBand.find((b) => b.key === "band_10000_")?.metrics.raceCount).toBe(1);
-    // 風速 7 は 6〜7m/s ビンへ。
+    // 風速 7 は 6〜7m/s ビンへ、既定 3 は 2〜3m/s ビンへ。
     expect(a.byWindSpeed.find((b) => b.key === "w6_7")?.metrics.raceCount).toBe(1);
+    expect(a.byWindSpeed.find((b) => b.key === "w2_3")?.metrics.raceCount).toBe(1);
   });
 
   it("本命枠番は strengthPt 最大艇から導出", () => {

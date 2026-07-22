@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { PredictorSpec, RacePrediction } from "@fun-site/shared";
-import { activePredictors, allPredictors } from "@fun-site/shared";
+import { activePredictors, allPredictors, isSettledResult } from "@fun-site/shared";
 import { fetchHistoricalPredictions } from "../site-builder/data-writer.js";
 
 /**
@@ -94,6 +94,8 @@ export const aggregatePredictorStats = (
   }
 
   for (const pred of predictions) {
+    // 未確定レース（結果未着・中止・不成立）は母数・購入額・分子から一括除外。
+    if (!isSettledResult(pred.raceResult)) continue;
     const month = monthOf(pred.raceDate);
     const perPredictor = pred.predictions ?? [];
     for (const pp of perPredictor) {
