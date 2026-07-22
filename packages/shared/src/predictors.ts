@@ -129,6 +129,9 @@ export type PredictorSpec = {
  * 計算・スリット図の予測 ST だけを AI 推定 ST (racer_st) に差し替えた版 (2026-07-21〜)。
  * v6_course = "コース予想" (実験スロット)。control の waku を場×レース番号×コース別の
  * コース強度 (course) に差し替えた 5 成分版 (2026-07-22〜)。
+ * v7_aggregate = "統合予想" (実験スロット)。v4_motor (motor→motor4) + v6_course
+ * (waku→course) の成分差し替えに、v5_slit の予測 ST 差し替え (useEstimatedST) を
+ * 重ねた 3 仮説統合版 (2026-07-23〜)。
  *
  * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
  * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
@@ -211,6 +214,22 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     // 設計: boatracecsv docs/design/course_strength_v6.md
     startedAt: "2026-07-22",
     componentKeys: ["course", "racer", "motor", "exhibit", "weather"],
+  },
+  {
+    id: "v7_aggregate",
+    displayName: "統合予想",
+    slot: 7,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 統合予想 = v4_motor / v5_slit / v6_course の 3 仮説を全て適用した版。
+    //   - v6_course 由来: waku → course (場×レース番号×コース別の収縮済み1着率)
+    //   - v4_motor  由来: motor → motor4 (スコア表 v4 + ペナルティ -50 + 直近 5 節)
+    //   - v5_slit   由来: 予測 ST を全国平均 ST → AI 推定 ST (racer_st) に差し替え
+    // componentKeys は course と motor4 を両取り。予測 ST 差し替えは index / 強さpt
+    // には影響せず (成分は同一)、useEstimatedST フラグでのみ表現する。
+    startedAt: "2026-07-23",
+    componentKeys: ["course", "racer", "motor4", "exhibit", "weather"],
+    useEstimatedST: true,
   },
 ];
 

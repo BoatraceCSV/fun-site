@@ -102,6 +102,25 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v6_course")).toBe(true);
   });
 
+  it("has v7_aggregate active combining course + motor4 + AI-estimated ST", () => {
+    // 統合予想 (v7_aggregate): v4_motor (motor→motor4) + v6_course (waku→course) の
+    // 成分差し替えに v5_slit の予測 ST 差し替え (useEstimatedST) を重ねた 3 仮説統合版
+    // (2026-07-23 投入)。boatracecsv docs/design/aggregate_v7.md
+    const v7 = predictorById("v7_aggregate");
+    expect(v7?.status).toBe("active");
+    expect(v7?.slot).toBe(7);
+    // v6_course の course と v4_motor の motor4 を両取りした 5 成分。
+    expect(v7?.componentKeys).toEqual(["course", "racer", "motor4", "exhibit", "weather"]);
+    // control (v1_basic) から waku→course・motor→motor4 の 2 成分だけ差し替え。
+    const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
+    expect(v7?.componentKeys).toEqual(
+      v1Keys.map((k) => (k === "waku" ? "course" : k === "motor" ? "motor4" : k)),
+    );
+    // v5_slit と同じく予測 ST に AI 推定 ST を使う。
+    expect(v7?.useEstimatedST).toBe(true);
+    expect(activePredictors().some((p) => p.id === "v7_aggregate")).toBe(true);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
@@ -115,6 +134,8 @@ describe("predictor registry", () => {
     expect(predictorById("v5_slit")?.startedAt).toBe("2026-07-21");
     // コース予想 (v6_course) は 2026-07-22 投入。
     expect(predictorById("v6_course")?.startedAt).toBe("2026-07-22");
+    // 統合予想 (v7_aggregate) は 2026-07-23 投入。
+    expect(predictorById("v7_aggregate")?.startedAt).toBe("2026-07-23");
   });
 
   it("returns active predictors sorted by slot", () => {
