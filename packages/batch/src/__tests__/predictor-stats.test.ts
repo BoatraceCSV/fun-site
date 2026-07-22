@@ -71,29 +71,42 @@ const findTotal = (report: ReturnType<typeof aggregatePredictorStats>) =>
   report.predictors.find((p) => p.predictorId === PID)?.total;
 
 describe("aggregatePredictorStats", () => {
-  it("未確定レースは母数・購入額・払戻から除外し、確定分のみ集計する", () => {
+  it("直前のみを集計し、当日買い目と未確定レースは除外する", () => {
     const report = aggregatePredictorStats([
-      // 確定済み: 当日+直前で購入額 100、直前的中で払戻 800。
+      // 確定済み・直前的中。当日は購入額 300/払戻 5000 だが集計に含めない。
       makePred({
         raceCode: "202605021201",
         settled: true,
-        dailyBet: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false },
+        dailyBet: { betCount: 3, betCostYen: 300, payoutYen: 5000, hit: true },
         realtimeBet: { betCount: 1, betCostYen: 100, payoutYen: 800, hit: true },
       }),
-      // 未確定 (結果なし): 買い目はあるが除外される。
+      // 確定済み・直前は外れ (当日は的中)。hitCount は直前基準なので加算しない。
       makePred({
         raceCode: "202605021202",
+        settled: true,
+        dailyBet: { betCount: 2, betCostYen: 200, payoutYen: 3000, hit: true },
+        realtimeBet: { betCount: 1, betCostYen: 100, payoutYen: 0, hit: false },
+      }),
+      // 未確定 (結果なし): 直前買い目はあるが母数から除外。
+      makePred({
+        raceCode: "202605021203",
         settled: false,
         dailyBet: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false },
         realtimeBet: { betCount: 2, betCostYen: 200, payoutYen: 0, hit: false },
       }),
     ]);
     const total = findTotal(report);
-    expect(total?.raceCount).toBe(1);
-    expect(total?.betCostYen).toBe(100);
+    expect(total?.raceCount).toBe(2);
+    // 直前のみ: 100 + 100 = 200 (当日 300/200 は含めない)。
+    expect(total?.betCostYen).toBe(200);
+    // 直前のみ: 800 + 0 = 800 (当日 5000/3000 は含めない)。
     expect(total?.payoutYen).toBe(800);
+    // 的中は直前基準で 1 レース (当日的中は数えない)。
     expect(total?.hitCount).toBe(1);
-    expect(total?.recoveryRate).toBeCloseTo(8.0);
+    expect(total?.realtimeHitCount).toBe(1);
+    // 参考値として当日的中数は残る。
+    expect(total?.dailyHitCount).toBe(2);
+    expect(total?.recoveryRate).toBeCloseTo(4.0);
   });
 
   it("すべて未確定なら母数 0", () => {

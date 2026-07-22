@@ -9,12 +9,12 @@ import { fetchHistoricalPredictions } from "../site-builder/data-writer.js";
  */
 export type PredictorMonthlyStats = {
   readonly month: string; // "YYYY-MM"
-  readonly raceCount: number; // 集計対象になったレース数 (買い目が組めたもののみ)
-  readonly hitCount: number; // 当日 / 直前 いずれかが的中したレース数
-  readonly dailyHitCount: number;
-  readonly realtimeHitCount: number;
-  readonly betCostYen: number; // 当日 + 直前 の合算購入額
-  readonly payoutYen: number; // 当日 + 直前 の合算払戻額
+  readonly raceCount: number; // 集計対象レース数 (直前買い目が組めた確定済みレースのみ)
+  readonly hitCount: number; // 直前買い目が的中したレース数 (= realtimeHitCount)
+  readonly dailyHitCount: number; // 参考: 当日買い目が的中したレース数
+  readonly realtimeHitCount: number; // 参考: 直前買い目が的中したレース数
+  readonly betCostYen: number; // 直前買い目の購入額
+  readonly payoutYen: number; // 直前買い目の払戻額
   /** 回収率。`betCostYen === 0` のときは `null` (集計母数なし)。 */
   readonly recoveryRate: number | null;
 };
@@ -62,7 +62,7 @@ const accumulate = (
 ): PredictorMonthlyStats => ({
   ...acc,
   raceCount: acc.raceCount + 1,
-  hitCount: acc.hitCount + (dailyHit || realtimeHit ? 1 : 0),
+  hitCount: acc.hitCount + (realtimeHit ? 1 : 0),
   dailyHitCount: acc.dailyHitCount + (dailyHit ? 1 : 0),
   realtimeHitCount: acc.realtimeHitCount + (realtimeHit ? 1 : 0),
   betCostYen: acc.betCostYen + betCostYen,
@@ -77,8 +77,10 @@ const accumulate = (
  * `predictions` (= 任意の日数ぶんの RacePrediction) を予想者 × 月でグループ化し、
  * 各予想者の月次・通算統計を返す。
  *
- * 当日 / 直前を「どちらかでも買い目が組めていれば 1 レース」としてカウントし、
- * 購入額・払戻額・的中数は当日 + 直前を合算する (= 2 通り買った前提)。
+ * **直前 (realtime) 買い目のみ** を対象に、直前買い目が組めた確定済みレースを
+ * 1 レースとしてカウントし、購入額・払戻額・的中数を集計する
+ * (/stats・会場「今節成績」と指標を統一)。当日 (daily) の的中数は
+ * `dailyHitCount` に参考値として残す。
  *
  * 純関数で副作用なし。テストはこの関数に対して書く。
  */
@@ -107,16 +109,15 @@ export const aggregatePredictorStats = (
         byPredictor.set(pp.predictorId, perMonth);
       }
       const current = perMonth.get(month) ?? emptyMonthStats(month);
-      const totalCost = pp.betPayout.daily.betCostYen + pp.betPayout.realtime.betCostYen;
-      // 集計対象は「買い目が組めた」レース (betCostYen > 0) のみ。
-      if (totalCost === 0) continue;
-      const totalPayout = pp.betPayout.daily.payoutYen + pp.betPayout.realtime.payoutYen;
+      const realtime = pp.betPayout.realtime;
+      // 集計対象は「直前買い目が組めた」レース (realtime.betCostYen > 0) のみ。
+      if (realtime.betCostYen === 0) continue;
       perMonth.set(
         month,
         accumulate(
           current,
-          totalCost,
-          totalPayout,
+          realtime.betCostYen,
+          realtime.payoutYen,
           pp.betHitStatus.dailyHit,
           pp.betHitStatus.realtimeHit,
         ),
