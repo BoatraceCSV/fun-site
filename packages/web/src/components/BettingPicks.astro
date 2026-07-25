@@ -6,6 +6,7 @@ import {
   computeBettingPicks,
   computeOneMarkDistances,
   isValidBoatNumber,
+  oneMarkDistanceOptionsFor,
 } from "@fun-site/shared";
 
 interface Props {
@@ -37,6 +38,11 @@ const {
 
 const tolerance = bettingToleranceFor(predictorId);
 
+/** 予測 ST の種別（AI 推定 ST / 全国平均 ST）。バッチ側の買い目生成
+ *  (`prediction-builder.ts`) と同じヘルパーで解決し、表示される買い目と
+ *  的中・回収率の集計対象になる買い目を一致させる。 */
+const stOptions = oneMarkDistanceOptionsFor(predictorId);
+
 /** しきい値の説明文。全着順同値なら "±X"、異なれば着順別に列挙。 */
 const toleranceLabel =
   tolerance.first === tolerance.second && tolerance.second === tolerance.third
@@ -59,7 +65,7 @@ const realtimeEval =
 type Group = { readonly label: string; readonly boats: readonly number[] };
 
 const buildGroups = (evaluation: AiEvaluation): Group[] => {
-  const distanceEntries = computeOneMarkDistances(racers, evaluation);
+  const distanceEntries = computeOneMarkDistances(racers, evaluation, stOptions);
   const picks = computeBettingPicks(distanceEntries, tolerance);
   return [
     { label: "1着", boats: picks.first },
@@ -162,5 +168,6 @@ const boatBoxStyle = (boatNumber: number): string => {
 </div>
 <p class="text-xs text-gray-500 mt-3">
   1マーク予想の走行距離を基準に、各着順の上位艇から {toleranceLabel} 以内の艇を候補としています（三連単フォーメーションの目安）。
+  走行距離の予測STは{stOptions.useEstimatedST ? "実測ST履歴から算出したAI推定ST" : "選手の全国平均ST"}です。
   「当日買い目」は朝バッチ時点（直前情報反映前）、「直前買い目」は直前情報反映後の AI 評価に基づきます。
 </p>

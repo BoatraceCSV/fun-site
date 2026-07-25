@@ -1,3 +1,4 @@
+import { predictorById } from "../predictors.js";
 import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
 
 /**
@@ -75,6 +76,21 @@ export const computeOneMarkDistances = (
     return { boatNumber: racer.boatNumber, avgST, strengthPt, distance };
   });
 };
+
+/**
+ * 予想者 ID から 1 マーク走行距離計算のオプションを解決する。
+ * レジストリ (`predictors.ts`) の `PredictorSpec.useEstimatedST` が唯一の
+ * 情報源で、未登録 ID / 未指定なら既定（全国平均 ST）になる。
+ *
+ * `bettingToleranceFor` と対になるヘルパー。バッチ（回収率の集計対象になる
+ * 買い目）と web（画面に表示する買い目）が **同じ距離計算になることを保証**
+ * するために両方からこれを呼ぶ。片側だけが `useEstimatedST` を渡していると、
+ * v5_slit / v7_aggregate のように AI 推定 ST を使う予想者で「表示された買い目」
+ * と「的中・回収率の集計対象になった買い目」が食い違う。
+ */
+export const oneMarkDistanceOptionsFor = (predictorId?: string): OneMarkDistanceOptions => ({
+  useEstimatedST: predictorId ? predictorById(predictorId)?.useEstimatedST === true : false,
+});
 
 /**
  * 買い目（フォーメーション） - 各着順の候補艇番リスト。

@@ -161,7 +161,7 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 | 状況 | 表示 |
 |---|---|
 | `previews/stt` 取得済み | 実測の進入コース・スタート展示を表示 |
-| `previews/stt` 未取得 | 進入コース＝枠番、ST＝全国平均ST で仮表示（v5_slit の推定 ST 版は AI 推定 ST） |
+| `previews/stt` 未取得 | 進入コース＝枠番、ST＝全国平均ST で仮表示（`useEstimatedST` な予想者 v5_slit / v7_aggregate の推定 ST 版は AI 推定 ST） |
 | `estimate/index` `状態=daily` | 寄与pt から展示・気象を除外、3 要素のみ表示 |
 | `estimate/index` `状態=realtime` | 5 要素すべて表示 |
 | `results/realtime` 取得済み | レース詳細ページに結果セクションを表示 |
@@ -169,11 +169,16 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 | `results/payouts` 取得済み | レース詳細ページに「もし買ったら」セクション、トップに当日サマリーを表示 |
 | `results/payouts` 未取得 | 両セクションともそのレースは集計から除外 |
 
-予測 ST は既定で全国平均 ST。**スリット予想 (v5_slit) のみ** AI 推定 ST
+予測 ST は既定で全国平均 ST。**`useEstimatedST` な予想者(スリット予想 v5_slit /
+統合予想 v7_aggregate)のみ** AI 推定 ST
 (BoatraceCSV `estimate/racer_st`。実測 ST 履歴の時間減衰平均 + コース・F 補正)を
 優先し、未生成時は全国平均 ST にフォールバックする
 (`packages/shared/src/utils/one-mark-distance.ts` の `predictedST` / opt-in は
 `PredictorSpec.useEstimatedST`)。
+予想者 ID からこの opt-in を解決するのは `oneMarkDistanceOptionsFor(predictorId)` で、
+バッチの買い目生成(`prediction-builder.ts`)と web の買い目表示(`BettingPicks.astro`)は
+**必ずこのヘルパー経由**で距離計算のオプションを得る。片側だけが渡し忘れると、
+画面に表示される買い目と的中・回収率の集計対象になる買い目が食い違う。
 全国平均ST が 0.00(公表実績なし。新人・長期離脱明け等)の艇は、スタート予想図の描画と
 1 マーク走行距離計算の両方で `NO_RECORD_ST_FALLBACK`(0.25 秒)に補完する(`effectiveAvgST`)。
 補完しない場合 0.00 が「最速スタート扱い」になるため。

@@ -16,6 +16,7 @@ export {
   computeBettingPicks,
   bettingToleranceFor,
   effectiveAvgST,
+  oneMarkDistanceOptionsFor,
   predictedST,
   BETTING_TOLERANCE_BY_PREDICTOR,
   DEFAULT_BETTING_TOLERANCE,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { activePredictors, predictorById } from "../predictors.js";
 import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
 import {
   NO_RECORD_ST_FALLBACK,
@@ -7,6 +8,7 @@ import {
   computeBettingPicks,
   computeOneMarkDistances,
   effectiveAvgST,
+  oneMarkDistanceOptionsFor,
   predictedST,
 } from "../utils/one-mark-distance.js";
 
@@ -114,6 +116,71 @@ describe("predictedST", () => {
     const plain = computeOneMarkDistances(racers, ai);
     expect(plain[0]?.avgST).toBe(0.18);
     expect(plain[0]?.distance).toBeCloseTo(0.22, 5);
+  });
+});
+
+describe("oneMarkDistanceOptionsFor", () => {
+  it("レジストリの useEstimatedST を引き当てる", () => {
+    // useEstimatedST=true の予想者 (AI 推定 ST 版)
+    expect(oneMarkDistanceOptionsFor("v5_slit")).toEqual({ useEstimatedST: true });
+    expect(oneMarkDistanceOptionsFor("v7_aggregate")).toEqual({ useEstimatedST: true });
+    // 全国平均 ST の予想者
+    expect(oneMarkDistanceOptionsFor("v1_basic")).toEqual({ useEstimatedST: false });
+    expect(oneMarkDistanceOptionsFor("v4_motor")).toEqual({ useEstimatedST: false });
+  });
+
+  it("未指定 / 未登録 ID は既定 (全国平均 ST) にフォールバックする", () => {
+    expect(oneMarkDistanceOptionsFor(undefined)).toEqual({ useEstimatedST: false });
+    expect(oneMarkDistanceOptionsFor("")).toEqual({ useEstimatedST: false });
+    expect(oneMarkDistanceOptionsFor("v999_unknown")).toEqual({ useEstimatedST: false });
+  });
+
+  it("全 active 予想者でレジストリの値と一致する (バッチ / web の唯一の情報源)", () => {
+    // バッチ (prediction-builder) と web (BettingPicks.astro) がこのヘルパー経由で
+    // 同じオプションを得ることで、表示される買い目と回収率の集計対象になる買い目が
+    // 一致する。片側だけが渡し忘れると v5_slit / v7_aggregate で食い違う。
+    for (const p of activePredictors()) {
+      expect(oneMarkDistanceOptionsFor(p.id).useEstimatedST).toBe(
+        predictorById(p.id)?.useEstimatedST === true,
+      );
+    }
+  });
+
+  it("同じ出走表でも予想者によって買い目が変わる (v1_basic vs v5_slit)", () => {
+    // 全国平均 ST では 2号艇、AI 推定 ST では 1号艇が先頭になる配置。
+    // 強さpt は全艇 50 (= 寄与 1.0) に揃え、差が予測 ST だけに出るようにする。
+    const racers: RaceRacer[] = [
+      { ...makeRacer(1, 0.2), estimatedST: 0.1 },
+      makeRacer(2, 0.15),
+      makeRacer(3, 0.22),
+    ];
+    const ai = makeAi([
+      { boatNumber: 1, strengthPt: 50 },
+      { boatNumber: 2, strengthPt: 50 },
+      { boatNumber: 3, strengthPt: 50 },
+    ]);
+
+    // 全国平均 ST (v1_basic): 艇1=0.20 / 艇2=0.25 / 艇3=0.18 → 1着基準 0.25 ±0.10 に全艇入る
+    const plain = computeOneMarkDistances(racers, ai, oneMarkDistanceOptionsFor("v1_basic"));
+    expect(plain[0]?.avgST).toBe(0.2);
+    expect(plain[0]?.distance).toBeCloseTo(0.2, 5);
+    expect(plain[1]?.distance).toBeCloseTo(0.25, 5);
+    expect(plain[2]?.distance).toBeCloseTo(0.18, 5);
+    expect(computeBettingPicks(plain).first).toEqual([1, 2, 3]);
+
+    // AI 推定 ST (v5_slit): 艇1=0.30 に伸びて先頭 → 1着基準 0.30 ±0.10 から艇3(0.18)が外れる
+    const estimated = computeOneMarkDistances(racers, ai, oneMarkDistanceOptionsFor("v5_slit"));
+    expect(estimated[0]?.avgST).toBe(0.1);
+    expect(estimated[0]?.distance).toBeCloseTo(0.3, 5);
+    expect(computeBettingPicks(estimated).first).toEqual([1, 2]);
+
+    // v7_aggregate も useEstimatedST=true なので v5_slit と同じ買い目になる
+    const aggregate = computeOneMarkDistances(
+      racers,
+      ai,
+      oneMarkDistanceOptionsFor("v7_aggregate"),
+    );
+    expect(computeBettingPicks(aggregate)).toEqual(computeBettingPicks(estimated));
   });
 });
 

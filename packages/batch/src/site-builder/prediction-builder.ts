@@ -39,6 +39,7 @@ import {
   computeRaceBetPayoutSummary,
   getStadiumById,
   isPreviewDerivedComponent,
+  oneMarkDistanceOptionsFor,
   parseRaceCode,
 } from "@fun-site/shared";
 import type { PredictorIndexFetch } from "../fetcher/index.js";
@@ -344,8 +345,10 @@ const buildPredictorPrediction = (
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
 
   const tolerance = bettingToleranceFor(predictor.id);
-  // v5_slit のみ AI 推定 ST を距離計算に使う (他予想者は従来どおり全国平均 ST)
-  const stOptions = { useEstimatedST: predictor.useEstimatedST === true };
+  // useEstimatedST な予想者 (v5_slit / v7_aggregate) のみ AI 推定 ST を距離計算に
+  // 使う (他予想者は従来どおり全国平均 ST)。web の BettingPicks.astro と同じ
+  // ヘルパーで解決し、表示される買い目と集計対象の買い目を一致させる。
+  const stOptions = oneMarkDistanceOptionsFor(predictor.id);
   const dailyPicks = aiEvaluationDaily
     ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily, stOptions), tolerance)
     : undefined;
