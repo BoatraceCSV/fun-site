@@ -14,6 +14,7 @@ export {
 export {
   computeOneMarkDistances,
   computeBettingPicks,
+  bettingBasisFor,
   bettingToleranceFor,
   effectiveAvgST,
   oneMarkDistanceOptionsFor,
@@ -21,6 +22,8 @@ export {
   BETTING_TOLERANCE_BY_PREDICTOR,
   DEFAULT_BETTING_TOLERANCE,
   NO_RECORD_ST_FALLBACK,
+  STRENGTH_BETTING_TOLERANCE,
+  type BettingBasis,
   type OneMarkDistanceEntry,
   type OneMarkDistanceOptions,
   type BettingPicks,

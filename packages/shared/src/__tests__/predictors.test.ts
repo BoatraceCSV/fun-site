@@ -121,6 +121,25 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v7_aggregate")).toBe(true);
   });
 
+  it("has v8_aionly active with v7-identical components and strength-only betting", () => {
+    // AI予想 (v8_aionly): v7_aggregate と同一レシピ (index / 強さpt は同値) で、
+    // 買い目候補の選定だけを走行距離 (予測 ST 込み) から強さpt のみ
+    // (±5.0pt 窓、strengthOnlyBetting) に差し替えた実験スロット (2026-07-28 投入)。
+    const v8 = predictorById("v8_aionly");
+    expect(v8?.status).toBe("active");
+    expect(v8?.slot).toBe(8);
+    expect(v8?.displayName).toBe("AI予想");
+    expect(v8?.componentKeys).toEqual(predictorById("v7_aggregate")?.componentKeys);
+    // 買い目は強さpt のみで選定する。
+    expect(v8?.strengthOnlyBetting).toBe(true);
+    // useEstimatedST はスタート予想図・1マーク予想図の表示にのみ効く (v7 と同じ)。
+    expect(v8?.useEstimatedST).toBe(true);
+    // 他の予想者は買い目の選定基準を差し替えない (既存処理へ影響なし)。
+    expect(predictorById("v1_basic")?.strengthOnlyBetting).toBeUndefined();
+    expect(predictorById("v7_aggregate")?.strengthOnlyBetting).toBeUndefined();
+    expect(activePredictors().some((p) => p.id === "v8_aionly")).toBe(true);
+  });
+
   it("matches the boatracecsv registry started_at", () => {
     // boatracecsv 側 (data/estimate/{predictor_id}/) と揃えておく必要がある。
     // fun-site /predictors の累計回収率の起点。
@@ -136,6 +155,8 @@ describe("predictor registry", () => {
     expect(predictorById("v6_course")?.startedAt).toBe("2026-07-22");
     // 統合予想 (v7_aggregate) は 2026-07-23 投入。
     expect(predictorById("v7_aggregate")?.startedAt).toBe("2026-07-23");
+    // AI予想 (v8_aionly) は 2026-07-28 投入。
+    expect(predictorById("v8_aionly")?.startedAt).toBe("2026-07-28");
   });
 
   it("returns active predictors sorted by slot", () => {

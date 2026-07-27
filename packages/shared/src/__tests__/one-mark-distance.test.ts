@@ -4,6 +4,8 @@ import type { AiEvaluation, RaceRacer } from "../types/prediction.js";
 import {
   NO_RECORD_ST_FALLBACK,
   type OneMarkDistanceEntry,
+  STRENGTH_BETTING_TOLERANCE,
+  bettingBasisFor,
   bettingToleranceFor,
   computeBettingPicks,
   computeOneMarkDistances,
@@ -309,12 +311,91 @@ describe("computeBettingPicks", () => {
     expect(picks.third).toEqual([2, 3, 4]);
   });
 
-  it("bettingToleranceFor: 現状オーバーライド無しで全予想者 既定 ±0.10", () => {
+  it("bettingToleranceFor: 距離基準の予想者はオーバーライド無しで既定 ±0.10", () => {
     expect(bettingToleranceFor("v1_basic")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     expect(bettingToleranceFor(undefined)).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     // 現行 active のモーター予想 (v4_motor) もオーバーライド無しで既定値。
     expect(bettingToleranceFor("v4_motor")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
     // 退役済み予想者を渡しても既定値 (bettingToleranceFor は status に依らず解決)。
     expect(bettingToleranceFor("v2_tenkai")).toEqual({ first: 0.1, second: 0.1, third: 0.1 });
+    // 強さpt 基準 (v8_aionly) は ±5.0pt (距離 ±0.10 × 50 と等価スケール)。
+    expect(bettingToleranceFor("v8_aionly")).toEqual({ first: 5.0, second: 5.0, third: 5.0 });
+    expect(bettingToleranceFor("v8_aionly")).toBe(STRENGTH_BETTING_TOLERANCE);
+  });
+});
+
+describe("bettingBasisFor / 強さpt 基準の買い目 (v8_aionly)", () => {
+  it("レジストリの strengthOnlyBetting を引き当てる", () => {
+    expect(bettingBasisFor("v8_aionly")).toBe("strength");
+    // 他予想者・未指定・未登録 ID は距離基準。
+    expect(bettingBasisFor("v1_basic")).toBe("distance");
+    expect(bettingBasisFor("v7_aggregate")).toBe("distance");
+    expect(bettingBasisFor(undefined)).toBe("distance");
+    expect(bettingBasisFor("v999_unknown")).toBe("distance");
+  });
+
+  const entry = (
+    boatNumber: number,
+    strengthPt: number,
+    distance: number,
+  ): OneMarkDistanceEntry => ({ boatNumber, avgST: 0, strengthPt, distance });
+
+  it('basis="strength" は距離を無視して強さpt ±5.0pt 窓で候補を選ぶ', () => {
+    // 強さpt: 1=60, 2=56, 3=54, 4=48, 5=40, 6=30 / 距離は逆順に設定して
+    // 距離基準なら結果が変わることを保証する。
+    const entries = [
+      entry(1, 60, 0.0),
+      entry(2, 56, 0.1),
+      entry(3, 54, 0.2),
+      entry(4, 48, 0.3),
+      entry(5, 40, 0.4),
+      entry(6, 30, 0.5),
+    ];
+    const picks = computeBettingPicks(entries, STRENGTH_BETTING_TOLERANCE, "strength");
+    // 1着基準=60 ±5.0 → 1,2 (3=差6 NG)
+    expect(picks.first).toEqual([1, 2]);
+    // 2着基準=56 ±5.0 → [51,61]: 1,2,3
+    expect(picks.second).toEqual([1, 2, 3]);
+    // 3着基準=54 ±5.0 → [49,59]: 2,3 (1=60 NG, 4=48 NG)
+    expect(picks.third).toEqual([2, 3]);
+    // 距離基準 (既定) だと降順が 6,5,4,... になり結果が異なる。
+    // 1着基準=0.5 ±0.10 → [0.4,0.6]: 5,6
+    const byDistance = computeBettingPicks(entries);
+    expect(byDistance.first).toEqual([5, 6]);
+  });
+
+  it("同じ AI 評価でも予測 ST の差は v8_aionly の買い目に影響しない", () => {
+    // v7_aggregate (距離基準) では ST 差で買い目が変わる配置でも、
+    // v8_aionly (強さpt 基準) は強さpt だけを見るため同じ買い目になる。
+    const racers: RaceRacer[] = [
+      { ...makeRacer(1, 0.2), estimatedST: 0.1 },
+      makeRacer(2, 0.15),
+      makeRacer(3, 0.22),
+    ];
+    const ai = makeAi([
+      { boatNumber: 1, strengthPt: 52 },
+      { boatNumber: 2, strengthPt: 50 },
+      { boatNumber: 3, strengthPt: 44 },
+    ]);
+    const entriesEstimated = computeOneMarkDistances(
+      racers,
+      ai,
+      oneMarkDistanceOptionsFor("v8_aionly"),
+    );
+    const entriesPlain = computeOneMarkDistances(racers, ai, { useEstimatedST: false });
+    const strengthPicks = computeBettingPicks(
+      entriesEstimated,
+      bettingToleranceFor("v8_aionly"),
+      bettingBasisFor("v8_aionly"),
+    );
+    // ST の取り方 (AI 推定 / 全国平均) に依らず強さpt 基準の買い目は同一。
+    expect(computeBettingPicks(entriesPlain, bettingToleranceFor("v8_aionly"), "strength")).toEqual(
+      strengthPicks,
+    );
+    // 1着基準=52 ±5.0 → [47,57]: 1,2 / 2着基準=50 ±5.0 → [45,55]: 1,2 /
+    // 3着基準=44 ±5.0 → [39,49]: 3 のみ (2=50 は差 6 で範囲外)。
+    expect(strengthPicks.first).toEqual([1, 2]);
+    expect(strengthPicks.second).toEqual([1, 2]);
+    expect(strengthPicks.third).toEqual([3]);
   });
 });

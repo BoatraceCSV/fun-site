@@ -336,11 +336,13 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
             ? "本命予想の5成分のうち、枠番pt を場×レース番号×コース別のコース強度pt（コースpt）に置き換えた構成です。"
             : pp.predictorId === "v7_aggregate"
               ? "本命予想をベースに、モーターpt をチューニング版モーター能力指数に、枠番pt をコース強度pt（コースpt）に置き換え、さらにスタート予想・1マーク予想の予測STをAI推定STにした、モーター予想・コース予想・スリット予想の3仮説を統合した構成です。"
-              : pp.predictorId === "v2_tenkai"
-                ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
-                : pp.predictorId === "v3_tenkai"
-                  ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
-                  : undefined;
+              : pp.predictorId === "v8_aionly"
+                ? "統合予想と同じ5成分（AI評価は同値）ですが、買い目を1マーク予想の走行距離（予測ST込み）ではなく、AI総合評価の強さポイントのみ（±5.0pt）で選定する構成です。"
+                : pp.predictorId === "v2_tenkai"
+                  ? "本命予想の5成分のうち、モーターpt を公式モーター2連対率pt（M2連率）に置き換えた構成です。"
+                  : pp.predictorId === "v3_tenkai"
+                    ? "本命予想の5成分に展開優位pt（進入コースと枠番デフォルトコースの勝率差）を加えた6成分の構成です。"
+                    : undefined;
     return (
       <section class="mb-6">
         <PredictorCard

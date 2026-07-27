@@ -32,6 +32,7 @@ import type {
 } from "@fun-site/shared";
 import {
   activePredictors,
+  bettingBasisFor,
   bettingToleranceFor,
   checkBettingHit,
   computeBettingPicks,
@@ -349,13 +350,21 @@ const buildPredictorPrediction = (
   // 使う (他予想者は従来どおり全国平均 ST)。web の BettingPicks.astro と同じ
   // ヘルパーで解決し、表示される買い目と集計対象の買い目を一致させる。
   const stOptions = oneMarkDistanceOptionsFor(predictor.id);
+  // strengthOnlyBetting な予想者 (v8_aionly) は走行距離ではなく強さpt のみで
+  // 候補を選定する (basis="strength"、しきい値 ±5.0pt)。
+  const basis = bettingBasisFor(predictor.id);
   const dailyPicks = aiEvaluationDaily
-    ? computeBettingPicks(computeOneMarkDistances(racers, aiEvaluationDaily, stOptions), tolerance)
+    ? computeBettingPicks(
+        computeOneMarkDistances(racers, aiEvaluationDaily, stOptions),
+        tolerance,
+        basis,
+      )
     : undefined;
   const realtimePicks = aiEvaluationRealtime
     ? computeBettingPicks(
         computeOneMarkDistances(racers, aiEvaluationRealtime, stOptions),
         tolerance,
+        basis,
       )
     : undefined;
   const betHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);

@@ -113,6 +113,14 @@ export type PredictorSpec = {
    * 従来どおり全国平均 ST。現状 v5_slit のみ true。
    */
   readonly useEstimatedST?: boolean;
+  /**
+   * 買い目候補を 1 マーク走行距離ではなく **強さpt のみ** で選定するか
+   * (v8_aionly)。true なら各着の基準艇の強さpt ±5.0pt 窓で候補を取る
+   * (距離式では強さpt/50 なので距離 ±0.1 と等価スケール。予測 ST は
+   * 買い目に一切影響しない)。未指定 (false) は従来どおり走行距離基準。
+   * バッチ / web は `bettingBasisFor(predictorId)` 経由でこのフラグを解決する。
+   */
+  readonly strengthOnlyBetting?: boolean;
 };
 
 /**
@@ -132,6 +140,9 @@ export type PredictorSpec = {
  * v7_aggregate = "統合予想" (実験スロット)。v4_motor (motor→motor4) + v6_course
  * (waku→course) の成分差し替えに、v5_slit の予測 ST 差し替え (useEstimatedST) を
  * 重ねた 3 仮説統合版 (2026-07-23〜)。
+ * v8_aionly = "AI予想" (実験スロット)。v7_aggregate と同一レシピ (index / 強さpt は
+ * 同値) で、買い目候補の選定だけを 1 マーク走行距離 (予測 ST 込み) から
+ * 強さpt のみ (±5.0pt 窓、strengthOnlyBetting) に差し替えた版 (2026-07-28〜)。
  *
  * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
  * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
@@ -230,6 +241,24 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-07-23",
     componentKeys: ["course", "racer", "motor4", "exhibit", "weather"],
     useEstimatedST: true,
+  },
+  {
+    id: "v8_aionly",
+    displayName: "AI予想",
+    slot: 8,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // AI予想 = v7_aggregate と同一の 5 成分 (index / 強さpt は同値)。差分は
+    // 買い目候補の選定方法のみ: 1 マーク走行距離 (予測 ST + 強さpt/50) 基準の
+    // ±0.1 窓を、強さpt のみの ±5.0pt 窓 (等価スケール) に差し替える
+    // (strengthOnlyBetting)。予測 ST が買い目に与える影響を外し、AI の
+    // 強さ評価だけで買い目を組んだ場合の回収率を v7_aggregate と A/B 比較する。
+    // useEstimatedST はスタート予想図・1マーク予想図の表示にのみ効き
+    // (v7 と同じ AI 推定 ST 版)、買い目には影響しない。
+    startedAt: "2026-07-28",
+    componentKeys: ["course", "racer", "motor4", "exhibit", "weather"],
+    useEstimatedST: true,
+    strengthOnlyBetting: true,
   },
 ];
 

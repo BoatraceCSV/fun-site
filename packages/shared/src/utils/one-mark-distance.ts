@@ -96,13 +96,15 @@ export const oneMarkDistanceOptionsFor = (predictorId?: string): OneMarkDistance
  * 買い目（フォーメーション） - 各着順の候補艇番リスト。
  * いずれも艇番昇順。各着のしきい値窓から、有効な出目（1-2-3 着が相異なる
  * 組合せ）に 1 つも使われないデッド候補を除いたもの（`computeBettingPicks`）。
+ * 選定値は既定で 1 マーク走行距離、`basis="strength"` の予想者 (v8_aionly)
+ * では強さpt。
  */
 export type BettingPicks = {
-  /** 1着候補: 距離が最大の艇の距離 ± `tolerance.first` 以内 */
+  /** 1着候補: 選定値が最大の艇の値 ± `tolerance.first` 以内 */
   readonly first: readonly number[];
-  /** 2着候補: 距離降順で2位の艇の距離 ± `tolerance.second` 以内 */
+  /** 2着候補: 選定値降順で2位の艇の値 ± `tolerance.second` 以内 */
   readonly second: readonly number[];
-  /** 3着候補: 距離降順で3位の艇の距離 ± `tolerance.third` 以内 */
+  /** 3着候補: 選定値降順で3位の艇の値 ± `tolerance.third` 以内 */
   readonly third: readonly number[];
 };
 
@@ -127,6 +129,36 @@ export const DEFAULT_BETTING_TOLERANCE: BettingTolerance = {
 };
 
 /**
+ * 買い目候補の選定基準。
+ * - `"distance"`: 1 マーク走行距離 (予測 ST + 強さpt/50) 基準（既定）。
+ * - `"strength"`: 強さpt のみ基準（v8_aionly。予測 ST は買い目に影響しない）。
+ */
+export type BettingBasis = "distance" | "strength";
+
+/**
+ * 強さpt 基準 (`basis="strength"`) のしきい値（±5.0pt。全着順共通）。
+ * 距離式は強さpt/50 を項に持つので、距離 ±0.10 と等価スケール
+ * (0.10 × 50 = 5.0)。距離基準から ST 項だけを外した窓になる。
+ */
+export const STRENGTH_BETTING_TOLERANCE: BettingTolerance = {
+  first: 5.0,
+  second: 5.0,
+  third: 5.0,
+};
+
+/**
+ * 予想者 ID から買い目候補の選定基準を解決する。レジストリ
+ * (`predictors.ts`) の `PredictorSpec.strengthOnlyBetting` が唯一の情報源で、
+ * 未登録 ID / 未指定なら既定の走行距離基準になる。
+ *
+ * `bettingToleranceFor` / `oneMarkDistanceOptionsFor` と対になるヘルパー。
+ * バッチ（回収率の集計対象になる買い目）と web（画面に表示する買い目）が
+ * **同じ選定基準になることを保証**するために両方からこれを呼ぶ。
+ */
+export const bettingBasisFor = (predictorId?: string): BettingBasis =>
+  predictorId && predictorById(predictorId)?.strengthOnlyBetting === true ? "strength" : "distance";
+
+/**
  * 予想者 ID ごとのしきい値オーバーライド。未登録の予想者は
  * `DEFAULT_BETTING_TOLERANCE`（±0.10）を使う。
  *
@@ -138,9 +170,15 @@ export const DEFAULT_BETTING_TOLERANCE: BettingTolerance = {
  */
 export const BETTING_TOLERANCE_BY_PREDICTOR: Readonly<Record<string, BettingTolerance>> = {};
 
-/** 予想者 ID に対応するしきい値を返す。未登録／未指定なら既定値。 */
-export const bettingToleranceFor = (predictorId?: string): BettingTolerance =>
-  (predictorId && BETTING_TOLERANCE_BY_PREDICTOR[predictorId]) || DEFAULT_BETTING_TOLERANCE;
+/**
+ * 予想者 ID に対応するしきい値を返す。強さpt 基準の予想者
+ * (`strengthOnlyBetting`) は `STRENGTH_BETTING_TOLERANCE`（±5.0pt）、
+ * それ以外はオーバーライド → 既定値（±0.10）の順に解決する。
+ */
+export const bettingToleranceFor = (predictorId?: string): BettingTolerance => {
+  if (bettingBasisFor(predictorId) === "strength") return STRENGTH_BETTING_TOLERANCE;
+  return (predictorId && BETTING_TOLERANCE_BY_PREDICTOR[predictorId]) || DEFAULT_BETTING_TOLERANCE;
+};
 
 /**
  * 走行距離から買い目（三連単フォーメーションの候補）を導出する。
@@ -163,24 +201,37 @@ export const bettingToleranceFor = (predictorId?: string): BettingTolerance =>
  * 各候補リストは艇番昇順。`tolerance` 省略時は
  * `DEFAULT_BETTING_TOLERANCE`（±0.10）。予想者ごとに変える場合は
  * `bettingToleranceFor(predictorId)` を渡す。
+ *
+ * `basis` 省略時は従来どおり走行距離基準。`"strength"` を渡すと各艇の
+ * 強さpt を選定値に使う（v8_aionly。しきい値は `STRENGTH_BETTING_TOLERANCE`
+ * とセットで渡すこと。予想者 ID からの解決は `bettingBasisFor`）。
  */
 export const computeBettingPicks = (
   entries: readonly OneMarkDistanceEntry[],
   tolerance: BettingTolerance = DEFAULT_BETTING_TOLERANCE,
+  basis: BettingBasis = "distance",
 ): BettingPicks => {
-  const sortedDesc = [...entries].sort((a, b) => b.distance - a.distance);
+  const pickValue = (e: OneMarkDistanceEntry): number =>
+    basis === "strength" ? e.strengthPt : e.distance;
+  const sortedDesc = [...entries].sort((a, b) => pickValue(b) - pickValue(a));
 
   const pickWithin = (reference: number | undefined, tol: number): readonly number[] => {
     if (reference === undefined) return [];
     return entries
-      .filter((e) => Math.abs(e.distance - reference) <= tol + 1e-9)
+      .filter((e) => Math.abs(pickValue(e) - reference) <= tol + 1e-9)
       .map((e) => e.boatNumber)
       .sort((a, b) => a - b);
   };
 
-  const rawFirst = pickWithin(sortedDesc[0]?.distance, tolerance.first);
-  const rawSecond = pickWithin(sortedDesc[1]?.distance, tolerance.second);
-  const rawThird = pickWithin(sortedDesc[2]?.distance, tolerance.third);
+  const first = sortedDesc[0];
+  const second = sortedDesc[1];
+  const third = sortedDesc[2];
+  const rawFirst = pickWithin(first === undefined ? undefined : pickValue(first), tolerance.first);
+  const rawSecond = pickWithin(
+    second === undefined ? undefined : pickValue(second),
+    tolerance.second,
+  );
+  const rawThird = pickWithin(third === undefined ? undefined : pickValue(third), tolerance.third);
 
   // 有効な出目（1-2-3 着が相異なる組合せ）に登場する艇だけを各着で残す。
   // これは bet-payout.ts の countFormationCombinations と同じ制約。

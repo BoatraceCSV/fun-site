@@ -15,7 +15,7 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 近況5節セクション |
 | `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 近況5節セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
-| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正） | `useEstimatedST` な予想者（スリット予想 v5_slit / 統合予想 v7_aggregate）のスタート予想・1 マーク走行距離の予測 ST |
+| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正） | `useEstimatedST` な予想者（スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly）のスタート予想・1 マーク走行距離の予測 ST |
 | `estimate/{predictor_id}` | `estimate/{predictor_id}/YYYY/MM/DD.csv` | 各 active 予想者の強さpt と寄与pt | 予想者ごとの AI 総合評価・買い目・回収率 |
 | `results/realtime` | `results/realtime/YYYY/MM/DD.csv` | 当日確定直後のレース結果 | レース結果セクション・的中判定 |
 | `results/payouts` | `results/payouts/YYYY/MM/DD.csv` | 当日確定直後の払戻金（単勝/複勝/2連単/2連複/拡連複/3連単/3連複） | 3連単 戦略の回収率計算 |
@@ -86,7 +86,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt） |
 | `BetHitStatus` | 当日買い目・直前買い目の三連単フォーメーションが結果と一致したか |
 | `BetPayoutResult` / `RaceBetPayoutSummary` / `DailyBetPayoutAggregate` | 3連単 フォーメーションを 1 点 ¥100 で買った場合の払戻 / 回収率（レース単位 / 当日集計） |
-| `BettingTolerance` / `bettingToleranceFor` | 買い目の着順別しきい値（1着 / 2着 / 3着 の ± 許容幅）と予想者 ID からの解決関数。既定は全着順 ±0.10（`DEFAULT_BETTING_TOLERANCE`）。`BETTING_TOLERANCE_BY_PREDICTOR` に予想者別オーバーライドを定義（現状オーバーライド無し＝全予想者 ±0.10。以前は `v2_tenkai`=モーター評価変更予想に 1着0.02 / 2着0.10 / 3着0.20 を設定していたが 2026-06-13 に本命予想へ揃えるため削除）。再最適化の根拠は boatracecsv 側 [`notebooks/threshold_optimization.ipynb`](https://github.com/BoatraceCSV) |
+| `BettingTolerance` / `bettingToleranceFor` | 買い目の着順別しきい値（1着 / 2着 / 3着 の ± 許容幅）と予想者 ID からの解決関数。距離基準の既定は全着順 ±0.10（`DEFAULT_BETTING_TOLERANCE`）、強さpt 基準（`strengthOnlyBetting` な AI予想 v8_aionly。`bettingBasisFor` で解決）は全着順 ±5.0pt（`STRENGTH_BETTING_TOLERANCE`。距離式が強さpt/50 を項に持つため距離 ±0.10 と等価スケール）。`BETTING_TOLERANCE_BY_PREDICTOR` に予想者別オーバーライドを定義（現状オーバーライド無し。以前は `v2_tenkai`=モーター評価変更予想に 1着0.02 / 2着0.10 / 3着0.20 を設定していたが 2026-06-13 に本命予想へ揃えるため削除）。再最適化の根拠は boatracecsv 側 [`notebooks/threshold_optimization.ipynb`](https://github.com/BoatraceCSV) |
 
 `RacePrediction` は `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に 1 ファイルずつ書き出される。`predictions[]` 配列にレジストリの active 予想者ぶんの `PredictorPrediction` が slot 昇順で並ぶ (旧 `aiEvaluation` / `betPayout` フィールドは primary predictor の値を平坦化して残しており、後方互換性のため当面保持)。
 
