@@ -86,12 +86,13 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v5_slit")).toBe(true);
   });
 
-  it("has v6_course active with waku swapped for course", () => {
+  it("has v6_course retired with waku swapped for course", () => {
     // コース予想 (v6_course): 本命予想の waku を場×レース番号×コース別の
     // course に差し替えた 5 成分の実験スロット (2026-07-22 投入)。
+    // 2026-08-09 退役 (control 比 -6.91pt, p=0.0047)。成分定義は保持する。
     // boatracecsv docs/design/course_strength_v6.md
     const v6 = predictorById("v6_course");
-    expect(v6?.status).toBe("active");
+    expect(v6?.status).toBe("retired");
     expect(v6?.slot).toBe(6);
     expect(v6?.componentKeys).toEqual(["course", "racer", "motor", "exhibit", "weather"]);
     // control との差分は waku → course の 1 成分のみ。
@@ -99,15 +100,16 @@ describe("predictor registry", () => {
     expect(v6?.componentKeys).toEqual(v1Keys.map((k) => (k === "waku" ? "course" : k)));
     // course は daily でも値を持つ (preview 由来成分ではない)。
     expect(isPreviewDerivedComponent("course")).toBe(false);
-    expect(activePredictors().some((p) => p.id === "v6_course")).toBe(true);
+    expect(activePredictors().some((p) => p.id === "v6_course")).toBe(false);
   });
 
-  it("has v7_aggregate active combining course + motor4 + AI-estimated ST", () => {
+  it("has v7_aggregate retired, combining course + motor4 + AI-estimated ST", () => {
     // 統合予想 (v7_aggregate): v4_motor (motor→motor4) + v6_course (waku→course) の
     // 成分差し替えに v5_slit の予測 ST 差し替え (useEstimatedST) を重ねた 3 仮説統合版
     // (2026-07-23 投入)。boatracecsv docs/design/aggregate_v7.md
+    // 2026-08-09 退役 (control 比 -7.76pt, p=0.0040)。成分定義は保持する。
     const v7 = predictorById("v7_aggregate");
-    expect(v7?.status).toBe("active");
+    expect(v7?.status).toBe("retired");
     expect(v7?.slot).toBe(7);
     // v6_course の course と v4_motor の motor4 を両取りした 5 成分。
     expect(v7?.componentKeys).toEqual(["course", "racer", "motor4", "exhibit", "weather"]);
@@ -118,15 +120,16 @@ describe("predictor registry", () => {
     );
     // v5_slit と同じく予測 ST に AI 推定 ST を使う。
     expect(v7?.useEstimatedST).toBe(true);
-    expect(activePredictors().some((p) => p.id === "v7_aggregate")).toBe(true);
+    expect(activePredictors().some((p) => p.id === "v7_aggregate")).toBe(false);
   });
 
-  it("has v8_aionly active with v7-identical components and strength-only betting", () => {
+  it("has v8_aionly retired with v7-identical components and strength-only betting", () => {
     // AI予想 (v8_aionly): v7_aggregate と同一レシピ (index / 強さpt は同値) で、
     // 買い目候補の選定だけを走行距離 (予測 ST 込み) から強さpt のみ
     // (±5.0pt 窓、strengthOnlyBetting) に差し替えた実験スロット (2026-07-28 投入)。
+    // 2026-08-09 退役 (control 比 -10.62pt, p=0.0001)。レシピ定義は保持する。
     const v8 = predictorById("v8_aionly");
-    expect(v8?.status).toBe("active");
+    expect(v8?.status).toBe("retired");
     expect(v8?.slot).toBe(8);
     expect(v8?.displayName).toBe("AI予想");
     expect(v8?.componentKeys).toEqual(predictorById("v7_aggregate")?.componentKeys);
@@ -137,7 +140,7 @@ describe("predictor registry", () => {
     // 他の予想者は買い目の選定基準を差し替えない (既存処理へ影響なし)。
     expect(predictorById("v1_basic")?.strengthOnlyBetting).toBeUndefined();
     expect(predictorById("v7_aggregate")?.strengthOnlyBetting).toBeUndefined();
-    expect(activePredictors().some((p) => p.id === "v8_aionly")).toBe(true);
+    expect(activePredictors().some((p) => p.id === "v8_aionly")).toBe(false);
   });
 
   it("matches the boatracecsv registry started_at", () => {

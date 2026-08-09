@@ -135,17 +135,24 @@ export type PredictorSpec = {
  * チューニングした motor4 に差し替えた 5 成分版 (2026-07-20〜)。
  * v5_slit = "スリット予想" (実験スロット)。control と同一の 5 成分で、1 マーク距離
  * 計算・スリット図の予測 ST だけを AI 推定 ST (racer_st) に差し替えた版 (2026-07-21〜)。
- * v6_course = "コース予想" (実験スロット)。control の waku を場×レース番号×コース別の
- * コース強度 (course) に差し替えた 5 成分版 (2026-07-22〜)。
- * v7_aggregate = "統合予想" (実験スロット)。v4_motor (motor→motor4) + v6_course
- * (waku→course) の成分差し替えに、v5_slit の予測 ST 差し替え (useEstimatedST) を
- * 重ねた 3 仮説統合版 (2026-07-23〜)。
- * v8_aionly = "AI予想" (実験スロット)。v7_aggregate と同一レシピ (index / 強さpt は
- * 同値) で、買い目候補の選定だけを 1 マーク走行距離 (予測 ST 込み) から
- * 強さpt のみ (±5.0pt 窓、strengthOnlyBetting) に差し替えた版 (2026-07-28〜)。
+ * v6_course = "コース予想"。control の waku を場×レース番号×コース別のコース強度
+ * (course) に差し替えた 5 成分版 (2026-07-22〜)。2026-08-09 退役。
+ * v7_aggregate = "統合予想"。v4_motor (motor→motor4) + v6_course (waku→course) の
+ * 成分差し替えに、v5_slit の予測 ST 差し替え (useEstimatedST) を重ねた 3 仮説統合版
+ * (2026-07-23〜)。2026-08-09 退役。
+ * v8_aionly = "AI予想"。v7_aggregate と同一レシピ (index / 強さpt は同値) で、
+ * 買い目候補の選定だけを 1 マーク走行距離 (予測 ST 込み) から強さpt のみ
+ * (±5.0pt 窓、strengthOnlyBetting) に差し替えた版 (2026-07-28〜)。2026-08-09 退役。
  *
- * v2_tenkai / v3_tenkai は退役後もエントリと過去データ (data/estimate/{id}/…)・
- * 成分定義 (tenkai / motor2rate) を保持する。命名規則どおり退役した ID は再利用しない
+ * 2026-08-09 退役の 3 者 (v6_course / v7_aggregate / v8_aionly) は、control
+ * (v1_basic) と同一レースで突き合わせたペア比較で回収率が有意に低かった
+ * (それぞれ -6.91pt / -7.76pt / -10.62pt、Holm 補正後 p<0.05)。3 者に共通する
+ * 差分は waku → course の差し替えで、course を持たない v4_motor / v5_slit は
+ * control と同水準だったため course 成分が主因と判断した。検定の詳細は
+ * boatracecsv 側 docs/data/estimate.md の「現行レジストリ」退役ノート参照。
+ *
+ * 退役後もエントリと過去データ (data/estimate/{id}/…)・成分定義
+ * (tenkai / motor2rate / course) は保持する。命名規則どおり退役した ID は再利用しない
  * (累計回収率の同一性のため)。`activePredictors()` から除外されるので fetcher /
  * build-state / 各集計の対象から自動的に外れる。boatracecsv 側 registry.py と同期。
  */
@@ -215,7 +222,9 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v6_course",
     displayName: "コース予想",
     slot: 6,
-    status: "active",
+    // 2026-08-09 退役。control (v1_basic) との同一レース比較で回収率 -6.91pt
+    // (95%CI [-13.1, -0.5], p=0.0047, n=3002)。エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // 本命予想 (control, v1_basic) の枠番pt (waku、場×季節×コース) を、
     // 場×レース番号×コース別の収縮済み1着率テーブルに基づくコースpt (course) に
@@ -230,7 +239,9 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v7_aggregate",
     displayName: "統合予想",
     slot: 7,
-    status: "active",
+    // 2026-08-09 退役。control (v1_basic) との同一レース比較で回収率 -7.76pt
+    // (95%CI [-13.9, -1.7], p=0.0040, n=2717)。エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // 統合予想 = v4_motor / v5_slit / v6_course の 3 仮説を全て適用した版。
     //   - v6_course 由来: waku → course (場×レース番号×コース別の収縮済み1着率)
@@ -246,7 +257,10 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v8_aionly",
     displayName: "AI予想",
     slot: 8,
-    status: "active",
+    // 2026-08-09 退役。control (v1_basic) との同一レース比較で回収率 -10.62pt
+    // (95%CI [-18.5, -2.9], p=0.0001, n=1892)。日次でも 13/13 日 control 未満。
+    // エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // AI予想 = v7_aggregate と同一の 5 成分 (index / 強さpt は同値)。差分は
     // 買い目候補の選定方法のみ: 1 マーク走行距離 (予測 ST + 強さpt/50) 基準の
