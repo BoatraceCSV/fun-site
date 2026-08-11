@@ -44,6 +44,12 @@ export type RaceRacer = {
    */
   readonly estimatedST?: number;
   /**
+   * AI 推定 ST の 25 / 75 パーセンタイル。スタート予想図の帯に使う。
+   * `estimatedST` があっても、帯の列を持たない古い racer_st CSV では undefined。
+   */
+  readonly estimatedStP25?: number;
+  readonly estimatedStP75?: number;
+  /**
    * モーター期成績（motor_stats 由来、場×モーター番号で突合）。
    * 当日 motor_stats が未取得 / 当該場が未収録のレースでは undefined。
    */
@@ -84,6 +90,16 @@ export type StartPredictionEntry = {
    * stt 未取得・展示未計測 (空欄→0) の場合は null。負値はフライング側。
    */
   readonly exhibitionStartTiming: number | null;
+  /**
+   * `startTiming` の 25 / 75 パーセンタイル。AI 推定 ST 版のみ設定される
+   * (全国平均 ST には区間の推定が無いため)。
+   *
+   * 予測 ST を 1 点で描くとスリットの先頭コースを 7 割外す。帯は「どこまで
+   * 当てにならないか」を図に出すためのもので、全幅は中央値 0.08 秒 ≒ 1.1m
+   * (約 0.4 艇身)。経緯は boatracecsv `docs/design/slit_sim_plan.md`。
+   */
+  readonly startTimingP25?: number;
+  readonly startTimingP75?: number;
 };
 
 /** スタート予想全体 */

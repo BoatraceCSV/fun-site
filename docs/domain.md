@@ -161,7 +161,7 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 | 状況 | 表示 |
 |---|---|
 | `previews/stt` 取得済み | 実測の進入コース・スタート展示を表示 |
-| `previews/stt` 未取得 | 進入コース＝枠番、ST＝全国平均ST で仮表示（`useEstimatedST` な予想者 v5_slit / v7_aggregate / v8_aionly の推定 ST 版は AI 推定 ST） |
+| `previews/stt` 未取得 | 進入コース＝枠番で仮表示（ST はスタート予想図なら AI 推定 ST、racer_st も無ければ全国平均ST） |
 | `estimate/index` `状態=daily` | 寄与pt から展示・気象を除外、3 要素のみ表示 |
 | `estimate/index` `状態=realtime` | 5 要素すべて表示 |
 | `results/realtime` 取得済み | レース詳細ページに結果セクションを表示 |
@@ -169,12 +169,17 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 | `results/payouts` 取得済み | レース詳細ページに「もし買ったら」セクション、トップに当日サマリーを表示 |
 | `results/payouts` 未取得 | 両セクションともそのレースは集計から除外 |
 
-予測 ST は既定で全国平均 ST。**`useEstimatedST` な予想者(スリット予想 v5_slit /
-統合予想 v7_aggregate / AI予想 v8_aionly)のみ** AI 推定 ST
+**1 マーク走行距離**の予測 ST は既定で全国平均 ST。**`useEstimatedST` な予想者
+(スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly)のみ** AI 推定 ST
 (BoatraceCSV `estimate/racer_st`。実測 ST 履歴の時間減衰平均 + コース・F 補正)を
 優先し、未生成時は全国平均 ST にフォールバックする
 (`packages/shared/src/utils/one-mark-distance.ts` の `predictedST` / opt-in は
-`PredictorSpec.useEstimatedST`)。
+`PredictorSpec.useEstimatedST`)。走行距離は買い目の選定基準なので、ここは
+回収率 A/B の対象になる。
+
+一方**スタート予想図**の予測 ST は予想者に依らず AI 推定 ST(帯つき)で統一する。
+図は表示専用で買い目・回収率に効かず、予測区間を持つのは AI 推定 ST 版だけのため
+(BoatraceCSV `docs/design/slit_sim_plan.md` §9)。
 買い目候補の選定は既定で 1 マーク走行距離基準(各着の基準艇 ±0.10)。
 **`strengthOnlyBetting` な予想者(AI予想 v8_aionly)のみ**、走行距離ではなく
 **強さpt のみの ±5.0pt 窓**(距離式が強さpt/50 を項に持つため距離 ±0.10 と

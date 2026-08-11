@@ -311,15 +311,18 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
     // slot / ID のハードコード列挙を増やさず、新規予想者を追加しても自動で
     // 正しく描画されるようにするため (v6_course / v7_aggregate もこれで表示される)。
     const spec = predictorById(pp.predictorId);
-    // AI 推定 ST を採用する予想者 (useEstimatedST=true。現状 v5_slit / v7_aggregate)
-    // はスタート予想・1マーク距離の予測 ST を AI 推定 ST 版にする。
+    // 1マーク距離 (= 買い目 = 回収率) の予測 ST を AI 推定 ST にするかは
+    // 予想者ごとの useEstimatedST で決める。ここは A/B の対象なので触らない。
     const usesEstimatedST = spec?.useEstimatedST === true;
-    // スタート予想: useEstimatedST な予想者は AI 推定 ST 版
-    // (startPredictionEstimated。無ければ共通図にフォールバック)、それ以外は
-    // 全国平均 ST の共通図。全 active / 退役予想者カードで表示する。
-    const startPrediction = usesEstimatedST
-      ? (prediction.startPredictionEstimated ?? prediction.startPrediction)
-      : prediction.startPrediction;
+    // スタート予想図は **予想者に依らず** AI 推定 ST 版 (startPredictionEstimated)
+    // を使う。racer_st が無い日は共通図 (全国平均 ST) にフォールバック。
+    //
+    // 予想者ごとに出し分けない理由: 図は表示専用で買い目にも回収率にも効かない一方、
+    // 予測 ST を 1 点で描くとスリットの先頭コースを 7 割外す。AI 推定 ST 版だけが
+    // 予測区間 (帯) を持ち、その不確実性を図に出せる。useEstimatedST な予想者が
+    // 全て退役しても帯を出し続けるため、フラグから切り離してある。
+    // 経緯は BoatraceCSV docs/design/slit_sim_plan.md §9。
+    const startPrediction = prediction.startPredictionEstimated ?? prediction.startPrediction;
     // 1マーク予想は予想者ごとの AI 評価 (realtime 優先) で図が異なる。primary
     // (slot=1) は後方互換のため平坦化した prediction.aiEvaluation を使う。
     const oneMarkAiEvaluation =
@@ -331,11 +334,11 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
       pp.predictorId === "v4_motor"
         ? "本命予想の5成分のうち、モーターpt をエキスパート評価でチューニングしたモーター能力指数に置き換えた構成です。"
         : pp.predictorId === "v5_slit"
-          ? "本命予想と同じ5成分ですが、スタート予想・1マーク予想の予測STを全国平均STから実測ST履歴ベースのAI推定STに置き換えた構成です。"
+          ? "本命予想と同じ5成分ですが、買い目の選定基準になる1マーク予想の予測STを、全国平均STから実測ST履歴ベースのAI推定STに置き換えた構成です。"
           : pp.predictorId === "v6_course"
             ? "本命予想の5成分のうち、枠番pt を場×レース番号×コース別のコース強度pt（コースpt）に置き換えた構成です。"
             : pp.predictorId === "v7_aggregate"
-              ? "本命予想をベースに、モーターpt をチューニング版モーター能力指数に、枠番pt をコース強度pt（コースpt）に置き換え、さらにスタート予想・1マーク予想の予測STをAI推定STにした、モーター予想・コース予想・スリット予想の3仮説を統合した構成です。"
+              ? "本命予想をベースに、モーターpt をチューニング版モーター能力指数に、枠番pt をコース強度pt（コースpt）に置き換え、さらに1マーク予想の予測STをAI推定STにした、モーター予想・コース予想・スリット予想の3仮説を統合した構成です。"
               : pp.predictorId === "v8_aionly"
                 ? "統合予想と同じ5成分（AI評価は同値）ですが、買い目を1マーク予想の走行距離（予測ST込み）ではなく、AI総合評価の強さポイントのみ（±5.0pt）で選定する構成です。"
                 : pp.predictorId === "v2_tenkai"

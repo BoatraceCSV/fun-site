@@ -15,7 +15,7 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 近況5節セクション |
 | `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 近況5節セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
-| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正） | `useEstimatedST` な予想者（スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly）のスタート予想・1 マーク走行距離の予測 ST |
+| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | `useEstimatedST` な予想者（スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly）のスタート予想・1 マーク走行距離の予測 ST |
 | `estimate/{predictor_id}` | `estimate/{predictor_id}/YYYY/MM/DD.csv` | 各 active 予想者の強さpt と寄与pt | 予想者ごとの AI 総合評価・買い目・回収率 |
 | `results/realtime` | `results/realtime/YYYY/MM/DD.csv` | 当日確定直後のレース結果 | レース結果セクション・的中判定 |
 | `results/payouts` | `results/payouts/YYYY/MM/DD.csv` | 当日確定直後の払戻金（単勝/複勝/2連単/2連複/拡連複/3連単/3連複） | 3連単 戦略の回収率計算 |
@@ -67,7 +67,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `OriginalExhibitionRow` / `OriginalExhibitionBoat` | `previews/original_exhibition` | 場別計測項目ラベル（`itemLabels`、非空のみ）と艇別計測値（`values`、長さは itemLabels と一致） |
 | `RecentFormRow` / `RecentFormBoat` / `RecentFormSession` | `programs/recent_national`, `programs/recent_local` | 艇別・節別の開始/終了日・場名・グレード・着順列（両 CSV 同一スキーマ） |
 | `MotorStatsRow` | `programs/motor_stats` | `(記録日, 場コード, モーター番号)` キー。勝率・2/3連率・優勝/優出回数・平均ラップ秒など |
-| `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST)`。欠場枠は null。未生成日は空配列（全国平均 ST フォールバック） |
+| `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST, 推定ST_p25, 推定ST_p75)`。欠場枠は null。帯 2 列は導入前の CSV でも null（列が無くても読める）。未生成日は空配列（全国平均 ST フォールバック） |
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
 | `RaceResultRow` / `RaceResultFinish` / `RaceResultCourse` / `RaceResultWeather` | `results/realtime` | 着順、決まり手、ST、天候 |
 | `RacePayoutRow` / `SinglePayout` / `CombinationPayout` | `results/payouts` | 単勝・複勝・2連単・2連複・拡連複（3スロット固定）・3連単・3連複の組番／払戻金／人気 |
@@ -79,7 +79,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `RacePrediction` | レース 1 件分の統合予想。バッチが書き出し、Astro が読み込む |
 | `PredictorPrediction` | `RacePrediction.predictions[]` の要素。1 予想者 / 1 レースの AI 評価 + 買い目 + 回収率 |
 | `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
-| `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
+| `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
 | `RacePreview` / `RacePreviewBoat` / `RaceWeather` / `OriginalExhibition` / `OriginalExhibitionView` | 直前情報。`RacePrediction.preview` にぶら下がり、tkz（体重・展示タイム・チルト、`exhibitionTime` は 0→null）・sui（水面気象、天候はコード生値）・original_exhibition（場別オリジナル展示、`labels` + 艇別 `values`）を結合。いずれの CSV も未取得のレースでは `preview` 自体が undefined |
 | `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順列の可視化は `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`） |
 | `MotorStats`（`RaceRacer.motorStats`） | モーター期成績。motor_stats を `(場コード-モーター番号)` で各艇に突合（同一キーは記録日が新しい行を採用）。3連率・3連率順位・優勝/優出回数・平均ラップ秒を保持。当該場が motor_stats 未収録のレースでは undefined |

@@ -56,6 +56,20 @@ const BOAT_COUNT = 6;
 const startTimingFor = (racer: RaceRacer | undefined, useEstimated: boolean): number =>
   (useEstimated ? (racer?.estimatedST ?? racer?.nationalAvgST) : racer?.nationalAvgST) ?? 0;
 
+/**
+ * 予測 ST の 25/75 パーセンタイル。推定 ST 版で、かつ推定 ST 本体と帯の両方が
+ * 揃っている枠にだけ付く。全国平均 ST にフォールバックした枠は帯なし
+ * (その枠だけ帯が広く/狭く見えるのを避ける)。
+ */
+const startBandFor = (
+  racer: RaceRacer | undefined,
+  useEstimated: boolean,
+): Pick<StartPredictionEntry, "startTimingP25" | "startTimingP75"> => {
+  if (!useEstimated || racer?.estimatedST === undefined) return {};
+  const { estimatedStP25: p25, estimatedStP75: p75 } = racer;
+  return p25 !== undefined && p75 !== undefined ? { startTimingP25: p25, startTimingP75: p75 } : {};
+};
+
 /** stt が無い場合の進入コース＝枠番のフォールバック */
 const buildFallbackStartPrediction = (
   racers: readonly RaceRacer[],
@@ -66,6 +80,7 @@ const buildFallbackStartPrediction = (
     courseNumber: r.boatNumber,
     startTiming: startTimingFor(r, useEstimated),
     exhibitionStartTiming: null,
+    ...startBandFor(r, useEstimated),
   }));
   return {
     fromExhibition: false,
@@ -99,6 +114,7 @@ const buildStartPrediction = (
       courseNumber: boat.courseNumber || boat.boatNumber,
       startTiming: startTimingFor(racer, useEstimated),
       exhibitionStartTiming,
+      ...startBandFor(racer, useEstimated),
     };
   });
 
@@ -290,8 +306,12 @@ const toRaceRacers = (
   racerSt: RacerStRow | undefined,
 ): RaceRacer[] => {
   const estimatedByBoat = new Map<number, number>();
+  const bandByBoat = new Map<number, { p25: number; p75: number }>();
   for (const e of racerSt?.entries ?? []) {
     if (e.estimatedST !== null) estimatedByBoat.set(e.boatNumber, e.estimatedST);
+    if (e.estimatedStP25 !== null && e.estimatedStP75 !== null) {
+      bandByBoat.set(e.boatNumber, { p25: e.estimatedStP25, p75: e.estimatedStP75 });
+    }
   }
   return cards.racers.map((r) => ({
     boatNumber: r.boatNumber,
@@ -323,6 +343,12 @@ const toRaceRacers = (
       : {}),
     ...(estimatedByBoat.has(r.boatNumber)
       ? { estimatedST: estimatedByBoat.get(r.boatNumber) }
+      : {}),
+    ...(bandByBoat.has(r.boatNumber)
+      ? {
+          estimatedStP25: bandByBoat.get(r.boatNumber)?.p25,
+          estimatedStP75: bandByBoat.get(r.boatNumber)?.p75,
+        }
       : {}),
   }));
 };

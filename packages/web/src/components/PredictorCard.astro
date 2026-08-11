@@ -14,9 +14,13 @@ interface Props {
   /** 結果確定後の AI 評価チャートを表示するか。デフォルト true。 */
   showChart?: boolean;
   /**
-   * スタート予想図。予想者非依存の共通情報 (全国平均ST + 進入コース) だが、
+   * スタート予想図。予想者非依存の共通情報 (予測ST + 進入コース) だが、
    * primary predictor (本命予想 / slot=1) のカード内にまとめて表示するため任意 prop で受け取る。
    * 渡された場合のみ 1マーク予想と横並びで描画する。
+   *
+   * 呼び出し側 (レース詳細ページ) は予想者に依らず AI 推定 ST 版を渡す
+   * (racer_st が無い日は全国平均 ST 版にフォールバック)。予想者ごとの
+   * useEstimatedST は 1マーク距離 = 買い目の側だけに効く。
    */
   startPrediction?: StartPrediction;
   /**

@@ -54,6 +54,11 @@ const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
 
 // いずれかの艇に展示ST実測があるか（注記の出し分け用）
 const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != null);
+
+// いずれかの艇に予測区間（帯）があるか。AI推定ST版でのみ入る
+const hasBand = start.entries.some(
+  (e) => e.startTimingP25 != null && e.startTimingP75 != null,
+);
 ---
 
 <figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
@@ -145,8 +150,27 @@ const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != nul
       const stroke = entry.boatNumber === 1 ? "#94a3b8" : fill;
       const textColor = color?.textHex ?? "#0f172a";
       const boatX = stToX(stForDraw(entry.startTiming));
+      // 予測区間の帯。p25/p75 は AI 推定 ST 版にだけ入る。
+      // ST が大きいほど左なので p75 が左端、p25 が右端になる。
+      const band =
+        entry.startTimingP25 != null && entry.startTimingP75 != null
+          ? { left: stToX(entry.startTimingP75), right: stToX(entry.startTimingP25) }
+          : null;
       return (
         <g>
+          {/* 予測区間(25〜75パーセンタイル)の帯 */}
+          {band && (
+            <rect
+              x={band.left}
+              y={cy - 11}
+              width={Math.max(band.right - band.left, 1)}
+              height="22"
+              rx="4"
+              fill={fill}
+              opacity="0.22"
+            />
+          )}
+
           {/* コース番号 */}
           <text
             x={TRACK_LEFT - 14}
@@ -206,6 +230,12 @@ const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != nul
       (start.usesEstimatedST
         ? "スタートタイミングは実測ST履歴から算出したAI推定STです。"
         : "スタートタイミングは選手の全国平均STです。")}
+    {hasBand && (
+      <>
+        {" "}
+        帯は予測のブレ幅(25〜75パーセンタイル)で、実際のSTが約半分の確率でこの範囲に入ります。
+      </>
+    )}
     {hasExhibitionSt && (
       <>
         {" "}

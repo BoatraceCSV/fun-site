@@ -15,6 +15,13 @@ export type RacerStEntry = {
   readonly registrationNumber: number | null;
   /** 推定 ST (秒、小数 4 桁)。空欄の枠は null */
   readonly estimatedST: number | null;
+  /**
+   * 推定 ST の 25 / 75 パーセンタイル (秒)。スタート予想図の「帯」用。
+   * `estimatedST` を中心に対称で、幅は選手ごとの ST のばらつきで変わる。
+   * 本列が追加される前に生成された CSV では null。
+   */
+  readonly estimatedStP25: number | null;
+  readonly estimatedStP75: number | null;
 };
 
 /** 推定 ST - 1 レース分 (racer_st CSV の 1 行) */

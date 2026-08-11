@@ -16,6 +16,10 @@ const toNumberOrNull = (v: string | undefined): number | null => {
 // 選手別 推定ST (boatracecsv scripts/build_racer_st.py 出力)。1 レース 1 行、
 // 各枠の `N枠_登録番号` / `N枠_推定ST` を持つ。スリット予想と 1 マーク走行距離
 // 計算が全国平均 ST の代わりに読む (boatracecsv docs/design/st_estimation.md)。
+//
+// `N枠_推定ST_p25` / `_p75` はスタート予想図の帯 (予測区間) 用。この 2 列より前に
+// 生成された CSV も読めるよう、欠損は null に落とす (toNumberOrNull が undefined を
+// 受けて null を返す)。
 
 const parseRacerStRow = (row: Record<string, string>): RacerStRow => {
   const entries: RacerStEntry[] = [];
@@ -24,6 +28,8 @@ const parseRacerStRow = (row: Record<string, string>): RacerStRow => {
       boatNumber: boat,
       registrationNumber: toNumberOrNull(row[`${boat}枠_登録番号`]),
       estimatedST: toNumberOrNull(row[`${boat}枠_推定ST`]),
+      estimatedStP25: toNumberOrNull(row[`${boat}枠_推定ST_p25`]),
+      estimatedStP75: toNumberOrNull(row[`${boat}枠_推定ST_p75`]),
     });
   }
   return {
