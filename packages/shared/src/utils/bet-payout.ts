@@ -1,5 +1,6 @@
 import type { CombinationPayout, RacePayoutRow } from "../types/race-payout.js";
 import type { RaceResultRow } from "../types/race-result.js";
+import { isBetHit } from "./bet-hit.js";
 import type { BettingPicks } from "./one-mark-distance.js";
 import { extractTopThree } from "./race-result.js";
 
@@ -7,14 +8,16 @@ import { extractTopThree } from "./race-result.js";
 export const BET_UNIT_YEN = 100 as const;
 
 /**
- * 三連単フォーメーション内の「実際に賭ける組合せ数」を数える。
+ * 買い目に含まれる「実際に賭ける組合せ数」を数える。
  *
- * `first × second × third` の積から、同一艇番を 2 度以上使う組合せ
- * （1着 = 2着 / 2着 = 3着 / 1着 = 3着）を除外する。これは
- * `bet-hit.ts` の `isFormationHit` と同じ「実出目として有り得ない」
- * 制約に揃えるためで、1 点 ¥100 賭けの総コストを過大評価しない。
+ * - `kind: "combos"`: 出目リストの長さ
+ * - `kind: "formation"`: `first × second × third` の積から、同一艇番を 2 度以上
+ *   使う組合せ（1着 = 2着 / 2着 = 3着 / 1着 = 3着）を除外した数。これは
+ *   `bet-hit.ts` の `isBetHit` と同じ「実出目として有り得ない」制約に揃える
+ *   ためで、1 点 ¥100 賭けの総コストを過大評価しない。
  */
-export const countFormationCombinations = (picks: BettingPicks): number => {
+export const countBetCombinations = (picks: BettingPicks): number => {
+  if (picks.kind === "combos") return picks.combos.length;
   const { first, second, third } = picks;
   if (first.length === 0 || second.length === 0 || third.length === 0) return 0;
   let total = 0;
@@ -33,10 +36,10 @@ export const countFormationCombinations = (picks: BettingPicks): number => {
 /**
  * 3連単 1 レース分の集計。
  *
- * - `betCount` = フォーメーションに含まれる組合せ数（1 点 ¥100 で買う前提）
+ * - `betCount` = 買い目に含まれる組合せ数（1 点 ¥100 で買う前提）
  * - `betCostYen` = `betCount * BET_UNIT_YEN`
  * - `payoutYen` = 的中時のみ 3連単_払戻金、外れ / 未確定なら 0
- * - `hit` = フォーメーション内に actual 1-2-3 着の出目が含まれるか
+ * - `hit` = 買い目に actual 1-2-3 着の出目が含まれるか
  * - `actualSanrentan` = 実際の 3連単 払戻情報（参考表示用）。未確定なら null
  */
 export type BetPayoutResult = {
@@ -55,18 +58,8 @@ const ZERO_RESULT: BetPayoutResult = {
   actualSanrentan: null,
 };
 
-/** フォーメーション内に `[1着, 2着, 3着]` が含まれるか（同着除外） */
-const formationContains = (
-  picks: BettingPicks,
-  topThree: readonly [number, number, number],
-): boolean => {
-  const [a, b, c] = topThree;
-  if (a === b || b === c || a === c) return false;
-  return picks.first.includes(a) && picks.second.includes(b) && picks.third.includes(c);
-};
-
 /**
- * 1 レース × 1 フォーメーションの 3連単 ベット結果を計算する。
+ * 1 レース × 1 買い目の 3連単 ベット結果を計算する。
  *
  * 払戻金は `payout?.sanrentan?.payout` を採用する。`payout` が無い、または
  * `sanrentan` が空のレースは未確定とみなし `payoutYen = 0` / `hit = false`。
@@ -81,7 +74,7 @@ export const computeBetPayout = (
   payout: RacePayoutRow | undefined,
 ): BetPayoutResult => {
   if (!picks) return ZERO_RESULT;
-  const betCount = countFormationCombinations(picks);
+  const betCount = countBetCombinations(picks);
   const betCostYen = betCount * BET_UNIT_YEN;
   if (betCount === 0) {
     return {
@@ -102,7 +95,7 @@ export const computeBetPayout = (
     };
   }
   const topThree = extractTopThree(result);
-  const hit = topThree ? formationContains(picks, topThree) : false;
+  const hit = topThree ? isBetHit(picks, topThree) : false;
   const sanrentan = payout?.sanrentan ?? null;
   const payoutYen = hit && sanrentan ? sanrentan.payout : 0;
   return {

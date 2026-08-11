@@ -92,6 +92,16 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 除外するのは、着順が出ず予想の当否を判定できないレースを母数に入れないため（購入額を
 計上しない扱いは全額返還の会計上も整合する）。
 
+### 穴予想の買い目 (v9_suji)
+
+データソース: BoatraceCSV `estimate/suji`
+
+`v9_suji`(スジ予想)は **buy list を CSV から読む**唯一の予想者。
+1着 = 1 コース以外で強さpt 最大の艇、2-3着 = スジ表 `P(2着,3着|1着)` の上位 5 ペア。
+出目ごとに決まり手注釈(「まくり差し」等)が付く。
+**レース単位の決まり手予測ではなく、出目 1 点ごとの説明**である点に注意
+(BoatraceCSV `docs/design/ana_prediction.md` §14)。
+
 ### 利用していないデータ
 
 オッズ・実測展示タイム・チルト角度・水面コンディションの詳細などは、現状の BoatraceCSV では取得できないか、本サイトでは使っていない。
@@ -181,6 +191,10 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 図は表示専用で買い目・回収率に効かず、予測区間を持つのは AI 推定 ST 版だけのため
 (BoatraceCSV `docs/design/slit_sim_plan.md` §9)。
 買い目候補の選定は既定で 1 マーク走行距離基準(各着の基準艇 ±0.10)。
+**`bettingStyle="suji"` な予想者(スジ予想 v9_suji)は fun-site で買い目を計算せず**、
+BoatraceCSV `estimate/suji` の出目をそのまま使う(`bettingStyleFor(predictorId)`)。
+バッチが採点した買い目は `PredictorPrediction.dailyPicks` / `realtimePicks` に載り、
+web はそれを描画する — 表示と集計が構造的に一致する。
 **`strengthOnlyBetting` な予想者(AI予想 v8_aionly)のみ**、走行距離ではなく
 **強さpt のみの ±5.0pt 窓**(距離式が強さpt/50 を項に持つため距離 ±0.10 と
 等価スケール。ST 項を外した形)で候補を選定し、予測 ST は買い目に影響しない

@@ -1,6 +1,7 @@
 import type { ComponentKey } from "../predictors.js";
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
+import type { BettingPicks } from "../utils/one-mark-distance.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
@@ -164,6 +165,23 @@ export type PredictorPrediction = {
   readonly betPayout: RaceBetPayoutSummary;
   /** この予想者の当日 / 直前買い目それぞれの的中状態。 */
   readonly betHitStatus: BetHitStatus;
+  /**
+   * バッチが実際に採点した買い目。
+   *
+   * フォーメーション型の予想者は web 側でも同じ入力から再計算できるが、
+   * `bettingStyle="suji"` の予想者 (`v9_suji`) は CSV 由来の出目なので
+   * 再計算できない。**表示と集計の食い違いを構造的に防ぐため、
+   * 買い目そのものをここに載せて web はこれを描画する。**
+   */
+  readonly dailyPicks?: BettingPicks;
+  readonly realtimePicks?: BettingPicks;
+  /**
+   * 買い目 1 点ごとの決まり手注釈 (`v9_suji` のみ)。`realtimePicks` と同順。
+   * レース単位の決まり手予測ではなく「この出目はどの決まり手の形か」の説明
+   * (boatracecsv docs/design/ana_prediction.md §14.1)。
+   */
+  readonly dailyKimarite?: readonly string[];
+  readonly realtimeKimarite?: readonly string[];
 };
 
 /** 直前情報 - 1 艇分の展示データ（tkz 由来） */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RaceResultRow } from "../types/race-result.js";
-import { checkBettingHit } from "../utils/bet-hit.js";
-import type { BettingPicks } from "../utils/one-mark-distance.js";
+import { checkBettingHit, isBetHit } from "../utils/bet-hit.js";
+import type { BetCombo, BettingPicks } from "../utils/one-mark-distance.js";
 
 const makeResult = (top: readonly number[]): RaceResultRow => ({
   raceCode: "202602131912",
@@ -33,7 +33,9 @@ const picks = (
   first: readonly number[],
   second: readonly number[],
   third: readonly number[],
-): BettingPicks => ({ first, second, third });
+): BettingPicks => ({ kind: "formation", first, second, third });
+
+const comboPicks = (...combos: BetCombo[]): BettingPicks => ({ kind: "combos", combos });
 
 describe("checkBettingHit", () => {
   it("結果未確定の場合は両方 false", () => {
@@ -75,5 +77,38 @@ describe("checkBettingHit", () => {
     const result = makeResult([1, 2, 3]);
     const status = checkBettingHit(result, undefined, undefined);
     expect(status).toEqual({ dailyHit: false, realtimeHit: false });
+  });
+});
+
+describe('isBetHit — kind: "combos" (スジ予想 v9_suji)', () => {
+  it("出目がリストに含まれていれば的中", () => {
+    const picks = comboPicks([3, 1, 4], [3, 4, 5], [3, 5, 2]);
+    expect(isBetHit(picks, [3, 4, 5])).toBe(true);
+  });
+
+  it("順序が違う出目は的中扱いしない (3連単なので着順が意味を持つ)", () => {
+    const picks = comboPicks([3, 1, 4]);
+    expect(isBetHit(picks, [3, 4, 1])).toBe(false);
+    expect(isBetHit(picks, [1, 3, 4])).toBe(false);
+  });
+
+  it("リストに無い出目は外れ", () => {
+    const picks = comboPicks([3, 1, 4], [3, 4, 5]);
+    expect(isBetHit(picks, [1, 2, 3])).toBe(false);
+  });
+
+  it("空の出目リストは常に外れ", () => {
+    expect(isBetHit(comboPicks(), [3, 1, 4])).toBe(false);
+  });
+
+  it("同着 (同一艇番の重複) は的中扱いしない", () => {
+    const picks = comboPicks([3, 3, 4]);
+    expect(isBetHit(picks, [3, 3, 4])).toBe(false);
+  });
+
+  it("checkBettingHit 経由でも当日 / 直前を別々に判定する", () => {
+    const result = makeResult([3, 1, 4]);
+    const status = checkBettingHit(result, comboPicks([1, 2, 3]), comboPicks([3, 1, 4]));
+    expect(status).toEqual({ dailyHit: false, realtimeHit: true });
   });
 });

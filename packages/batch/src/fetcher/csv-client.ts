@@ -26,6 +26,7 @@ export type CsvType =
   | "recent_local"
   | "motor_stats"
   | "racer_st"
+  | "suji"
   | "results"
   | "payouts";
 
@@ -40,6 +41,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   recent_local: "programs/recent_local",
   motor_stats: "programs/motor_stats",
   racer_st: "estimate/racer_st",
+  suji: "estimate/suji",
   results: "results/realtime",
   payouts: "results/payouts",
 };

@@ -15,6 +15,7 @@ export {
   computeOneMarkDistances,
   computeBettingPicks,
   bettingBasisFor,
+  bettingStyleFor,
   bettingToleranceFor,
   effectiveAvgST,
   oneMarkDistanceOptionsFor,
@@ -26,10 +27,13 @@ export {
   type BettingBasis,
   type OneMarkDistanceEntry,
   type OneMarkDistanceOptions,
+  type BetCombo,
   type BettingPicks,
   type BettingTolerance,
+  type ComboPicks,
+  type FormationPicks,
 } from "./one-mark-distance.js";
-export { checkBettingHit, type BetHitStatus } from "./bet-hit.js";
+export { checkBettingHit, isBetHit, type BetHitStatus } from "./bet-hit.js";
 export { extractTopThree, isSettledResult } from "./race-result.js";
 export { tokenizeRankString, type RankMark } from "./rank-marks.js";
 export {
@@ -37,7 +41,7 @@ export {
   aggregateDailyBetPayout,
   computeBetPayout,
   computeRaceBetPayoutSummary,
-  countFormationCombinations,
+  countBetCombinations,
   type BetPayoutResult,
   type DailyBetPayoutAggregate,
   type RaceBetPayoutSummary,

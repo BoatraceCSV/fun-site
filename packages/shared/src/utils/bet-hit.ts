@@ -17,17 +17,26 @@ export type BetHitStatus = {
 const BET_HIT_STATUS_NONE: BetHitStatus = { dailyHit: false, realtimeHit: false };
 
 /**
- * 三連単フォーメーション（買い目の `first` × `second` × `third`）が
- * 結果の 1-2-3 着と一致しているかを判定する。
- * - 各着の候補リストに該当艇番が含まれていれば的中
- * - ただし 1-2-3 着で同一艇番を重複して使うのは（実際の出目として有り得ないので）的中扱いにしない
+ * 買い目が結果の 1-2-3 着と一致しているかを判定する。
+ *
+ * - `kind: "formation"`: 各着の候補リストに該当艇番が含まれていれば的中
+ * - `kind: "combos"`: 出目リストに `[1着, 2着, 3着]` がそのまま含まれていれば的中
+ *
+ * いずれも 1-2-3 着で同一艇番を重複して使うのは（実際の出目として有り得ないので）
+ * 的中扱いにしない。
+ *
+ * **的中判定はこの 1 関数に集約すること。** 以前は `bet-payout.ts` にも同じ判定が
+ * 二重実装されていて、片方だけ直すとズレる状態だった。
  */
-const isFormationHit = (
+export const isBetHit = (
   picks: BettingPicks,
   topThree: readonly [number, number, number],
 ): boolean => {
   const [a, b, c] = topThree;
   if (a === b || b === c || a === c) return false;
+  if (picks.kind === "combos") {
+    return picks.combos.some(([x, y, z]) => x === a && y === b && z === c);
+  }
   return picks.first.includes(a) && picks.second.includes(b) && picks.third.includes(c);
 };
 
@@ -47,7 +56,7 @@ export const checkBettingHit = (
   const topThree = extractTopThree(result);
   if (!topThree) return BET_HIT_STATUS_NONE;
   return {
-    dailyHit: dailyPicks ? isFormationHit(dailyPicks, topThree) : false,
-    realtimeHit: realtimePicks ? isFormationHit(realtimePicks, topThree) : false,
+    dailyHit: dailyPicks ? isBetHit(dailyPicks, topThree) : false,
+    realtimeHit: realtimePicks ? isBetHit(realtimePicks, topThree) : false,
   };
 };

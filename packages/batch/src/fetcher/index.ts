@@ -10,6 +10,7 @@ import type {
   RecentFormRow,
   SttRow,
   SuiRow,
+  SujiRow,
   TitleRow,
   TkzRow,
 } from "@fun-site/shared";
@@ -23,6 +24,7 @@ import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
+import { parseSuji } from "./suji-schemas.js";
 
 /**
  * 1 予想者ぶんの index 取得結果。
@@ -52,6 +54,12 @@ export type FetchedCsvData = {
   readonly recentLocal: readonly RecentFormRow[];
   /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
   readonly motorStats: readonly MotorStatsRow[];
+  /**
+   * 穴予想 v9_suji の買い目 (estimate/suji)。レース × 状態 で 1 行。
+   * fun-site は買い目を計算せず、この CSV の出目をそのまま使う
+   * (boatracecsv docs/design/ana_prediction.md §13)。未生成時は空配列
+   */
+  readonly suji: readonly SujiRow[];
   /**
    * 選手別 推定ST (estimate/racer_st)。1 レース 1 行。未生成時は空配列
    * (その場合スタート予想・1マーク距離は全国平均 ST にフォールバックする)。
@@ -139,6 +147,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentLocal,
     motorStats,
     racerSt,
+    suji,
     indexesByPredictor,
     results,
     payouts,
@@ -153,6 +162,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("recent_local", date, parseRecentForm),
     fetchAndParse("motor_stats", date, parseMotorStats),
     fetchAndParse("racer_st", date, parseRacerSt),
+    fetchAndParse("suji", date, parseSuji),
     Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
     fetchAndParse("results", date, parseResults),
     fetchAndParse("payouts", date, parsePayouts),
@@ -169,6 +179,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentLocal,
     motorStats,
     racerSt,
+    suji,
     indexesByPredictor,
     results,
     payouts,
@@ -179,6 +190,7 @@ export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
+export { parseSuji } from "./suji-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";

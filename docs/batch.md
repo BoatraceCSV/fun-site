@@ -165,3 +165,17 @@ pnpm --filter @fun-site/batch run start
 - 出力した JSON を読む側: [web.md](./web.md)
 - Cloud Run Job のデプロイ: [infrastructure.md](./infrastructure.md)
 - 動作確認・トラブルシューティング: [operations.md](./operations.md)
+
+## 穴予想 v9_suji の買い目
+
+`v9_suji` だけは **fun-site が買い目を計算しない**。BoatraceCSV
+`estimate/suji` の出目をそのまま使う(フォーメーションでは表現できない出目集合のため)。
+
+- 取得: `packages/batch/src/fetcher/suji-schemas.ts` の `parseSuji`
+  (`racer_st` と同じ日付パーティション CSV の経路)
+- 分岐: `bettingStyleFor(predictorId)` が `"suji"` を返したら
+  `computeBettingPicks` ではなく CSV 由来の `ComboPicks` を使う
+  (`prediction-builder.ts`)
+- 出力: バッチが採点した買い目を `PredictorPrediction.dailyPicks` /
+  `realtimePicks`、注釈を `dailyKimarite` / `realtimeKimarite` に載せる。
+  **web はこれを描画するので、表示と集計が食い違わない**

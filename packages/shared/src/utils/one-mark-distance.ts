@@ -99,7 +99,8 @@ export const oneMarkDistanceOptionsFor = (predictorId?: string): OneMarkDistance
  * 選定値は既定で 1 マーク走行距離、`basis="strength"` の予想者 (v8_aionly)
  * では強さpt。
  */
-export type BettingPicks = {
+export type FormationPicks = {
+  readonly kind: "formation";
   /** 1着候補: 選定値が最大の艇の値 ± `tolerance.first` 以内 */
   readonly first: readonly number[];
   /** 2着候補: 選定値降順で2位の艇の値 ± `tolerance.second` 以内 */
@@ -107,6 +108,28 @@ export type BettingPicks = {
   /** 3着候補: 選定値降順で3位の艇の値 ± `tolerance.third` 以内 */
   readonly third: readonly number[];
 };
+
+/** 三連単の 1 点 (1着艇, 2着艇, 3着艇)。 */
+export type BetCombo = readonly [number, number, number];
+
+/**
+ * 買い目（出目リスト）- 個別の三連単出目をそのまま列挙したもの。
+ *
+ * スジ予想 (`v9_suji`) のようにフォーメーションで表現できない買い目のための形。
+ * 例: `3-1-5` / `3-4-5` / `3-5-2` はどんな候補窓の直積でも作れない。
+ * boatracecsv の `data/estimate/suji/YYYY/MM/DD.csv` から読んだ出目をそのまま持つ。
+ */
+export type ComboPicks = {
+  readonly kind: "combos";
+  /** 買う出目。重複・同一艇の重複使用は含めない前提（生成側で保証する） */
+  readonly combos: readonly BetCombo[];
+};
+
+/**
+ * 買い目。フォーメーション（既存の全予想者）か出目リスト（`v9_suji`）のいずれか。
+ * `kind` で判別する。
+ */
+export type BettingPicks = FormationPicks | ComboPicks;
 
 /**
  * 買い目の着順別しきい値（±許容幅）。
@@ -159,6 +182,21 @@ export const bettingBasisFor = (predictorId?: string): BettingBasis =>
   predictorId && predictorById(predictorId)?.strengthOnlyBetting === true ? "strength" : "distance";
 
 /**
+ * 買い目の作り方を予想者 ID から解決する。レジストリ (`predictors.ts`) の
+ * `PredictorSpec.bettingStyle` が唯一の情報源で、未登録 ID / 未指定なら
+ * 既定の `"formation"`(fun-site 側でフォーメーションを計算)になる。
+ *
+ * `"suji"` の予想者 (`v9_suji`) は fun-site では買い目を **計算しない**。
+ * boatracecsv が `data/estimate/suji/YYYY/MM/DD.csv` に確定させた出目を読む。
+ *
+ * `bettingBasisFor` / `bettingToleranceFor` / `oneMarkDistanceOptionsFor` と
+ * 対になるヘルパー。バッチ(回収率の集計対象になる買い目)と web(画面に表示する
+ * 買い目)が **同じ買い目になることを保証**するために両方からこれを呼ぶ。
+ */
+export const bettingStyleFor = (predictorId?: string): "formation" | "suji" =>
+  predictorId && predictorById(predictorId)?.bettingStyle === "suji" ? "suji" : "formation";
+
+/**
  * 予想者 ID ごとのしきい値オーバーライド。未登録の予想者は
  * `DEFAULT_BETTING_TOLERANCE`（±0.10）を使う。
  *
@@ -193,8 +231,8 @@ export const bettingToleranceFor = (predictorId?: string): BettingTolerance => {
  * 表示される不具合を解消する。
  *
  * 除外するのは「どの有効出目にも使えないデッド候補」のみなので、買える
- * 組合せの集合は変わらず、`countFormationCombinations` /
- * `isFormationHit`（組合せ数・的中・回収率）の結果は不変。1着候補が
+ * 組合せの集合は変わらず、`countBetCombinations` /
+ * `isBetHit`（組合せ数・的中・回収率）の結果は不変。1着候補が
  * 複数艇ある場合、その艇は別の艇が 1着になる出目で下位着に使えるため
  * 残る。
  *
@@ -210,7 +248,7 @@ export const computeBettingPicks = (
   entries: readonly OneMarkDistanceEntry[],
   tolerance: BettingTolerance = DEFAULT_BETTING_TOLERANCE,
   basis: BettingBasis = "distance",
-): BettingPicks => {
+): FormationPicks => {
   const pickValue = (e: OneMarkDistanceEntry): number =>
     basis === "strength" ? e.strengthPt : e.distance;
   const sortedDesc = [...entries].sort((a, b) => pickValue(b) - pickValue(a));
@@ -234,7 +272,7 @@ export const computeBettingPicks = (
   const rawThird = pickWithin(third === undefined ? undefined : pickValue(third), tolerance.third);
 
   // 有効な出目（1-2-3 着が相異なる組合せ）に登場する艇だけを各着で残す。
-  // これは bet-payout.ts の countFormationCombinations と同じ制約。
+  // これは bet-payout.ts の countBetCombinations と同じ制約。
   const usedFirst = new Set<number>();
   const usedSecond = new Set<number>();
   const usedThird = new Set<number>();
@@ -253,6 +291,7 @@ export const computeBettingPicks = (
   const ascending = (set: ReadonlySet<number>): readonly number[] => [...set].sort((a, b) => a - b);
 
   return {
+    kind: "formation",
     first: ascending(usedFirst),
     second: ascending(usedSecond),
     third: ascending(usedThird),

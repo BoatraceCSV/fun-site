@@ -168,3 +168,18 @@ CSV ミラーバケットは以下のライフサイクルで自動遷移する�
 - 365 日超: COLDLINE
 
 過去日付のレースページを再ビルドする場合、当日の CSV が NEARLINE / COLDLINE に落ちていてもコスト面の問題はあるが取得は可能。
+
+## 穴予想 v9_suji の買い目 (`estimate/suji`)
+
+BoatraceCSV `data/estimate/suji/YYYY/MM/DD.csv`。レース × 状態 で 1 行。
+
+| 列 | 用途 |
+| --- | --- |
+| `状態` | `daily` / `realtime`。当日買い目 / 直前買い目に振り分ける |
+| `1着コース` / `1着艇番` | 参考表示 |
+| `買い目1`〜`買い目5` | `"3-1-4"` 形式の出目(艇番) |
+| `決まり手1`〜`決まり手5` | 各出目の決まり手注釈 |
+
+**fun-site は買い目を計算しない。** 他の予想者は強さpt からフォーメーションを
+計算するが、`v9_suji` はフォーメーションで表現できない出目集合なので
+boatracecsv が確定させたものを読む(`parseSuji` / `packages/batch/src/fetcher/suji-schemas.ts`)。

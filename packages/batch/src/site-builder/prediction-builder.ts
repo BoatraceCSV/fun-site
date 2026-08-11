@@ -2,6 +2,7 @@ import type {
   AiEvaluation,
   AiEvaluationEntry,
   BetHitStatus,
+  BettingPicks,
   ComponentKey,
   IndexRow,
   MotorStats,
@@ -27,12 +28,14 @@ import type {
   StartPredictionEntry,
   SttRow,
   SuiRow,
+  SujiRow,
   TitleRow,
   TkzRow,
 } from "@fun-site/shared";
 import {
   activePredictors,
   bettingBasisFor,
+  bettingStyleFor,
   bettingToleranceFor,
   checkBettingHit,
   computeBettingPicks,
@@ -360,6 +363,11 @@ const toRaceRacers = (
  * 行。同レースに対して両方存在する場合があり、それぞれを独立した AI 評価として
  * 保持し、買い目・的中状態・回収率も daily / realtime の両方で計算する。
  */
+const toComboPicks = (row: SujiRow | undefined): BettingPicks | undefined =>
+  row && row.picks.length > 0
+    ? { kind: "combos", combos: row.picks.map((p) => p.combo) }
+    : undefined;
+
 const buildPredictorPrediction = (
   predictor: PredictorSpec,
   racers: readonly RaceRacer[],
@@ -367,6 +375,8 @@ const buildPredictorPrediction = (
   realtimeIdx: IndexRow | undefined,
   result: RaceResultRow | undefined,
   payout: RacePayoutRow | undefined,
+  sujiDaily?: SujiRow,
+  sujiRealtime?: SujiRow,
 ): PredictorPrediction => {
   const aiEvaluationDaily = dailyIdx ? buildAiEvaluation(dailyIdx) : undefined;
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
@@ -379,24 +389,42 @@ const buildPredictorPrediction = (
   // strengthOnlyBetting な予想者 (v8_aionly) は走行距離ではなく強さpt のみで
   // 候補を選定する (basis="strength"、しきい値 ±5.0pt)。
   const basis = bettingBasisFor(predictor.id);
-  const dailyPicks = aiEvaluationDaily
-    ? computeBettingPicks(
-        computeOneMarkDistances(racers, aiEvaluationDaily, stOptions),
-        tolerance,
-        basis,
-      )
-    : undefined;
-  const realtimePicks = aiEvaluationRealtime
-    ? computeBettingPicks(
-        computeOneMarkDistances(racers, aiEvaluationRealtime, stOptions),
-        tolerance,
-        basis,
-      )
-    : undefined;
+  // bettingStyle="suji" の予想者 (v9_suji) は fun-site で買い目を計算しない。
+  // boatracecsv が data/estimate/suji/ に確定させた出目をそのまま使う
+  // (フォーメーションでは表現できない出目集合のため)。
+  const style = bettingStyleFor(predictor.id);
+  const dailyPicks =
+    style === "suji"
+      ? toComboPicks(sujiDaily)
+      : aiEvaluationDaily
+        ? computeBettingPicks(
+            computeOneMarkDistances(racers, aiEvaluationDaily, stOptions),
+            tolerance,
+            basis,
+          )
+        : undefined;
+  const realtimePicks =
+    style === "suji"
+      ? toComboPicks(sujiRealtime)
+      : aiEvaluationRealtime
+        ? computeBettingPicks(
+            computeOneMarkDistances(racers, aiEvaluationRealtime, stOptions),
+            tolerance,
+            basis,
+          )
+        : undefined;
   const betHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
   const betPayout = computeRaceBetPayoutSummary(dailyPicks, realtimePicks, result, payout);
+  // 採点した買い目そのものを載せる。web はこれを描画するので、表示と集計が
+  // 食い違わない (v9_suji は CSV 由来で web 側から再計算できないため必須)。
+  const kimarite = (row: SujiRow | undefined): readonly string[] | undefined =>
+    style === "suji" && row ? row.picks.map((p) => p.kimarite) : undefined;
 
   return {
+    dailyPicks,
+    realtimePicks,
+    dailyKimarite: kimarite(sujiDaily),
+    realtimeKimarite: kimarite(sujiRealtime),
     predictorId: predictor.id,
     predictorName: predictor.displayName,
     slot: predictor.slot,
@@ -436,6 +464,8 @@ export const buildRacePrediction = (
   result: RaceResultRow | undefined,
   payout: RacePayoutRow | undefined,
   generatedAt: string,
+  /** 穴予想 v9_suji の買い目 (estimate/suji)。daily / realtime それぞれ。 */
+  sujiRows?: { readonly daily?: SujiRow; readonly realtime?: SujiRow },
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -449,7 +479,16 @@ export const buildRacePrediction = (
   const predictors = activePredictors();
   const predictions: PredictorPrediction[] = predictors.map((p) => {
     const rows = indexRowsByPredictor.get(p.id) ?? {};
-    return buildPredictorPrediction(p, racers, rows.daily, rows.realtime, result, payout);
+    return buildPredictorPrediction(
+      p,
+      racers,
+      rows.daily,
+      rows.realtime,
+      result,
+      payout,
+      sujiRows?.daily,
+      sujiRows?.realtime,
+    );
   });
 
   // 後方互換: 既存 UI 用に primary predictor (= slot 最小) の値を平坦化
@@ -510,6 +549,7 @@ export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
   racerSt: readonly RacerStRow[],
+  suji: readonly SujiRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
   originalExhibition: readonly OriginalExhibitionRow[],
@@ -533,6 +573,12 @@ export const buildAllRacePredictions = (
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
+  // 穴予想 v9_suji の買い目。1 レースにつき daily / realtime の 2 行が来る。
+  const sujiByCode = new Map<string, { daily?: SujiRow; realtime?: SujiRow }>();
+  for (const row of suji) {
+    const slot = sujiByCode.get(row.raceCode) ?? {};
+    sujiByCode.set(row.raceCode, { ...slot, [row.state]: row });
+  }
 
   // raceCode → predictorId → { daily?, realtime? }
   const indexLookup = new Map<string, Map<string, { daily?: IndexRow; realtime?: IndexRow }>>();
@@ -568,6 +614,7 @@ export const buildAllRacePredictions = (
       resultByCode.get(cards.raceCode),
       payoutByCode.get(cards.raceCode),
       generatedAt,
+      sujiByCode.get(cards.raceCode),
     ),
   );
 };

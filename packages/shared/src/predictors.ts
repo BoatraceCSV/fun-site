@@ -121,6 +121,18 @@ export type PredictorSpec = {
    * バッチ / web は `bettingBasisFor(predictorId)` 経由でこのフラグを解決する。
    */
   readonly strengthOnlyBetting?: boolean;
+  /**
+   * 買い目の作り方。
+   * - 未指定 / `"formation"`: 1 マーク走行距離(または強さpt)から
+   *   フォームレーションを **fun-site 側で計算**する(既存の全予想者)。
+   * - `"suji"`: boatracecsv が確定させた出目を **CSV から読む**だけ
+   *   (`v9_suji`。`data/estimate/suji/YYYY/MM/DD.csv`)。
+   *   フォーメーションでは表現できない出目集合になるため。
+   *
+   * 解決は `bettingStyleFor(predictorId)` 経由で行う。バッチ(集計対象の買い目)と
+   * web(表示する買い目)が食い違わないよう、必ず同じヘルパーを通すこと。
+   */
+  readonly bettingStyle?: "formation" | "suji";
 };
 
 /**
@@ -252,6 +264,23 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-07-23",
     componentKeys: ["course", "racer", "motor4", "exhibit", "weather"],
     useEstimatedST: true,
+  },
+  {
+    id: "v9_suji",
+    displayName: "スジ予想",
+    slot: 9,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 穴予想 (A案)。control (v1_basic) と同一の 5 成分で index / 強さpt は同値。
+    // 差分は買い目の作り方だけ:
+    //   1着   = 1 コース以外で 強さpt が最大の艇
+    //   2-3着 = スジ表 P(2着, 3着 | 1着) の上位 5 ペア
+    // フォーメーションで表現できない出目集合になるため、買い目は boatracecsv が
+    // data/estimate/suji/YYYY/MM/DD.csv に出したものをそのまま読む (bettingStyle)。
+    // 設計・検証: boatracecsv docs/design/ana_prediction.md §13 (A案)
+    startedAt: "2026-08-12",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+    bettingStyle: "suji",
   },
   {
     id: "v8_aionly",

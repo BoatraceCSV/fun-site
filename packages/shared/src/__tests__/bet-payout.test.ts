@@ -6,15 +6,17 @@ import {
   aggregateDailyBetPayout,
   computeBetPayout,
   computeRaceBetPayoutSummary,
-  countFormationCombinations,
+  countBetCombinations,
 } from "../utils/bet-payout.js";
-import type { BettingPicks } from "../utils/one-mark-distance.js";
+import type { BetCombo, BettingPicks } from "../utils/one-mark-distance.js";
 
 const picks = (
   first: readonly number[],
   second: readonly number[],
   third: readonly number[],
-): BettingPicks => ({ first, second, third });
+): BettingPicks => ({ kind: "formation", first, second, third });
+
+const comboPicks = (...combos: BetCombo[]): BettingPicks => ({ kind: "combos", combos });
 
 const makeResult = (top: readonly number[]): RaceResultRow => ({
   raceCode: "202605162112",
@@ -61,30 +63,30 @@ const makePayout = (sanrentanCombo: string, payout: number): RacePayoutRow => ({
   sanrenpuku: null,
 });
 
-describe("countFormationCombinations", () => {
+describe("countBetCombinations", () => {
   it("1x1x1 のフォーメーションは 1 点", () => {
-    expect(countFormationCombinations(picks([1], [2], [3]))).toBe(1);
+    expect(countBetCombinations(picks([1], [2], [3]))).toBe(1);
   });
 
   it("2x2x2 から同一艇の重複を除いた組合せ数を返す", () => {
     // {1,2} × {1,2} × {1,2} = 8 通り, 重複除外で 2 通り (1-2-? は 1 を含む, ? は 1/2 以外 → 0)
     // 実際: a≠b≠c≠a を満たすのは (1,2,?) where ? ∉ {1,2} → 0, (2,1,?) where ? ∉ {1,2} → 0
     // 各 first/second から異なる艇を残すと third 候補が空になるので 0
-    expect(countFormationCombinations(picks([1, 2], [1, 2], [1, 2]))).toBe(0);
+    expect(countBetCombinations(picks([1, 2], [1, 2], [1, 2]))).toBe(0);
   });
 
   it("3 艇とも異なる候補があれば 1 点", () => {
-    expect(countFormationCombinations(picks([1], [2], [3]))).toBe(1);
+    expect(countBetCombinations(picks([1], [2], [3]))).toBe(1);
   });
 
   it("first=2 艇のフォーメーション (1,2)x(3)x(4) は 2 点", () => {
-    expect(countFormationCombinations(picks([1, 2], [3], [4]))).toBe(2);
+    expect(countBetCombinations(picks([1, 2], [3], [4]))).toBe(2);
   });
 
   it("空のフォーメーションは 0 点", () => {
-    expect(countFormationCombinations(picks([], [2], [3]))).toBe(0);
-    expect(countFormationCombinations(picks([1], [], [3]))).toBe(0);
-    expect(countFormationCombinations(picks([1], [2], []))).toBe(0);
+    expect(countBetCombinations(picks([], [2], [3]))).toBe(0);
+    expect(countBetCombinations(picks([1], [], [3]))).toBe(0);
+    expect(countBetCombinations(picks([1], [2], []))).toBe(0);
   });
 });
 
@@ -208,5 +210,29 @@ describe("aggregateDailyBetPayout", () => {
     expect(agg.totalBetCostYen).toBe(300);
     expect(agg.totalPayoutYen).toBe(2180);
     expect(agg.recoveryRate).toBeCloseTo(2180 / 300);
+  });
+});
+
+describe('countBetCombinations / computeBetPayout — kind: "combos"', () => {
+  it("点数は出目リストの長さそのもの", () => {
+    expect(countBetCombinations(comboPicks([3, 1, 4], [3, 4, 5], [3, 5, 2]))).toBe(3);
+    expect(countBetCombinations(comboPicks())).toBe(0);
+  });
+
+  it("的中時は 3連単 払戻金をそのまま計上する", () => {
+    const picks = comboPicks([3, 1, 4], [3, 4, 5]);
+    const res = computeBetPayout(picks, makeResult([3, 4, 5]), makePayout("3-4-5", 23840));
+    expect(res.betCount).toBe(2);
+    expect(res.betCostYen).toBe(2 * BET_UNIT_YEN);
+    expect(res.hit).toBe(true);
+    expect(res.payoutYen).toBe(23840);
+  });
+
+  it("外れなら払戻 0 で購入額だけ計上する", () => {
+    const picks = comboPicks([3, 1, 4], [3, 4, 5]);
+    const res = computeBetPayout(picks, makeResult([1, 2, 3]), makePayout("3-4-5", 23840));
+    expect(res.hit).toBe(false);
+    expect(res.payoutYen).toBe(0);
+    expect(res.betCostYen).toBe(2 * BET_UNIT_YEN);
   });
 });

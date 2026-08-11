@@ -20,7 +20,7 @@ const picks = (
   first: readonly number[],
   second: readonly number[],
   third: readonly number[],
-): BettingPicks => ({ first, second, third });
+): BettingPicks => ({ kind: "formation", first, second, third });
 
 const makeResult = (top: readonly number[]): RaceResultRow => ({
   raceCode: "202605162112",

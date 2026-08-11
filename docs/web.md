@@ -105,3 +105,15 @@ pnpm --filter @fun-site/web run typecheck
 - データ生成側: [batch.md](./batch.md)
 - 配信インフラ（GCS / CDN）: [infrastructure.md](./infrastructure.md)
 - ローカル起動: [development.md](./development.md)
+
+## 買い目の表示 (フォーメーション / 出目リスト)
+
+`BettingPicks.astro` は 2 形態を描画する(`BettingPicks` は直和型)。
+
+- `kind: "formation"` — 従来どおり 1着 / 2着 / 3着 の候補艇を並べる
+- `kind: "combos"` — 出目を 1 行ずつ縦に並べ、右に決まり手注釈を添える
+  (穴予想 `v9_suji`)
+
+`dailyPicks` / `realtimePicks` props が渡された場合は**それを描画し、
+内部での再計算はしない**。`v9_suji` は CSV 由来なので web からは再計算できず、
+これが必須になる。渡されない場合は従来どおり強さpt から計算する。
