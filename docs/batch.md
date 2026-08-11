@@ -179,3 +179,21 @@ pnpm --filter @fun-site/batch run start
 - 出力: バッチが採点した買い目を `PredictorPrediction.dailyPicks` /
   `realtimePicks`、注釈を `dailyKimarite` / `realtimeKimarite` に載せる。
   **web はこれを描画するので、表示と集計が食い違わない**
+
+## 予想者統計の体験指標
+
+`aggregator/predictor-stats.ts` は回収率に加えて次を集計する。回収率だけでは
+「当たらないが当たれば大きい」穴予想 (`v9_suji`) の価値を測れないため
+(BoatraceCSV `docs/design/ana_prediction.md` §7)。
+
+| フィールド | 内容 |
+| --- | --- |
+| `hitPayoutYen` / `averagePayoutYen` | 的中レースの払戻総額と平均配当。分母は **的中数** (レース数ではない) |
+| `averageBetCount` | レースあたりの購入点数 |
+| `bigHitCount` | 万舟 (3連単 1 万円以上) の的中数 |
+| `bigHitPer10kYen` | **賭け金 1 万円あたり**の万舟的中数 |
+
+> **万舟は素の本数で予想者を比較しないこと。** 点数を多く買う予想者ほど本数は
+> 増える。実測でも control (11.5 点) が 40 本、v9_suji (5.0 点) が 27 本で
+> 素の本数では負けるが、賭け金あたりでは 0.12 対 0.10 で逆転する。
+> 比較には必ず `bigHitPer10kYen` を使う。

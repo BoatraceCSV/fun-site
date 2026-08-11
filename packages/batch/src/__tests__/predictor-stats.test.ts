@@ -124,3 +124,107 @@ describe("aggregatePredictorStats", () => {
     expect(total?.recoveryRate).toBeNull();
   });
 });
+
+describe("aggregatePredictorStats — 体験指標", () => {
+  const find = (report: ReturnType<typeof aggregatePredictorStats>) =>
+    report.predictors.find((p) => p.predictorId === PID);
+
+  it("平均配当は的中レースの払戻を的中数で割る (外れは分母に入れない)", () => {
+    const report = aggregatePredictorStats([
+      makePred({
+        raceCode: "202608010101",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 4000, hit: true },
+      }),
+      makePred({
+        raceCode: "202608010102",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+      }),
+    ]);
+    const total = find(report)?.total;
+    expect(total?.raceCount).toBe(2);
+    expect(total?.hitCount).toBe(1);
+    expect(total?.hitPayoutYen).toBe(4000);
+    // 2 レース買って 1 本的中 → 平均配当は 4000 (2000 ではない)
+    expect(total?.averagePayoutYen).toBe(4000);
+  });
+
+  it("平均点数はレースあたりの購入点数", () => {
+    const report = aggregatePredictorStats([
+      makePred({
+        raceCode: "202608010101",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+      }),
+      makePred({
+        raceCode: "202608010102",
+        settled: true,
+        dailyBet: { betCount: 11, betCostYen: 1100, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 11, betCostYen: 1100, payoutYen: 0, hit: false },
+      }),
+    ]);
+    expect(find(report)?.total.averageBetCount).toBe(8);
+  });
+
+  it("万舟は 1 万円以上の的中のみ数え、賭け金あたりでも出す", () => {
+    const report = aggregatePredictorStats([
+      makePred({
+        raceCode: "202608010101",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 9999, hit: true },
+      }),
+      makePred({
+        raceCode: "202608010102",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 10000, hit: true },
+      }),
+    ]);
+    const total = find(report)?.total;
+    // 9,999 円は万舟に含めない (境界は 10,000 円以上)
+    expect(total?.bigHitCount).toBe(1);
+    // 賭け金 1,000 円で 1 本 → 1 万円あたり 10 本
+    expect(total?.bigHitPer10kYen).toBe(10);
+  });
+
+  it("的中ゼロなら平均配当は null (0 で割らない)", () => {
+    const report = aggregatePredictorStats([
+      makePred({
+        raceCode: "202608010101",
+        settled: true,
+        dailyBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 5, betCostYen: 500, payoutYen: 0, hit: false },
+      }),
+    ]);
+    const total = find(report)?.total;
+    expect(total?.averagePayoutYen).toBeNull();
+    expect(total?.bigHitPer10kYen).toBe(0);
+  });
+
+  it("月をまたいでも通算が正しく積み上がる", () => {
+    const report = aggregatePredictorStats([
+      makePred({
+        raceCode: "202607010101",
+        settled: true,
+        dailyBet: { betCount: 4, betCostYen: 400, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 4, betCostYen: 400, payoutYen: 20000, hit: true },
+      }),
+      makePred({
+        raceCode: "202608010101",
+        settled: true,
+        dailyBet: { betCount: 6, betCostYen: 600, payoutYen: 0, hit: false },
+        realtimeBet: { betCount: 6, betCostYen: 600, payoutYen: 0, hit: false },
+      }),
+    ]);
+    const overall = find(report);
+    expect(overall?.monthly.map((m) => m.month)).toEqual(["2026-07", "2026-08"]);
+    expect(overall?.total.averageBetCount).toBe(5);
+    expect(overall?.total.averagePayoutYen).toBe(20000);
+    expect(overall?.total.bigHitCount).toBe(1);
+  });
+});

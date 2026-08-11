@@ -17,7 +17,30 @@ export type PredictorMonthlyStats = {
   readonly payoutYen: number; // 直前買い目の払戻額
   /** 回収率。`betCostYen === 0` のときは `null` (集計母数なし)。 */
   readonly recoveryRate: number | null;
+
+  // --- 体験指標 ---
+  // 回収率だけでは「当たらないが当たれば大きい」穴予想の価値を測れないため
+  // 併せて見る (BoatraceCSV docs/design/ana_prediction.md §7)。
+
+  /** 的中レースの払戻総額。`hitCount` で割ると平均配当。 */
+  readonly hitPayoutYen: number;
+  /** 平均配当 (円)。`hitCount === 0` のときは `null`。 */
+  readonly averagePayoutYen: number | null;
+  /** 平均購入点数 (1 点 ¥100 前提)。`raceCount === 0` のときは `null`。 */
+  readonly averageBetCount: number | null;
+  /**
+   * 万舟 (3連単 1 万円以上) の的中数。
+   *
+   * **素の本数で予想者を比較しないこと。** 点数を多く買う予想者ほど増える。
+   * 比較には `bigHitPer10kYen` を使う。
+   */
+  readonly bigHitCount: number;
+  /** 賭け金 1 万円あたりの万舟的中数。`betCostYen === 0` のときは `null`。 */
+  readonly bigHitPer10kYen: number | null;
 };
+
+/** 万舟 (高配当) の下限 (円)。3連単の配当分布の上位 16% がここ。 */
+export const BIG_PAYOUT_THRESHOLD_YEN = 10_000;
 
 export type PredictorOverallStats = {
   readonly predictorId: string;
@@ -51,6 +74,11 @@ const emptyMonthStats = (month: string): PredictorMonthlyStats => ({
   betCostYen: 0,
   payoutYen: 0,
   recoveryRate: null,
+  hitPayoutYen: 0,
+  averagePayoutYen: null,
+  averageBetCount: null,
+  bigHitCount: 0,
+  bigHitPer10kYen: null,
 });
 
 const accumulate = (
@@ -59,19 +87,34 @@ const accumulate = (
   payoutYen: number,
   dailyHit: boolean,
   realtimeHit: boolean,
-): PredictorMonthlyStats => ({
-  ...acc,
-  raceCount: acc.raceCount + 1,
-  hitCount: acc.hitCount + (realtimeHit ? 1 : 0),
-  dailyHitCount: acc.dailyHitCount + (dailyHit ? 1 : 0),
-  realtimeHitCount: acc.realtimeHitCount + (realtimeHit ? 1 : 0),
-  betCostYen: acc.betCostYen + betCostYen,
-  payoutYen: acc.payoutYen + payoutYen,
-  recoveryRate:
-    acc.betCostYen + betCostYen > 0
-      ? (acc.payoutYen + payoutYen) / (acc.betCostYen + betCostYen)
-      : null,
-});
+  betCount: number,
+): PredictorMonthlyStats => {
+  const raceCount = acc.raceCount + 1;
+  const hitCount = acc.hitCount + (realtimeHit ? 1 : 0);
+  const totalCost = acc.betCostYen + betCostYen;
+  const totalPayout = acc.payoutYen + payoutYen;
+  // 的中したレースの払戻だけを足す (外れは payoutYen = 0 なので実質同じだが、
+  // 平均配当の分母 hitCount と対応させるため明示的に分けておく)
+  const hitPayoutYen = acc.hitPayoutYen + (realtimeHit ? payoutYen : 0);
+  const bigHitCount =
+    acc.bigHitCount + (realtimeHit && payoutYen >= BIG_PAYOUT_THRESHOLD_YEN ? 1 : 0);
+  const totalBetCount = (acc.averageBetCount ?? 0) * acc.raceCount + betCount;
+  return {
+    ...acc,
+    raceCount,
+    hitCount,
+    dailyHitCount: acc.dailyHitCount + (dailyHit ? 1 : 0),
+    realtimeHitCount: acc.realtimeHitCount + (realtimeHit ? 1 : 0),
+    betCostYen: totalCost,
+    payoutYen: totalPayout,
+    recoveryRate: totalCost > 0 ? totalPayout / totalCost : null,
+    hitPayoutYen,
+    averagePayoutYen: hitCount > 0 ? hitPayoutYen / hitCount : null,
+    averageBetCount: raceCount > 0 ? totalBetCount / raceCount : null,
+    bigHitCount,
+    bigHitPer10kYen: totalCost > 0 ? bigHitCount / (totalCost / 10_000) : null,
+  };
+};
 
 /**
  * `predictions` (= 任意の日数ぶんの RacePrediction) を予想者 × 月でグループ化し、
@@ -120,6 +163,7 @@ export const aggregatePredictorStats = (
           realtime.payoutYen,
           pp.betHitStatus.dailyHit,
           pp.betHitStatus.realtimeHit,
+          realtime.betCount,
         ),
       );
     }
@@ -144,6 +188,9 @@ export const aggregatePredictorStats = (
     );
     let totalCost = 0;
     let totalPayout = 0;
+    let totalHitPayout = 0;
+    let totalBigHits = 0;
+    let totalBetCount = 0;
     let total: PredictorMonthlyStats = emptyMonthStats("total");
     for (const m of monthly) {
       total = {
@@ -155,12 +202,20 @@ export const aggregatePredictorStats = (
       };
       totalCost += m.betCostYen;
       totalPayout += m.payoutYen;
+      totalHitPayout += m.hitPayoutYen;
+      totalBigHits += m.bigHitCount;
+      totalBetCount += (m.averageBetCount ?? 0) * m.raceCount;
     }
     total = {
       ...total,
       betCostYen: totalCost,
       payoutYen: totalPayout,
       recoveryRate: totalCost > 0 ? totalPayout / totalCost : null,
+      hitPayoutYen: totalHitPayout,
+      averagePayoutYen: total.hitCount > 0 ? totalHitPayout / total.hitCount : null,
+      averageBetCount: total.raceCount > 0 ? totalBetCount / total.raceCount : null,
+      bigHitCount: totalBigHits,
+      bigHitPer10kYen: totalCost > 0 ? totalBigHits / (totalCost / 10_000) : null,
     };
     return {
       predictorId,
