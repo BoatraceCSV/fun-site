@@ -8,6 +8,7 @@ export type {
   OriginalExhibitionView,
   PredictorPrediction,
   RacePrediction,
+  UpsetMeter,
   RacePreview,
   RacePreviewBoat,
   RaceRacer,
@@ -20,6 +21,7 @@ export type {
 } from "./prediction.js";
 export type { MotorStatsRow } from "./motor-stats.js";
 export type { RacerStEntry, RacerStRow } from "./racer-st.js";
+export type { KimariteRow } from "./kimarite.js";
 export type { SujiPick, SujiRow } from "./suji.js";
 export type {
   OriginalExhibitionBoat,

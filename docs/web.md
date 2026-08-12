@@ -117,3 +117,12 @@ pnpm --filter @fun-site/web run typecheck
 `dailyPicks` / `realtimePicks` props が渡された場合は**それを描画し、
 内部での再計算はしない**。`v9_suji` は CSV 由来なので web からは再計算できず、
 これが必須になる。渡されない場合は従来どおり強さpt から計算する。
+
+## 荒れ度メーター
+
+`UpsetMeter.astro` が `RacePrediction.upsetMeter` を描画する。直前 (realtime) が
+あればそれを、無ければ朝 (daily) の値に「(朝時点)」を添えて出す。
+**予想者に紐づかない**ので予想者カードの外に 1 回だけ置く。
+
+決まり手の内訳は出さない。レース単位の決まり手予測は当たっていないため
+(BoatraceCSV `docs/design/ana_prediction.md` §14.2)。

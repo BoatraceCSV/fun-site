@@ -1,5 +1,6 @@
 import type {
   IndexRow,
+  KimariteRow,
   MotorStatsRow,
   OriginalExhibitionRow,
   PredictorSpec,
@@ -16,6 +17,7 @@ import type {
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
+import { parseKimarite } from "./kimarite-schemas.js";
 import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
 import { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
@@ -60,6 +62,11 @@ export type FetchedCsvData = {
    * (boatracecsv docs/design/ana_prediction.md §13)。未生成時は空配列
    */
   readonly suji: readonly SujiRow[];
+  /**
+   * 荒れ度メーター (estimate/kimarite)。レース × 状態 で 1 行。
+   * 予想者に紐づかないレース単位の指標。未生成時は空配列
+   */
+  readonly kimarite: readonly KimariteRow[];
   /**
    * 選手別 推定ST (estimate/racer_st)。1 レース 1 行。未生成時は空配列
    * (その場合スタート予想・1マーク距離は全国平均 ST にフォールバックする)。
@@ -148,6 +155,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     motorStats,
     racerSt,
     suji,
+    kimarite,
     indexesByPredictor,
     results,
     payouts,
@@ -163,6 +171,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("motor_stats", date, parseMotorStats),
     fetchAndParse("racer_st", date, parseRacerSt),
     fetchAndParse("suji", date, parseSuji),
+    fetchAndParse("kimarite", date, parseKimarite),
     Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
     fetchAndParse("results", date, parseResults),
     fetchAndParse("payouts", date, parsePayouts),
@@ -180,6 +189,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     motorStats,
     racerSt,
     suji,
+    kimarite,
     indexesByPredictor,
     results,
     payouts,
@@ -191,6 +201,7 @@ export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
 export { parseSuji } from "./suji-schemas.js";
+export { parseKimarite } from "./kimarite-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";

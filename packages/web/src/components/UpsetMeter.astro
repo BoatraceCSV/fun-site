@@ -1,0 +1,42 @@
+---
+import type { UpsetMeter } from "@fun-site/shared";
+
+interface Props {
+  /** 荒れ度メーター。未生成なら何も描画しない。 */
+  meter?: UpsetMeter;
+}
+
+const { meter } = Astro.props;
+
+/** 直前があればそちら、無ければ朝の値。 */
+const value = meter?.realtime ?? meter?.daily;
+const isRealtime = meter?.realtime !== undefined;
+
+/** 表示用の帯。しきい値は全体平均 (約 46%) を中心に置いた目安。 */
+const band = (v: number): { label: string; cls: string } => {
+  if (v < 0.35) return { label: "堅め", cls: "bg-sky-100 text-sky-800 border-sky-300" };
+  if (v < 0.55) return { label: "標準", cls: "bg-gray-100 text-gray-700 border-gray-300" };
+  if (v < 0.7) return { label: "やや荒れ", cls: "bg-amber-100 text-amber-800 border-amber-300" };
+  return { label: "荒れ", cls: "bg-rose-100 text-rose-800 border-rose-300" };
+};
+---
+
+{value !== undefined && (
+  <div class="flex items-center gap-2" aria-label="荒れ度">
+    <span class="text-sm font-semibold text-gray-700">荒れ度</span>
+    <div class="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden max-w-[160px]">
+      <div
+        class="h-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-500"
+        style={`width: ${Math.round(value * 100)}%`}
+      />
+    </div>
+    <span class="text-sm font-bold tabular-nums">{Math.round(value * 100)}%</span>
+    <span class={`px-2 py-0.5 rounded text-[11px] font-bold border ${band(value).cls}`}>
+      {band(value).label}
+    </span>
+    {!isRealtime && <span class="text-[11px] text-gray-400">(朝時点)</span>}
+  </div>
+)}
+<p class="text-[11px] text-gray-500 mt-1">
+  1 コースが逃げない確率。過去実績から推定した値で、決まり手そのものは予測していません。
+</p>

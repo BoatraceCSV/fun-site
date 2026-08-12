@@ -184,6 +184,20 @@ export type PredictorPrediction = {
   readonly realtimeKimarite?: readonly string[];
 };
 
+/**
+ * 荒れ度メーター(レース単位)。予想者に紐づかないので `RacePrediction` 直下に持つ。
+ *
+ * `1 − P(逃げ)` で、校正が取れている唯一の値。**決まり手の argmax は出さない**
+ * (レース単位の決まり手予測はベースレートを超えない。BoatraceCSV
+ * docs/design/ana_prediction.md §14.2)。
+ */
+export type UpsetMeter = {
+  /** 朝バッチ時点の荒れ度 (0〜1)。 */
+  readonly daily?: number;
+  /** 直前情報反映後の荒れ度 (0〜1)。 */
+  readonly realtime?: number;
+};
+
 /** 直前情報 - 1 艇分の展示データ（tkz 由来） */
 export type RacePreviewBoat = {
   readonly boatNumber: number;
@@ -361,5 +375,7 @@ export type RacePrediction = {
    * 古い JSON ではこのフィールドが無いため、UI 側は空配列フォールバックすること。
    */
   readonly predictions?: readonly PredictorPrediction[];
+  /** 荒れ度メーター (レース単位)。CSV 未生成なら undefined。 */
+  readonly upsetMeter?: UpsetMeter;
   readonly generatedAt: string;
 };

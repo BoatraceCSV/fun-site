@@ -183,3 +183,19 @@ BoatraceCSV `data/estimate/suji/YYYY/MM/DD.csv`。レース × 状態 で 1 行�
 **fun-site は買い目を計算しない。** 他の予想者は強さpt からフォーメーションを
 計算するが、`v9_suji` はフォーメーションで表現できない出目集合なので
 boatracecsv が確定させたものを読む(`parseSuji` / `packages/batch/src/fetcher/suji-schemas.ts`)。
+
+## 荒れ度メーター (`estimate/kimarite`)
+
+BoatraceCSV `data/estimate/kimarite/YYYY/MM/DD.csv`。レース × 状態 で 1 行。
+**予想者に紐づかないレース単位の指標**なので、`RacePrediction.upsetMeter` に載る
+(予想者カードの外に 1 回だけ表示する)。
+
+| 列 | 用途 |
+| --- | --- |
+| `状態` | `daily` / `realtime` |
+| `荒れ度` | `1 − P(逃げ_1)`。**これが唯一そのまま見せてよい値** |
+| `P_{クラス}` × 32 | 決まり手セルの確率 |
+
+> **argmax は使わない。** レース単位の決まり手予測はベースレートを超えない
+> (BoatraceCSV `docs/design/ana_prediction.md` §14.2)。94.5% のレースで
+> 最有力が「逃げ」になるため、確率値としてのみ扱う。

@@ -5,6 +5,7 @@ import type {
   BettingPicks,
   ComponentKey,
   IndexRow,
+  KimariteRow,
   MotorStats,
   MotorStatsRow,
   OriginalExhibition,
@@ -31,6 +32,7 @@ import type {
   SujiRow,
   TitleRow,
   TkzRow,
+  UpsetMeter,
 } from "@fun-site/shared";
 import {
   activePredictors,
@@ -466,6 +468,8 @@ export const buildRacePrediction = (
   generatedAt: string,
   /** 穴予想 v9_suji の買い目 (estimate/suji)。daily / realtime それぞれ。 */
   sujiRows?: { readonly daily?: SujiRow; readonly realtime?: SujiRow },
+  /** 荒れ度メーター (estimate/kimarite)。daily / realtime それぞれ。 */
+  kimariteRows?: { readonly daily?: KimariteRow; readonly realtime?: KimariteRow },
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -533,6 +537,12 @@ export const buildRacePrediction = (
     betHitStatus,
     ...(betPayout !== undefined ? { betPayout } : {}),
     predictions,
+    // 荒れ度メーター (レース単位)。CSV が無ければ undefined のまま。
+    upsetMeter: ((): UpsetMeter | undefined => {
+      const d = kimariteRows?.daily?.upsetRate;
+      const rt = kimariteRows?.realtime?.upsetRate;
+      return d === undefined && rt === undefined ? undefined : { daily: d, realtime: rt };
+    })(),
     generatedAt,
   };
 };
@@ -550,6 +560,7 @@ export const buildAllRacePredictions = (
   stt: readonly SttRow[],
   racerSt: readonly RacerStRow[],
   suji: readonly SujiRow[],
+  kimarite: readonly KimariteRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
   originalExhibition: readonly OriginalExhibitionRow[],
@@ -578,6 +589,12 @@ export const buildAllRacePredictions = (
   for (const row of suji) {
     const slot = sujiByCode.get(row.raceCode) ?? {};
     sujiByCode.set(row.raceCode, { ...slot, [row.state]: row });
+  }
+  // 荒れ度メーター。同じく 1 レースにつき daily / realtime の 2 行。
+  const kimariteByCode = new Map<string, { daily?: KimariteRow; realtime?: KimariteRow }>();
+  for (const row of kimarite) {
+    const slot = kimariteByCode.get(row.raceCode) ?? {};
+    kimariteByCode.set(row.raceCode, { ...slot, [row.state]: row });
   }
 
   // raceCode → predictorId → { daily?, realtime? }
@@ -615,6 +632,7 @@ export const buildAllRacePredictions = (
       payoutByCode.get(cards.raceCode),
       generatedAt,
       sujiByCode.get(cards.raceCode),
+      kimariteByCode.get(cards.raceCode),
     ),
   );
 };
