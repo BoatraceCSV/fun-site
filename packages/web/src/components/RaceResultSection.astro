@@ -1,18 +1,22 @@
 ---
-import type { BetHitStatus, RaceResultRow } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import type { PredictorPrediction, RaceResultRow } from "@fun-site/shared";
+import { BOAT_COLORS, getPredictorBadge, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   result: RaceResultRow;
-  /** 当日買い目 / 直前買い目の的中状況。未指定なら的中バッジは表示しない。 */
-  hitStatus?: BetHitStatus;
-  /** 的中バッジの先頭に付ける予想者名（例: "本命予想"）。未指定なら付けない。 */
-  predictorName?: string;
+  /**
+   * このレースの予想者ごとの予想。**直前買い目**が的中した予想者ぶんだけ
+   * バッジを出す（当日買い目の的中は予想者カード側で表示する）。
+   * 未指定なら的中バッジは表示しない。
+   */
+  predictions?: readonly PredictorPrediction[];
 }
 
-const { result, hitStatus, predictorName } = Astro.props;
-/** "本命予想" → "本命"。 予想 サフィックスを剥がしてバッジに使う。 */
-const badgePrefix = predictorName ? predictorName.replace(/予想$/, "") : "";
+const { result, predictions } = Astro.props;
+/** 直前買い目が的中した予想者。slot 昇順（= predictions の並び順）で並べる。 */
+const realtimeHitBadges = (predictions ?? [])
+  .filter((pp) => pp.betHitStatus.realtimeHit)
+  .map((pp) => ({ id: pp.predictorId, ...getPredictorBadge(pp.predictorId, pp.predictorName) }));
 
 const sortedFinishes = [...result.finishes].sort((a, b) => a.rank - b.rank);
 const sortedCourses = [...result.courses].sort((a, b) => a.courseNumber - b.courseNumber);
@@ -35,26 +39,17 @@ const recordedAtLabel = formatRecordedAt(result.recordedAt);
     </p>
   </div>
 
-  {hitStatus && (hitStatus.dailyHit || hitStatus.realtimeHit) && (
+  {realtimeHitBadges.length > 0 && (
     <div class="flex flex-wrap items-center gap-2 mb-3">
-      {hitStatus.dailyHit && (
+      {realtimeHitBadges.map((b) => (
         <span
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300"
-          aria-label={`${badgePrefix}当日買い目が的中`}
+          class={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold border ${b.tailwindClass}`}
+          aria-label={`${b.shortName}予想の直前買い目が的中`}
         >
-          <span aria-hidden="true">🎯</span>
-          <span>{badgePrefix}当日買い目 的中</span>
+          <span aria-hidden="true">{b.icon}</span>
+          <span>{b.shortName}直前買い目 的中</span>
         </span>
-      )}
-      {hitStatus.realtimeHit && (
-        <span
-          class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-cyan-100 text-cyan-800 border border-cyan-300"
-          aria-label={`${badgePrefix}直前買い目が的中`}
-        >
-          <span aria-hidden="true">🔥</span>
-          <span>{badgePrefix}直前買い目 的中</span>
-        </span>
-      )}
+      ))}
     </div>
   )}
 

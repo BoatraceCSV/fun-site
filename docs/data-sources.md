@@ -15,7 +15,7 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 近況5節セクション |
 | `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 近況5節セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
-| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | `useEstimatedST` な予想者（スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly）のスタート予想・1 マーク走行距離の予測 ST |
+| `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | 全予想者共通のスタート予想図（帯つき）の予測 ST と、`useEstimatedST` な予想者の 1 マーク走行距離の予測 ST（`useEstimatedST` を持つ予想者は現行 active には無く、過去日の退役予想者ぶんでのみ効く） |
 | `estimate/{predictor_id}` | `estimate/{predictor_id}/YYYY/MM/DD.csv` | 各 active 予想者の強さpt と寄与pt | 予想者ごとの AI 総合評価・買い目・回収率 |
 | `results/realtime` | `results/realtime/YYYY/MM/DD.csv` | 当日確定直後のレース結果 | レース結果セクション・的中判定 |
 | `results/payouts` | `results/payouts/YYYY/MM/DD.csv` | 当日確定直後の払戻金（単勝/複勝/2連単/2連複/拡連複/3連単/3連複） | 3連単 戦略の回収率計算 |
@@ -78,7 +78,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 |---|---|
 | `RacePrediction` | レース 1 件分の統合予想。バッチが書き出し、Astro が読み込む |
 | `PredictorPrediction` | `RacePrediction.predictions[]` の要素。1 予想者 / 1 レースの AI 評価 + 買い目 + 回収率 |
-| `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
+| `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt, および UI 表示用の icon / badgeTailwindClass)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
 | `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
 | `RacePreview` / `RacePreviewBoat` / `RaceWeather` / `OriginalExhibition` / `OriginalExhibitionView` | 直前情報。`RacePrediction.preview` にぶら下がり、tkz（体重・展示タイム・チルト、`exhibitionTime` は 0→null）・sui（水面気象、天候はコード生値）・original_exhibition（場別オリジナル展示、`labels` + 艇別 `values`）を結合。いずれの CSV も未取得のレースでは `preview` 自体が undefined |
 | `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順列の可視化は `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`） |
@@ -86,7 +86,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt） |
 | `BetHitStatus` | 当日買い目・直前買い目の三連単フォーメーションが結果と一致したか |
 | `BetPayoutResult` / `RaceBetPayoutSummary` / `DailyBetPayoutAggregate` | 3連単 フォーメーションを 1 点 ¥100 で買った場合の払戻 / 回収率（レース単位 / 当日集計） |
-| `BettingTolerance` / `bettingToleranceFor` | 買い目の着順別しきい値（1着 / 2着 / 3着 の ± 許容幅）と予想者 ID からの解決関数。距離基準の既定は全着順 ±0.10（`DEFAULT_BETTING_TOLERANCE`）、強さpt 基準（`strengthOnlyBetting` な AI予想 v8_aionly。`bettingBasisFor` で解決）は全着順 ±5.0pt（`STRENGTH_BETTING_TOLERANCE`。距離式が強さpt/50 を項に持つため距離 ±0.10 と等価スケール）。`BETTING_TOLERANCE_BY_PREDICTOR` に予想者別オーバーライドを定義（現状オーバーライド無し。以前は `v2_tenkai`=モーター評価変更予想に 1着0.02 / 2着0.10 / 3着0.20 を設定していたが 2026-06-13 に本命予想へ揃えるため削除）。再最適化の根拠は boatracecsv 側 [`notebooks/threshold_optimization.ipynb`](https://github.com/BoatraceCSV) |
+| `BettingTolerance` / `bettingToleranceFor` | 買い目の着順別しきい値（1着 / 2着 / 3着 の ± 許容幅）と予想者 ID からの解決関数。距離基準の既定は全着順 ±0.10（`DEFAULT_BETTING_TOLERANCE`）、強さpt 基準（`strengthOnlyBetting` な予想者。`bettingBasisFor` で解決。現行 active には該当なし）は全着順 ±5.0pt（`STRENGTH_BETTING_TOLERANCE`。距離式が強さpt/50 を項に持つため距離 ±0.10 と等価スケール）。`BETTING_TOLERANCE_BY_PREDICTOR` に予想者別オーバーライドを定義（現状オーバーライド無し。以前は `v2_tenkai`=モーター評価変更予想に 1着0.02 / 2着0.10 / 3着0.20 を設定していたが 2026-06-13 に本命予想へ揃えるため削除）。再最適化の根拠は boatracecsv 側 [`notebooks/threshold_optimization.ipynb`](https://github.com/BoatraceCSV) |
 
 `RacePrediction` は `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に 1 ファイルずつ書き出される。`predictions[]` 配列にレジストリの active 予想者ぶんの `PredictorPrediction` が slot 昇順で並ぶ (旧 `aiEvaluation` / `betPayout` フィールドは primary predictor の値を平坦化して残しており、後方互換性のため当面保持)。
 

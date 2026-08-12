@@ -188,8 +188,8 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 | `results/payouts` 取得済み | レース詳細ページに「もし買ったら」セクション、トップに当日サマリーを表示 |
 | `results/payouts` 未取得 | 両セクションともそのレースは集計から除外 |
 
-**1 マーク走行距離**の予測 ST は既定で全国平均 ST。**`useEstimatedST` な予想者
-(スリット予想 v5_slit / 統合予想 v7_aggregate / AI予想 v8_aionly)のみ** AI 推定 ST
+**1 マーク走行距離**の予測 ST は既定で全国平均 ST。**`useEstimatedST` な予想者のみ**
+(現行 active には該当なし。過去日の退役予想者ぶんでのみ効く) AI 推定 ST
 (BoatraceCSV `estimate/racer_st`。実測 ST 履歴の時間減衰平均 + コース・F 補正)を
 優先し、未生成時は全国平均 ST にフォールバックする
 (`packages/shared/src/utils/one-mark-distance.ts` の `predictedST` / opt-in は
@@ -205,7 +205,7 @@ fun-site で買い目を計算せず**、BoatraceCSV が出した出目をその
 (`bettingStyleFor(predictorId)` が読む CSV を決める)。
 バッチが採点した買い目は `PredictorPrediction.dailyPicks` / `realtimePicks` に載り、
 web はそれを描画する — 表示と集計が構造的に一致する。
-**`strengthOnlyBetting` な予想者(AI予想 v8_aionly)のみ**、走行距離ではなく
+**`strengthOnlyBetting` な予想者のみ**(現行 active には該当なし)、走行距離ではなく
 **強さpt のみの ±5.0pt 窓**(距離式が強さpt/50 を項に持つため距離 ±0.10 と
 等価スケール。ST 項を外した形)で候補を選定し、予測 ST は買い目に影響しない
 (`computeBettingPicks` の `basis` 引数 / 解決は `bettingBasisFor(predictorId)`)。

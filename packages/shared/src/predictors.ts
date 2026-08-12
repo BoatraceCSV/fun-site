@@ -7,7 +7,9 @@
  * メッセージの `csv_type=index:{predictor_id}` を予想者に紐付ける。
  *
  * 新規予想者の追加: 必要なら `COMPONENT_LABELS` に新成分を足し、
- * `PREDICTORS` 配列に `PredictorSpec` を追加する。
+ * `PREDICTORS` 配列に `PredictorSpec` を追加する。active にする場合は
+ * `icon` / `badgeTailwindClass` も他の active 予想者と重複しない値で指定する
+ * (レース詳細ページの的中表示がこのレジストリ駆動のため)。
  * 退役: 該当エントリの `status` を `"retired"` に変更する
  * (過去データと累計回収率は保持)。
  *
@@ -99,6 +101,19 @@ export type PredictorSpec = {
   readonly id: string;
   /** UI 表示名 (例: "本命予想")。 */
   readonly displayName: string;
+  /**
+   * 直前買い目が的中したことを示すアイコン (絵文字)。レース詳細ページの
+   * レース番号リンクバーと、レース結果の的中バッジで使う。
+   * **active な予想者では他と重複しない値を必ず指定する**
+   * (アイコンだけでどの予想者が当たったか判別できるようにするため)。
+   * 退役済みの予想者は表示機会が無いので未指定でよい。
+   */
+  readonly icon?: string;
+  /**
+   * 的中バッジの配色 (Tailwind v4 ユーティリティクラス)。`icon` とセットで指定する。
+   * shared 配下の .ts も web の Tailwind スキャン対象 (`global.css` の `@source`)。
+   */
+  readonly badgeTailwindClass?: string;
   /** active な予想者の中での表示順。低いほど先頭に出る。 */
   readonly slot: number;
   /** "active" か "retired"。 */
@@ -177,6 +192,8 @@ export const PREDICTORS: readonly PredictorSpec[] = [
   {
     id: "v1_basic",
     displayName: "本命予想",
+    icon: "🎯",
+    badgeTailwindClass: "bg-amber-100 text-amber-800 border-amber-300",
     slot: 1,
     status: "active",
     startedAt: "2026-05-01",
@@ -281,6 +298,8 @@ export const PREDICTORS: readonly PredictorSpec[] = [
   {
     id: "v9_suji",
     displayName: "スジ予想",
+    icon: "🧩",
+    badgeTailwindClass: "bg-violet-100 text-violet-800 border-violet-300",
     slot: 9,
     status: "active",
     // boatracecsv 側 registry.py と同期。
@@ -298,6 +317,8 @@ export const PREDICTORS: readonly PredictorSpec[] = [
   {
     id: "v10_kimarite",
     displayName: "穴予想",
+    icon: "💎",
+    badgeTailwindClass: "bg-cyan-100 text-cyan-800 border-cyan-300",
     slot: 10,
     status: "active",
     // boatracecsv 側 registry.py と同期。
@@ -354,6 +375,37 @@ export function activePredictors(): readonly PredictorSpec[] {
 /** ID で 1 件取得。見つからなければ `undefined`。 */
 export function predictorById(id: string): PredictorSpec | undefined {
   return PREDICTORS.find((p) => p.id === id);
+}
+
+/** 的中表示 (アイコン / バッジ) に必要な予想者ごとの表示情報。 */
+export type PredictorBadge = {
+  /** 的中アイコン (絵文字)。 */
+  readonly icon: string;
+  /** バッジの配色 (Tailwind ユーティリティクラス)。 */
+  readonly tailwindClass: string;
+  /** "本命予想" → "本命"。「〜直前買い目 的中」の接頭辞に使う短縮名。 */
+  readonly shortName: string;
+};
+
+/** レジストリに `icon` / `badgeTailwindClass` が無い予想者 (退役済み・未知 ID) 用。 */
+const PREDICTOR_BADGE_FALLBACK = {
+  icon: "🏁",
+  tailwindClass: "bg-gray-100 text-gray-700 border-gray-300",
+} as const;
+
+/**
+ * 予想者 ID → 的中バッジの表示情報。
+ * 未登録の ID や `icon` 未指定の退役予想者でも描画できるようフォールバックする。
+ */
+export function getPredictorBadge(id: string, displayName?: string): PredictorBadge {
+  const spec = predictorById(id);
+  const name = spec?.displayName ?? displayName ?? id;
+  return {
+    icon: spec?.icon ?? PREDICTOR_BADGE_FALLBACK.icon,
+    tailwindClass: spec?.badgeTailwindClass ?? PREDICTOR_BADGE_FALLBACK.tailwindClass,
+    // "本命予想" → "本命"。サフィックスの無い名前 (ID 等) はそのまま使う。
+    shortName: name.replace(/予想$/, ""),
+  };
 }
 
 /**

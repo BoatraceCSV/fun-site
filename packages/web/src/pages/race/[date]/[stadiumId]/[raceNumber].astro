@@ -4,7 +4,13 @@ import type {
   RacePrediction,
   SeriesBetPayoutAggregate,
 } from "@fun-site/shared";
-import { getRaceGradeBadge, getStadiumById, parseRaceCode, predictorById } from "@fun-site/shared";
+import {
+  getPredictorBadge,
+  getRaceGradeBadge,
+  getStadiumById,
+  parseRaceCode,
+  predictorById,
+} from "@fun-site/shared";
 import PredictorCard from "../../../../components/PredictorCard.astro";
 import RacePreviewSection from "../../../../components/RacePreviewSection.astro";
 import UpsetMeter from "../../../../components/UpsetMeter.astro";
@@ -21,11 +27,11 @@ type RaceNavItem = {
   raceName: string;
   votingDeadline: string;
   isConfirmed: boolean;
-  /** A君（slot=1, primary predictor）の直前買い目が的中したか。🎯 アイコン表示用。 */
-  aRealtimeHit: boolean;
-  /** 副予想者（実験スロット）の直前買い目が的中したか。🔥 アイコン表示用。存在しない場合は false。
-   *  現行はモーター予想（slot=4）。過去日は退役済みのモーター評価変更予想（slot=2）を拾う。 */
-  bRealtimeHit: boolean;
+  /**
+   * 直前買い目が的中した予想者の ID（slot 昇順）。タイルに予想者ごとの
+   * アイコン（レジストリの `PredictorSpec.icon`）を並べるのに使う。
+   */
+  realtimeHitPredictorIds: string[];
 };
 
 export async function getStaticPaths() {
@@ -48,26 +54,21 @@ export async function getStaticPaths() {
       // 文字列も併用判定する (上流 CSV の `電話投票締切予定` 列は確定後に "確定" に置き換わる)。
       const isConfirmed =
         prediction.raceResult !== undefined || prediction.votingDeadline === "確定";
-      // primary (slot=1) / 副予想者 (実験スロット) ぶんの直前買い目的中。
-      // 新スキーマでは predictions[] が slot 昇順で並ぶ。
-      // 旧 JSON (predictions 未設定) では legacy `betHitStatus` を primary ぶんとして採用、副予想者は無し扱い。
-      // 副予想者は現行がモーター予想 (slot=4)。過去日には退役済みの
-      // モーター評価変更予想 (slot=2) が入るため、slot=4 → slot=2 の順にフォールバックする。
-      const predictorsBySlot = new Map(
-        (prediction.predictions ?? []).map((p) => [p.slot, p] as const),
-      );
-      const aPred = predictorsBySlot.get(1);
-      const bPred = predictorsBySlot.get(4) ?? predictorsBySlot.get(2);
-      const aRealtimeHit =
-        aPred?.betHitStatus.realtimeHit ?? prediction.betHitStatus?.realtimeHit ?? false;
-      const bRealtimeHit = bPred?.betHitStatus.realtimeHit ?? false;
+      // 直前買い目が的中した予想者を全て拾う (slot 昇順)。
+      // 新スキーマでは predictions[] が slot 昇順で並ぶのでそのまま filter する。
+      // 旧 JSON (predictions 未設定) では legacy `betHitStatus` を primary (v1_basic) ぶんとして採用する。
+      const realtimeHitPredictorIds =
+        prediction.predictions !== undefined
+          ? prediction.predictions.filter((p) => p.betHitStatus.realtimeHit).map((p) => p.predictorId)
+          : prediction.betHitStatus?.realtimeHit
+            ? ["v1_basic"]
+            : [];
       list.push({
         raceNumber: prediction.raceNumber,
         raceName: prediction.raceName ?? "",
         votingDeadline: prediction.votingDeadline ?? "",
         isConfirmed,
-        aRealtimeHit,
-        bRealtimeHit,
+        realtimeHitPredictorIds,
       });
       racesByStadium.set(parsed.stadiumId, list);
     }
@@ -107,6 +108,30 @@ const stadiumName = stadium?.name ?? prediction.stadiumName;
 const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName || "スタート予想"}`;
 const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
+
+// 予想者ごとの予想。新スキーマで predictions[] が存在すればそれを使う。
+// 旧 JSON (predictions 未設定) では aiEvaluation 単体から仮想 PredictorPrediction
+// を 1 件だけ組み立て (= 本命予想相当) して同じ UI を流用する。
+// レース結果の的中バッジと予想者カードの両方がこの配列を参照する。
+const fromArray: readonly PredictorPrediction[] = prediction.predictions ?? [];
+const predictorPredictions: readonly PredictorPrediction[] =
+  fromArray.length > 0
+    ? fromArray
+    : [
+        {
+          predictorId: "v1_basic",
+          predictorName: "本命予想",
+          slot: 1,
+          aiEvaluationDaily: prediction.aiEvaluationDaily,
+          aiEvaluationRealtime: prediction.aiEvaluationRealtime,
+          betPayout:
+            prediction.betPayout ?? {
+              daily: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
+              realtime: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
+            },
+          betHitStatus: prediction.betHitStatus ?? { dailyHit: false, realtimeHit: false },
+        },
+      ];
 ---
 
 <BaseLayout title={title}>
@@ -127,17 +152,22 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
         const meta = raceByNumber.get(n);
         const isAvailable = meta !== undefined;
         const isConfirmed = meta?.isConfirmed ?? false;
-        const aRealtimeHit = meta?.aRealtimeHit ?? false;
-        const bRealtimeHit = meta?.bRealtimeHit ?? false;
-        const hasAnyHit = aRealtimeHit || bRealtimeHit;
+        // 直前買い目が的中した予想者ぶんのアイコン (本命 🎯 / スジ 🧩 / 穴 💎)。
+        // 割り当てはレジストリ (predictors.ts) の PredictorSpec.icon が唯一の定義元。
+        const hitBadges = (meta?.realtimeHitPredictorIds ?? []).map((id) => ({
+          id,
+          ...getPredictorBadge(id),
+        }));
 
         // 状態別のスタイル: 背景色そのもので識別
         // 現在     → 青ベタ (白文字)
         // 開催予定 → 青系 (薄青背景 + 青ボーダー + 青文字)
         // 確定済み → 緑系 (薄緑背景 + 緑ボーダー + 緑文字)
         // 非開催   → 灰色ベタ (淡色文字)
+        // h-full: 的中アイコンが折り返して背が伸びたタイルに他のタイルも揃える
+        // (active 予想者が 3 者なので「確定」+ アイコン 3 個は 1 行に収まらない)。
         const tileBase =
-          "flex flex-col items-center justify-between w-[4.75rem] min-h-[4.75rem] px-1 py-1.5 rounded-md select-none border-2";
+          "flex flex-col items-center justify-between w-[4.75rem] min-h-[4.75rem] h-full px-1 py-1.5 rounded-md select-none border-2";
         let tileClass = "";
         if (isCurrent) {
           tileClass = `${tileBase} bg-blue-600 text-white border-blue-700 shadow-sm`;
@@ -166,31 +196,22 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
             </span>
             {isAvailable ? (
               isConfirmed ? (
-                <span class="mt-1 inline-flex items-center gap-0.5">
-                  <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none ${
+                <span class="mt-1 flex flex-wrap items-center justify-center gap-0.5">
+                  <span class={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold leading-none whitespace-nowrap ${
                     isCurrent ? "bg-white/25 text-white" : "bg-emerald-600 text-white"
                   }`}>
                     確定
                   </span>
-                  {/* 本命予想の直前買い目的中 → 🎯 (amber)、モーター予想の直前買い目的中 → 🔥 (cyan)。両方的中時は両方表示。 */}
-                  {aRealtimeHit && (
+                  {/* 直前買い目が的中した予想者のアイコンを slot 昇順に並べる。複数的中時は全て表示。 */}
+                  {hitBadges.map((b) => (
                     <span
                       class="inline-block text-[12px] leading-none"
-                      title="本命予想の直前買い目が的中"
-                      aria-label="本命予想の直前買い目が的中"
+                      title={`${b.shortName}予想の直前買い目が的中`}
+                      aria-label={`${b.shortName}予想の直前買い目が的中`}
                     >
-                      🎯
+                      {b.icon}
                     </span>
-                  )}
-                  {bRealtimeHit && (
-                    <span
-                      class="inline-block text-[12px] leading-none"
-                      title="モーター予想の直前買い目が的中"
-                      aria-label="モーター予想の直前買い目が的中"
-                    >
-                      🔥
-                    </span>
-                  )}
+                  ))}
                 </span>
               ) : (
                 <span class={`mt-1 inline-block px-1 py-0.5 rounded text-[10px] font-mono leading-none tabular-nums ${
@@ -222,7 +243,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
                 class={tileClass}
                 aria-label={`${n}R ${meta?.raceName ?? ""}${
                   isConfirmed ? " 確定" : meta?.votingDeadline ? ` 締切 ${meta.votingDeadline}` : ""
-                }${hasAnyHit ? ` (${[aRealtimeHit ? "本命予想の直前買い目的中" : "", bRealtimeHit ? "モーター予想の直前買い目的中" : ""].filter(Boolean).join(" / ")})` : ""}`}
+                }${hitBadges.length > 0 ? ` (${hitBadges.map((b) => `${b.shortName}予想の直前買い目的中`).join(" / ")})` : ""}`}
               >
                 {inner}
               </a>
@@ -274,11 +295,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
   {prediction.raceResult && (
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6 border-l-4 border-blue-500">
       <h2 class="font-bold text-lg mb-3">レース結果</h2>
-      <RaceResultSection
-        result={prediction.raceResult}
-        hitStatus={prediction.betHitStatus}
-        predictorName={prediction.predictions?.[0]?.predictorName ?? "本命予想"}
-      />
+      <RaceResultSection result={prediction.raceResult} predictions={predictorPredictions} />
     </section>
   )}
 
@@ -290,31 +307,7 @@ const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
   )}
 
   {/* 予想者ごとの買い目・回収率・AI 評価 */}
-  {(() => {
-    // 新スキーマで predictions[] が存在すればそれを使う。
-    // 旧 JSON (predictions 未設定) では aiEvaluation 単体から仮想 PredictorPrediction
-    // を 1 件だけ組み立て (= 本命予想相当) して同じ UI を流用する。
-    const fromArray: readonly PredictorPrediction[] = prediction.predictions ?? [];
-    const fallback: readonly PredictorPrediction[] =
-      fromArray.length > 0
-        ? fromArray
-        : [
-            {
-              predictorId: "v1_basic",
-              predictorName: "本命予想",
-              slot: 1,
-              aiEvaluationDaily: prediction.aiEvaluationDaily,
-              aiEvaluationRealtime: prediction.aiEvaluationRealtime,
-              betPayout:
-                prediction.betPayout ?? {
-                  daily: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
-                  realtime: { betCount: 0, betCostYen: 0, payoutYen: 0, hit: false, actualSanrentan: null },
-                },
-              betHitStatus: prediction.betHitStatus ?? { dailyHit: false, realtimeHit: false },
-            },
-          ];
-    return fallback;
-  })().map((pp) => {
+  {predictorPredictions.map((pp) => {
     // 描画分岐はレジストリ (predictors.ts) の PredictorSpec 駆動にする。
     // slot / ID のハードコード列挙を増やさず、新規予想者を追加しても自動で
     // 正しく描画されるようにするため (v6_course / v7_aggregate もこれで表示される)。

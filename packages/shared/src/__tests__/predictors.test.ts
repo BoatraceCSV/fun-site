@@ -6,6 +6,7 @@ import {
   PREDICTORS,
   activePredictors,
   allPredictors,
+  getPredictorBadge,
   indexCsvTypeFor,
   isPreviewDerivedComponent,
   predictorById,
@@ -272,5 +273,37 @@ describe("Pub/Sub csv_type round-trip", () => {
 
   it("returns undefined for unknown predictor id in csv_type", () => {
     expect(predictorFromIndexCsvType("index:does_not_exist")).toBeUndefined();
+  });
+});
+
+describe("的中バッジ (icon / badgeTailwindClass)", () => {
+  it("assigns 本命=🎯 / スジ=🧩 / 穴=💎", () => {
+    expect(predictorById("v1_basic")?.icon).toBe("🎯");
+    expect(predictorById("v9_suji")?.icon).toBe("🧩");
+    expect(predictorById("v10_kimarite")?.icon).toBe("💎");
+  });
+
+  it("gives every active predictor a unique icon and a badge color", () => {
+    // アイコンだけでどの予想者が的中したか判別できる必要があるため重複を許さない。
+    const icons = activePredictors().map((p) => p.icon);
+    expect(icons.every((i) => typeof i === "string" && i.length > 0)).toBe(true);
+    expect(new Set(icons).size).toBe(icons.length);
+    expect(activePredictors().every((p) => (p.badgeTailwindClass ?? "").length > 0)).toBe(true);
+  });
+
+  it("getPredictorBadge strips the 予想 suffix for the badge prefix", () => {
+    expect(getPredictorBadge("v1_basic").shortName).toBe("本命");
+    expect(getPredictorBadge("v9_suji").shortName).toBe("スジ");
+    expect(getPredictorBadge("v10_kimarite").shortName).toBe("穴");
+  });
+
+  it("getPredictorBadge falls back for retired / unknown predictors", () => {
+    // 退役予想者 (icon 未指定) でも描画できる。
+    const retired = getPredictorBadge("v4_motor");
+    expect(retired.icon).toBe("🏁");
+    expect(retired.shortName).toBe("モーター");
+    // 未知 ID は displayName 引数 → ID の順にフォールバックする。
+    expect(getPredictorBadge("v99_unknown", "テスト予想").shortName).toBe("テスト");
+    expect(getPredictorBadge("v99_unknown").shortName).toBe("v99_unknown");
   });
 });
