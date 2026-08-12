@@ -22,8 +22,11 @@ import type {
   RaceRacer,
   RaceRecentForm,
   RaceResultRow,
+  RaceTokutenHayami,
+  RaceWaku10,
   RacerRecentForm,
   RacerStRow,
+  RacerWaku10,
   RecentFormRow,
   RecentFormSessionView,
   StartPrediction,
@@ -32,7 +35,9 @@ import type {
   SuiRow,
   TitleRow,
   TkzRow,
+  TokutenHayamiRow,
   UpsetMeter,
+  Waku10Row,
 } from "@fun-site/shared";
 import {
   activePredictors,
@@ -273,6 +278,54 @@ const buildRecentForm = (
   return { boats };
 };
 
+/**
+ * waku10 から枠番別過去10走 RaceWaku10 を構築。未取得なら undefined を返す。
+ *
+ * waku10 CSV は登録番号を持たないため、突合は艇番 (`艇1`〜`艇6` の位置) で行う。
+ * 出走歴が 10 走に満たない選手は古い側のスロットが全列空欄になるので、
+ * 着順が空のスロットは落とす。進入コースは空欄 = 枠なり進入なので枠番で補完し、
+ * 補完したことを `courseIsAsWaku` で示す。
+ */
+const buildWaku10 = (waku10: Waku10Row | undefined): RaceWaku10 | undefined => {
+  if (!waku10) return undefined;
+
+  const boats: RacerWaku10[] = waku10.boats
+    .map((b) => ({
+      boatNumber: b.boatNumber,
+      racerName: b.racerName,
+      winRate: b.winRate,
+      avgST: b.avgST,
+      avgStartOrder: b.avgStartOrder,
+      runs: b.runs
+        .filter((r) => r.rank !== "")
+        .map((r) => ({
+          rank: r.rank,
+          entryCourse: r.entryCourse > 0 ? r.entryCourse : b.boatNumber,
+          courseIsAsWaku: r.entryCourse === 0,
+          grade: r.grade,
+        })),
+    }))
+    // 全艇が空 (CSV に行はあるが中身が無い) のときはセクションごと出さない
+    .filter((b) => b.racerName !== "" || b.runs.length > 0);
+
+  return boats.length > 0 ? { boats } : undefined;
+};
+
+/**
+ * tokuten_hayami から得点率早見 RaceTokutenHayami を構築。行が無ければ undefined。
+ *
+ * 上流は「公開済み (status=1)」の行しか書かないので、行があれば表示できる。
+ * 予選最終日を過ぎた節・得点率早見を出さない節では恒久的に行が来ない。
+ */
+const buildTokutenHayami = (row: TokutenHayamiRow | undefined): RaceTokutenHayami | undefined => {
+  if (!row || row.racers.length === 0) return undefined;
+  return {
+    borderRank: row.borderRank,
+    rankPoints: row.rankPoints,
+    racers: [...row.racers].sort((a, b) => a.boatNumber - b.boatNumber),
+  };
+};
+
 /** motor_stats の `(場コード, モーター番号)` 突合キー */
 const motorStatsKey = (stadiumCode: string, motorNumber: number): string =>
   `${stadiumCode}-${motorNumber}`;
@@ -465,6 +518,8 @@ export const buildRacePrediction = (
   origEx: OriginalExhibitionRow | undefined,
   recentNational: RecentFormRow | undefined,
   recentLocal: RecentFormRow | undefined,
+  waku10Row: Waku10Row | undefined,
+  tokutenHayamiRow: TokutenHayamiRow | undefined,
   motorStatsByKey: ReadonlyMap<string, MotorStats>,
   indexRowsByPredictor: ReadonlyMap<
     string,
@@ -509,6 +564,8 @@ export const buildRacePrediction = (
 
   const preview = buildRacePreview(tkz, sui, origEx);
   const recentForm = buildRecentForm(recentNational, recentLocal);
+  const waku10 = buildWaku10(waku10Row);
+  const tokutenHayami = buildTokutenHayami(tokutenHayamiRow);
 
   return {
     raceCode: cards.raceCode,
@@ -528,6 +585,8 @@ export const buildRacePrediction = (
       : {}),
     ...(preview !== undefined ? { preview } : {}),
     ...(recentForm !== undefined ? { recentForm } : {}),
+    ...(waku10 !== undefined ? { waku10 } : {}),
+    ...(tokutenHayami !== undefined ? { tokutenHayami } : {}),
     aiEvaluation,
     aiEvaluationDaily,
     aiEvaluationRealtime,
@@ -566,6 +625,8 @@ export const buildAllRacePredictions = (
   originalExhibition: readonly OriginalExhibitionRow[],
   recentNational: readonly RecentFormRow[],
   recentLocal: readonly RecentFormRow[],
+  waku10: readonly Waku10Row[],
+  tokutenHayami: readonly TokutenHayamiRow[],
   motorStats: readonly MotorStatsRow[],
   indexesByPredictor: readonly PredictorIndexFetch[],
   titles: readonly TitleRow[],
@@ -580,6 +641,8 @@ export const buildAllRacePredictions = (
   const origExByCode = new Map(originalExhibition.map((o) => [o.raceCode, o]));
   const recentNationalByCode = new Map(recentNational.map((r) => [r.raceCode, r]));
   const recentLocalByCode = new Map(recentLocal.map((r) => [r.raceCode, r]));
+  const waku10ByCode = new Map(waku10.map((w) => [w.raceCode, w]));
+  const tokutenHayamiByCode = new Map(tokutenHayami.map((t) => [t.raceCode, t]));
   const motorStatsByKey = buildMotorStatsLookup(motorStats);
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
@@ -634,6 +697,8 @@ export const buildAllRacePredictions = (
       origExByCode.get(cards.raceCode),
       recentNationalByCode.get(cards.raceCode),
       recentLocalByCode.get(cards.raceCode),
+      waku10ByCode.get(cards.raceCode),
+      tokutenHayamiByCode.get(cards.raceCode),
       motorStatsByKey,
       indexLookup.get(cards.raceCode) ?? new Map(),
       titleByCode.get(cards.raceCode),

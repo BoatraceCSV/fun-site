@@ -5,6 +5,7 @@ import type { BettingPicks } from "../utils/one-mark-distance.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
+import type { TokutenHayamiRacer } from "./tokuten-hayami.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
 export type RaceRacer = {
@@ -289,6 +290,56 @@ export type RaceRecentForm = {
   readonly boats: readonly RacerRecentForm[];
 };
 
+/** 枠番別過去10走 - 1 走分の表示用データ（waku10 由来） */
+export type Waku10RunView = {
+  /** 着順トークン（"1"〜"6" / "F" / "L" / "欠" など） */
+  readonly rank: string;
+  /**
+   * 進入コース (1-6)。CSV が空欄 = 枠なり進入なので、**当該艇の枠番で補完済み**。
+   * `courseIsAsWaku` が true のときは実際には CSV に値が無かったことを示す。
+   */
+  readonly entryCourse: number;
+  /** 進入が枠なり（CSV 空欄）だったか */
+  readonly courseIsAsWaku: boolean;
+  /** グレード ("IP" / "G3" / "G2" / "G1" / "SG") */
+  readonly grade: string;
+};
+
+/** 枠番別過去10走 - 1 艇分 */
+export type RacerWaku10 = {
+  readonly boatNumber: number;
+  readonly racerName: string;
+  /** この枠番での勝率 */
+  readonly winRate: number;
+  /** この枠番での平均ST */
+  readonly avgST: number;
+  /** この枠番での平均スタート順 (1.0〜6.0) */
+  readonly avgStartOrder: number;
+  /** 過去1走 (前走) → 過去10走 の順。空スロット（出走歴不足）は除外済み */
+  readonly runs: readonly Waku10RunView[];
+};
+
+/**
+ * 枠番別過去10走。programs/waku10 が未取得のレースでは undefined。
+ */
+export type RaceWaku10 = {
+  readonly boats: readonly RacerWaku10[];
+};
+
+/**
+ * 得点率早見。previews/tokuten_hayami に当該レースの行が無い
+ * （予選最終日を過ぎた / その節は得点率早見を出さない / まだ未公開）
+ * ときは undefined。
+ */
+export type RaceTokutenHayami = {
+  /** 準優進出ラインの人数 (例 18 = 上位18名)。欠損は null */
+  readonly borderRank: number | null;
+  /** このレースの着順点 (index 0 = 1着)。予選は 10/8/6/4/2/1 */
+  readonly rankPoints: readonly (number | null)[];
+  /** 艇番昇順 */
+  readonly racers: readonly TokutenHayamiRacer[];
+};
+
 /** レース予想（新スキーマ） */
 export type RacePrediction = {
   readonly raceCode: string;
@@ -330,6 +381,16 @@ export type RacePrediction = {
    * 未取得のレースでは undefined。古い JSON では未設定のため undefined フォールバック。
    */
   readonly recentForm?: RaceRecentForm;
+  /**
+   * 枠番別過去10走。programs/waku10 が未取得のレースでは undefined。
+   * 古い JSON では未設定のため undefined フォールバックすること。
+   */
+  readonly waku10?: RaceWaku10;
+  /**
+   * 得点率早見。previews/tokuten_hayami に行が無いレースでは undefined。
+   * 古い JSON では未設定のため undefined フォールバックすること。
+   */
+  readonly tokutenHayami?: RaceTokutenHayami;
   /**
    * AI 総合評価（後方互換用）。realtime が利用可能ならそちらを、無ければ daily を採用する。
    * 1マーク予想や AI 評価チャートの既存表示はこの値を参照する。

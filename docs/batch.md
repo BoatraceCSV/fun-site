@@ -72,10 +72,12 @@ GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を�
 | `race-card-schemas.ts` | `programs/race_cards`, `previews/stt` と予想者別 `estimate/{predictor_id}` のパーサ。`parseIndex(csvText, predictor)` は `predictor.componentKeys` に基づいて CSV 列名を動的に解決する |
 | `preview-schemas.ts` | `previews/tkz`（体重・展示タイム・チルト）, `previews/sui`（水面気象）, `previews/original_exhibition`（場別オリジナル展示）のパーサ。`parseTkz` / `parseSui` / `parseOriginalExhibition` |
 | `recent-form-schemas.ts` | `programs/recent_national` / `programs/recent_local`（近況5節）のパーサ。両 CSV は同一スキーマのため `parseRecentForm` を共用 |
+| `tokuten-hayami-schemas.ts` | `previews/tokuten_hayami`（得点率早見）のパーサ。`parseTokutenHayami`。1 レース 1 行 |
+| `waku10-schemas.ts` | `programs/waku10`（枠番別過去10走）のパーサ。`parseWaku10`。1 レース 1 行、6 艇 × (枠番別3指標 + 過去10走 × 3項目) |
 | `motor-stats-schemas.ts` | `programs/motor_stats`（モーター期成績）のパーサ。`parseMotorStats`。1 モーター 1 行 |
 | `result-schemas.ts` | `results/realtime` のパーサ |
 | `payout-schemas.ts` | `results/payouts` のパーサ |
-| `index.ts` | `fetchAllCsvData()` で固定 CSV（title / race_cards / stt / tkz / sui / original_exhibition / recent_national / recent_local / motor_stats / results / payouts）+ 各 active 予想者の index を並列取得して `FetchedCsvData` に統合 (`indexesByPredictor: PredictorIndexFetch[]` で予想者単位に分離)。tkz / sui / original_exhibition は `RacePrediction.preview`、recent_national / recent_local は `RacePrediction.recentForm`、motor_stats は `(場コード-モーター番号)` 突合で各 `RaceRacer.motorStats` に結合される |
+| `index.ts` | `fetchAllCsvData()` で固定 CSV（title / race_cards / stt / tkz / sui / original_exhibition / tokuten_hayami / recent_national / recent_local / waku10 / motor_stats / results / payouts）+ 各 active 予想者の index を並列取得して `FetchedCsvData` に統合 (`indexesByPredictor: PredictorIndexFetch[]` で予想者単位に分離)。tkz / sui / original_exhibition は `RacePrediction.preview`、recent_national / recent_local は `RacePrediction.recentForm`、waku10 は `RacePrediction.waku10`、tokuten_hayami は `RacePrediction.tokutenHayami`、motor_stats は `(場コード-モーター番号)` 突合で各 `RaceRacer.motorStats` に結合される |
 
 CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参照。
 

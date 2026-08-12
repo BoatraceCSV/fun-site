@@ -12,8 +12,10 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `previews/tkz` | `previews/tkz/YYYY/MM/DD.csv` | 直前情報（体重・体重調整・展示タイム・チルト） | 直前情報セクション |
 | `previews/sui` | `previews/sui/YYYY/MM/DD.csv` | 直前情報（水面気象: 風速・風向・波高・天候・気温・水温） | 直前情報セクション |
 | `previews/original_exhibition` | `previews/original_exhibition/YYYY/MM/DD.csv` | 直前情報（場別オリジナル展示: 一周/まわり足/直線 等の計測値） | 直前情報セクション |
+| `previews/tokuten_hayami` | `previews/tokuten_hayami/YYYY/MM/DD.csv` | 得点率早見（現在の得点率・節内順位・準優ボーダー順位と、当該レースで各着順を取った場合の得点率） | 得点率早見セクション |
 | `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 近況5節セクション |
 | `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 近況5節セクション |
+| `programs/waku10` | `programs/waku10/YYYY/MM/DD.csv` | 枠番別過去10走（今回と同じ枠番での勝率・平均ST・平均スタート順 + 過去10走の着順/進入/グレード） | 枠番別過去10走セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
 | `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | 全予想者共通のスタート予想図（帯つき）の予測 ST と、`useEstimatedST` な予想者の 1 マーク走行距離の予測 ST（`useEstimatedST` を持つ予想者は現行 active には無く、過去日の退役予想者ぶんでのみ効く） |
 | `estimate/{predictor_id}` | `estimate/{predictor_id}/YYYY/MM/DD.csv` | 各 active 予想者の強さpt と寄与pt | 予想者ごとの AI 総合評価・買い目・回収率 |
@@ -66,6 +68,8 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `SuiRow` | `previews/sui` | 気象観測時刻・風速・風向・波高・天候コード・気温・水温 |
 | `OriginalExhibitionRow` / `OriginalExhibitionBoat` | `previews/original_exhibition` | 場別計測項目ラベル（`itemLabels`、非空のみ）と艇別計測値（`values`、長さは itemLabels と一致） |
 | `RecentFormRow` / `RecentFormBoat` / `RecentFormSession` | `programs/recent_national`, `programs/recent_local` | 艇別・節別の開始/終了日・場名・グレード・着順列（両 CSV 同一スキーマ） |
+| `TokutenHayamiRow` / `TokutenHayamiRacer` / `TokutenHayamiIfRank` | `previews/tokuten_hayami` | 準優ボーダー順位・レースの着順点と、艇別の得点率 / 節内順位 / ボーダー状態 / 早見 / 着順別の想定得点率。得点率セルは `賞除` `欠場` `帰郷` `追配` の文字列が来るため、数値は `scoreRate`(null 可)、生値は `scoreRateLabel` に持つ |
+| `Waku10Row` / `Waku10Boat` / `Waku10Run` | `programs/waku10` | 艇別の枠番別勝率・平均ST・平均スタート順と、過去10走（着順トークン・進入コース・グレード）。**登録番号列を持たない**ため突合は艇番。進入コースの空欄は枠なり進入を意味するので 0 のまま保持する |
 | `MotorStatsRow` | `programs/motor_stats` | `(記録日, 場コード, モーター番号)` キー。勝率・2/3連率・優勝/優出回数・平均ラップ秒など |
 | `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST, 推定ST_p25, 推定ST_p75)`。欠場枠は null。帯 2 列は導入前の CSV でも null（列が無くても読める）。未生成日は空配列（全国平均 ST フォールバック） |
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
@@ -82,6 +86,8 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
 | `RacePreview` / `RacePreviewBoat` / `RaceWeather` / `OriginalExhibition` / `OriginalExhibitionView` | 直前情報。`RacePrediction.preview` にぶら下がり、tkz（体重・展示タイム・チルト、`exhibitionTime` は 0→null）・sui（水面気象、天候はコード生値）・original_exhibition（場別オリジナル展示、`labels` + 艇別 `values`）を結合。いずれの CSV も未取得のレースでは `preview` 自体が undefined |
 | `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順列の可視化は `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`） |
+| `RaceWaku10` / `RacerWaku10` / `Waku10RunView` | 枠番別過去10走。`RacePrediction.waku10` にぶら下がる。waku10 を艇番で突合し、着順が空のスロット（出走歴 10 走未満）は除外、進入コースは空欄（枠なり進入）を枠番で補完して `courseIsAsWaku` で補完済みかを示す。CSV 未取得のレースでは `waku10` 自体が undefined |
+| `RaceTokutenHayami` | 得点率早見。`RacePrediction.tokutenHayami` にぶら下がる。上流は公開済み (`status=1`) の行しか書かないので、**行があれば表示できる**。予選最終日を過ぎた節・得点率早見を出さない節では行が来ないため undefined |
 | `MotorStats`（`RaceRacer.motorStats`） | モーター期成績。motor_stats を `(場コード-モーター番号)` で各艇に突合（同一キーは記録日が新しい行を採用）。3連率・3連率順位・優勝/優出回数・平均ラップ秒を保持。当該場が motor_stats 未収録のレースでは undefined |
 | `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt） |
 | `BetHitStatus` | 当日買い目・直前買い目の三連単フォーメーションが結果と一致したか |

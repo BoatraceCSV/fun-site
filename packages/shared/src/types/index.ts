@@ -14,10 +14,14 @@ export type {
   RaceRacer,
   RaceRecentForm,
   RacerRecentForm,
+  RacerWaku10,
+  RaceTokutenHayami,
+  RaceWaku10,
   RaceWeather,
   RecentFormSessionView,
   StartPrediction,
   StartPredictionEntry,
+  Waku10RunView,
 } from "./prediction.js";
 export type { MotorStatsRow } from "./motor-stats.js";
 export type { RacerStEntry, RacerStRow } from "./racer-st.js";
@@ -35,6 +39,12 @@ export type {
   RecentFormRow,
   RecentFormSession,
 } from "./recent-form.js";
+export type { Waku10Boat, Waku10Row, Waku10Run } from "./waku10.js";
+export type {
+  TokutenHayamiIfRank,
+  TokutenHayamiRacer,
+  TokutenHayamiRow,
+} from "./tokuten-hayami.js";
 export type { BetHitStatus } from "../utils/bet-hit.js";
 export type {
   BetPayoutResult,

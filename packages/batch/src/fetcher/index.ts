@@ -14,6 +14,8 @@ import type {
   SuiRow,
   TitleRow,
   TkzRow,
+  TokutenHayamiRow,
+  Waku10Row,
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { parseAnaPicks } from "./ana-picks-schemas.js";
@@ -27,6 +29,8 @@ import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
+import { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
+import { parseWaku10 } from "./waku10-schemas.js";
 
 /**
  * 1 予想者ぶんの index 取得結果。
@@ -50,10 +54,17 @@ export type FetchedCsvData = {
   readonly sui: readonly SuiRow[];
   /** 直前情報: 場別オリジナル展示 (previews/original_exhibition)。未生成時は空配列。 */
   readonly originalExhibition: readonly OriginalExhibitionRow[];
+  /**
+   * 得点率早見 (previews/tokuten_hayami)。1 レース 1 行。予選最終日を過ぎた節・
+   * 得点率早見を出さない節では行が存在しない。未生成時は空配列。
+   */
+  readonly tokutenHayami: readonly TokutenHayamiRow[];
   /** 近況5節: 全国 (programs/recent_national)。未生成時は空配列。 */
   readonly recentNational: readonly RecentFormRow[];
   /** 近況5節: 当地 (programs/recent_local)。未生成時は空配列。 */
   readonly recentLocal: readonly RecentFormRow[];
+  /** 枠番別過去10走 (programs/waku10)。1 レース 1 行。未生成時は空配列。 */
+  readonly waku10: readonly Waku10Row[];
   /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
   readonly motorStats: readonly MotorStatsRow[];
   /**
@@ -155,8 +166,10 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     tkz,
     sui,
     originalExhibition,
+    tokutenHayami,
     recentNational,
     recentLocal,
+    waku10,
     motorStats,
     racerSt,
     suji,
@@ -172,8 +185,10 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("tkz", date, parseTkz),
     fetchAndParse("sui", date, parseSui),
     fetchAndParse("original_exhibition", date, parseOriginalExhibition),
+    fetchAndParse("tokuten_hayami", date, parseTokutenHayami),
     fetchAndParse("recent_national", date, parseRecentForm),
     fetchAndParse("recent_local", date, parseRecentForm),
+    fetchAndParse("waku10", date, parseWaku10),
     fetchAndParse("motor_stats", date, parseMotorStats),
     fetchAndParse("racer_st", date, parseRacerSt),
     fetchAndParse("suji", date, parseAnaPicks),
@@ -191,8 +206,10 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     tkz,
     sui,
     originalExhibition,
+    tokutenHayami,
     recentNational,
     recentLocal,
+    waku10,
     motorStats,
     racerSt,
     suji,
@@ -213,6 +230,8 @@ export { parseKimarite } from "./kimarite-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";
+export { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
+export { parseWaku10 } from "./waku10-schemas.js";
 export { parseResults } from "./result-schemas.js";
 export { parseTitles } from "./schemas.js";
 

@@ -22,8 +22,10 @@ export type CsvType =
   | "tkz"
   | "sui"
   | "original_exhibition"
+  | "tokuten_hayami"
   | "recent_national"
   | "recent_local"
+  | "waku10"
   | "motor_stats"
   | "racer_st"
   | "suji"
@@ -39,8 +41,10 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   tkz: "previews/tkz",
   sui: "previews/sui",
   original_exhibition: "previews/original_exhibition",
+  tokuten_hayami: "previews/tokuten_hayami",
   recent_national: "programs/recent_national",
   recent_local: "programs/recent_local",
+  waku10: "programs/waku10",
   motor_stats: "programs/motor_stats",
   racer_st: "estimate/racer_st",
   suji: "estimate/suji",

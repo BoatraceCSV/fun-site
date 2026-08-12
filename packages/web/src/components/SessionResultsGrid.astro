@@ -12,12 +12,40 @@ const { slots } = Astro.props;
 /** 出走済みスロットのみ（未出走 = 着順空 かつ R番号 0 は除外） */
 const played = slots.filter((s) => s.rank !== "" || s.race > 0);
 
+/**
+ * 日次ごとにまとめる（1 日 2 走まで）。日区切りを画面上でも見せるため、
+ * バッジの羅列ではなく日ごとのグループにする。
+ */
+const byDay: { day: number; slots: SessionResultSlot[] }[] = [];
+for (const slot of played) {
+  const last = byDay[byDay.length - 1];
+  if (last && last.day === slot.day) {
+    last.slots.push(slot);
+  } else {
+    byDay.push({ day: slot.day, slots: [slot] });
+  }
+}
+
 /** 対象レースの枠番 → バッジ配色（艇番カラー）。枠番不明はグレー */
 const laneStyle = (lane: number): string => {
   if (!isValidBoatNumber(lane)) return "background-color: #e5e7eb; color: #374151;";
   const c = BOAT_COLORS[lane];
   const border = lane === 1 ? " border: 1px solid #cbd5e1;" : "";
   return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
+};
+
+/** 進入コースの丸バッジ配色（コース番号の艇色）。不明はグレー */
+const courseStyle = (course: number): string => {
+  if (!isValidBoatNumber(course)) return "background-color: #e5e7eb; color: #374151;";
+  const c = BOAT_COLORS[course];
+  const border = course === 1 ? " border: 1px solid #cbd5e1;" : "";
+  return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
+};
+
+/** ST 表記。負値 (F) は "F" を付け、未計測は空 */
+const stText = (st: number | null): string => {
+  if (st == null) return "";
+  return st < 0 ? `F${Math.abs(st).toFixed(2).slice(1)}` : st.toFixed(2).slice(1);
 };
 
 /** ホバー時のツールチップ（日次・走・R・進入・枠・ST） */
@@ -34,16 +62,40 @@ const slotTitle = (s: SessionResultSlot): string => {
 
 {
   played.length > 0 ? (
-    <div class="flex flex-wrap items-center gap-1">
-      <span class="text-[10px] text-gray-400 mr-1">今節</span>
-      {played.map((s) => (
-        <span
-          class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none"
-          style={laneStyle(s.lane)}
-          title={slotTitle(s)}
-        >
-          {s.rank || "·"}
-        </span>
+    <div class="flex flex-wrap items-start gap-x-2 gap-y-1">
+      <span class="text-[10px] text-gray-400 pt-3">今節</span>
+      {byDay.map(({ day, slots: daySlots }) => (
+        <div class="flex flex-col items-start">
+          <span class="text-[9px] text-gray-400 leading-none mb-0.5">{day}日目</span>
+          <div class="flex items-start gap-1">
+            {daySlots.map((s) => (
+              <div class="flex flex-col items-center w-8" title={slotTitle(s)}>
+                <span class="text-[9px] text-gray-400 leading-none tabular-nums">
+                  {s.race > 0 ? `${s.race}R` : "—"}
+                </span>
+                <span
+                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none my-0.5"
+                  style={laneStyle(s.lane)}
+                >
+                  {s.rank || "·"}
+                </span>
+                {s.entryCourse > 0 ? (
+                  <span
+                    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] leading-none"
+                    style={courseStyle(s.entryCourse)}
+                  >
+                    {s.entryCourse}
+                  </span>
+                ) : (
+                  <span class="h-3.5" />
+                )}
+                <span class="text-[9px] text-gray-400 leading-none tabular-nums">
+                  {stText(s.st)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   ) : (

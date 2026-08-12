@@ -1,0 +1,95 @@
+---
+import type { RaceWaku10, Waku10RunView } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  waku10: RaceWaku10;
+}
+
+const { waku10 } = Astro.props;
+const boats = [...waku10.boats].sort((a, b) => a.boatNumber - b.boatNumber);
+
+/** 着順バッジの配色（RecentFormSection / SessionResultsGrid と統一） */
+const rankClass = (rank: string): string => {
+  if (rank === "1") return "bg-blue-600 text-white";
+  if (rank === "2") return "bg-emerald-500 text-white";
+  if (rank === "3") return "bg-amber-400 text-amber-950";
+  if (rank === "4" || rank === "5" || rank === "6") return "bg-gray-200 text-gray-700";
+  if (rank === "F") return "bg-red-100 text-red-700";
+  if (rank === "L") return "bg-amber-100 text-amber-800";
+  return "bg-gray-300 text-gray-700";
+};
+
+/** 進入コースのラベル（枠なりは薄く出す） */
+const courseColor = (course: number): string =>
+  isValidBoatNumber(course) ? BOAT_COLORS[course].hex : "#e5e7eb";
+
+const runTitle = (run: Waku10RunView): string => {
+  const parts = [`${run.rank}着`];
+  parts.push(run.courseIsAsWaku ? `進入${run.entryCourse}(枠なり)` : `進入${run.entryCourse}`);
+  if (run.grade) parts.push(run.grade);
+  return parts.join(" / ");
+};
+
+/** 数値の表示。0（データ無し）は "—" */
+const num = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : "—");
+---
+
+<div class="space-y-2">
+  {boats.map((boat) => {
+    const color = isValidBoatNumber(boat.boatNumber) ? BOAT_COLORS[boat.boatNumber] : undefined;
+    return (
+      <div class="border border-gray-100 rounded-md p-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+          <span
+            class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0"
+            style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${boat.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+          >
+            {boat.boatNumber}
+          </span>
+          <span class="font-medium text-sm">{boat.racerName}</span>
+          <span class="flex items-center gap-2 text-[11px] text-gray-500 tabular-nums">
+            <span>
+              勝率 <span class="font-bold text-gray-800">{num(boat.winRate, 2)}</span>
+            </span>
+            <span>
+              平均ST <span class="font-bold text-gray-800">{num(boat.avgST, 2)}</span>
+            </span>
+            <span>
+              平均ｽﾀｰﾄ順 <span class="font-bold text-gray-800">{num(boat.avgStartOrder, 1)}</span>
+            </span>
+          </span>
+        </div>
+
+        {boat.runs.length > 0 ? (
+          <div class="flex flex-wrap items-start gap-1">
+            {/* 過去1走 = 前走 が左。新 → 古 の順に並べる */}
+            {boat.runs.map((run) => (
+              <div class="flex flex-col items-center gap-0.5 w-6" title={runTitle(run)}>
+                <span
+                  class={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none ${rankClass(run.rank)}`}
+                >
+                  {run.rank}
+                </span>
+                <span
+                  class={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] leading-none ${run.courseIsAsWaku ? "opacity-40" : ""}`}
+                  style={`background-color: ${courseColor(run.entryCourse)}; color: ${isValidBoatNumber(run.entryCourse) ? BOAT_COLORS[run.entryCourse].textHex : "#374151"};${run.entryCourse === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                >
+                  {run.entryCourse}
+                </span>
+                <span class="text-[9px] text-gray-400 leading-none">{run.grade}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <span class="text-[11px] text-gray-400">この枠番での出走歴なし</span>
+        )}
+      </div>
+    );
+  })}
+  <p class="text-[11px] text-gray-400">
+    各選手が<strong class="font-medium">今回と同じ枠番</strong>で出走した直近10走（左が前走）。
+    上段が着順、中段が進入コース（薄い表示は枠なり進入）、下段がグレードです。
+    勝率・平均ST・平均スタート順もこの枠番でのものです。
+  </p>
+</div>

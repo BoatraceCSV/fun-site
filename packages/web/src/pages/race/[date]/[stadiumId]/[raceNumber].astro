@@ -18,6 +18,8 @@ import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
 import RecentFormSection from "../../../../components/RecentFormSection.astro";
 import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
+import TokutenHayamiSection from "../../../../components/TokutenHayamiSection.astro";
+import Waku10Section from "../../../../components/Waku10Section.astro";
 import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import { loadAvailableDates, loadPredictions, loadSeriesSummary } from "../../../../lib/data";
 
@@ -386,6 +388,23 @@ const predictorPredictions: readonly PredictorPrediction[] =
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
       <h2 class="font-bold text-lg mb-3">近況5節</h2>
       <RecentFormSection recentForm={prediction.recentForm} />
+    </section>
+  )}
+
+  {/* 得点率早見。previews/tokuten_hayami に行が無い（予選最終日を過ぎた /
+       その節は得点率早見を出さない / 未公開）レースでは非表示。 */}
+  {prediction.tokutenHayami && prediction.tokutenHayami.racers.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">得点率早見</h2>
+      <TokutenHayamiSection tokutenHayami={prediction.tokutenHayami} />
+    </section>
+  )}
+
+  {/* 枠番別過去10走。programs/waku10 が未取得のレースでは非表示。 */}
+  {prediction.waku10 && prediction.waku10.boats.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">枠番別過去10走</h2>
+      <Waku10Section waku10={prediction.waku10} />
     </section>
   )}
 
