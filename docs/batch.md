@@ -166,16 +166,18 @@ pnpm --filter @fun-site/batch run start
 - Cloud Run Job のデプロイ: [infrastructure.md](./infrastructure.md)
 - 動作確認・トラブルシューティング: [operations.md](./operations.md)
 
-## 穴予想 v9_suji の買い目
+## 穴予想 (v9_suji / v10_kimarite) の買い目
 
-`v9_suji` だけは **fun-site が買い目を計算しない**。BoatraceCSV
-`estimate/suji` の出目をそのまま使う(フォーメーションでは表現できない出目集合のため)。
+穴予想 2 案だけは **fun-site が買い目を計算しない**。BoatraceCSV が確定させた
+出目をそのまま使う(フォーメーションでは表現できない出目集合のため)。
 
-- 取得: `packages/batch/src/fetcher/suji-schemas.ts` の `parseSuji`
-  (`racer_st` と同じ日付パーティション CSV の経路)
-- 分岐: `bettingStyleFor(predictorId)` が `"suji"` を返したら
+- 取得: `packages/batch/src/fetcher/ana-picks-schemas.ts` の `parseAnaPicks`
+  (`racer_st` と同じ日付パーティション CSV の経路)。A案 `estimate/suji` と
+  B案 `estimate/kimarite/picks` は同じスキーマなので **1 つのパーサで読む**
+- 分岐: `bettingStyleFor(predictorId)` が `"formation"` 以外を返したら
   `computeBettingPicks` ではなく CSV 由来の `ComboPicks` を使う
-  (`prediction-builder.ts`)
+  (`prediction-builder.ts`)。戻り値 (`"suji"` / `"kimarite"`) は
+  **どちらの CSV を読むかだけ**を決め、以降の表示・集計の経路は共通
 - 出力: バッチが採点した買い目を `PredictorPrediction.dailyPicks` /
   `realtimePicks`、注釈を `dailyKimarite` / `realtimeKimarite` に載せる。
   **web はこれを描画するので、表示と集計が食い違わない**
@@ -183,7 +185,7 @@ pnpm --filter @fun-site/batch run start
 ## 予想者統計の体験指標
 
 `aggregator/predictor-stats.ts` は回収率に加えて次を集計する。回収率だけでは
-「当たらないが当たれば大きい」穴予想 (`v9_suji`) の価値を測れないため
+「当たらないが当たれば大きい」穴予想 (`v9_suji` / `v10_kimarite`) の価値を測れないため
 (BoatraceCSV `docs/design/ana_prediction.md` §7)。
 
 | フィールド | 内容 |
@@ -197,3 +199,9 @@ pnpm --filter @fun-site/batch run start
 > 増える。実測でも control (11.5 点) が 40 本、v9_suji (5.0 点) が 27 本で
 > 素の本数では負けるが、賭け金あたりでは 0.12 対 0.10 で逆転する。
 > 比較には必ず `bigHitPer10kYen` を使う。
+
+> **A案 v9_suji と B案 v10_kimarite の優劣は、この画面の回収率では決まらない。**
+> 観測された差 (+4.2pt) を有意にするには約 8.2 ヶ月かかる。主判定は BoatraceCSV
+> 側で月次集計する 3連単 log-loss (`data/estimate/kimarite/tables/logloss.csv`)。
+> fun-site の回収率は破滅的な劣化を見るガードレールとしてのみ使う
+> (BoatraceCSV `docs/design/ana_prediction.md` §13.3)。

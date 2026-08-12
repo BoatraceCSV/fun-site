@@ -169,20 +169,31 @@ CSV ミラーバケットは以下のライフサイクルで自動遷移する�
 
 過去日付のレースページを再ビルドする場合、当日の CSV が NEARLINE / COLDLINE に落ちていてもコスト面の問題はあるが取得は可能。
 
-## 穴予想 v9_suji の買い目 (`estimate/suji`)
+## 穴予想の買い目 (`estimate/suji` / `estimate/kimarite/picks`)
 
-BoatraceCSV `data/estimate/suji/YYYY/MM/DD.csv`。レース × 状態 で 1 行。
+穴予想は 2 案を並行運用しており、**買い目 CSV のスキーマは共通**。
+
+| CSV | 予想者 | 出所 |
+| --- | --- | --- |
+| `estimate/suji` | `v9_suji`(スジ予想、A案) | `scripts/build_suji_picks.py` |
+| `estimate/kimarite/picks` | `v10_kimarite`(穴予想、B案) | `scripts/build_kimarite_picks.py` |
+
+どちらも `data/.../YYYY/MM/DD.csv` でレース × 状態 で 1 行。
 
 | 列 | 用途 |
 | --- | --- |
 | `状態` | `daily` / `realtime`。当日買い目 / 直前買い目に振り分ける |
-| `1着コース` / `1着艇番` | 参考表示 |
 | `買い目1`〜`買い目5` | `"3-1-4"` 形式の出目(艇番) |
-| `決まり手1`〜`決まり手5` | 各出目の決まり手注釈 |
+| `決まり手1`〜`決まり手5` | 各出目の決まり手注釈(両案共通の静的テーブル由来) |
+
+> suji CSV には `1着コース` / `1着艇番` 列もあるが、**型には持たせていない**。
+> B案は 120 通りの確率から上位 5 点を取るので **1 レースの買い目に複数の
+> 1着艇が混ざり**、1 つに決まらないため。A案でも `picks[0].combo[0]` で足りる。
 
 **fun-site は買い目を計算しない。** 他の予想者は強さpt からフォーメーションを
-計算するが、`v9_suji` はフォーメーションで表現できない出目集合なので
-boatracecsv が確定させたものを読む(`parseSuji` / `packages/batch/src/fetcher/suji-schemas.ts`)。
+計算するが、穴予想 2 案はフォーメーションで表現できない出目集合なので
+boatracecsv が確定させたものを読む
+(`parseAnaPicks` / `packages/batch/src/fetcher/ana-picks-schemas.ts`。1 つのパーサで両方読む)。
 
 ## 荒れ度メーター (`estimate/kimarite`)
 

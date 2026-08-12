@@ -1,6 +1,7 @@
 import type {
   AiEvaluation,
   AiEvaluationEntry,
+  AnaPicksRow,
   BetHitStatus,
   BettingPicks,
   ComponentKey,
@@ -29,7 +30,6 @@ import type {
   StartPredictionEntry,
   SttRow,
   SuiRow,
-  SujiRow,
   TitleRow,
   TkzRow,
   UpsetMeter,
@@ -365,10 +365,17 @@ const toRaceRacers = (
  * 行。同レースに対して両方存在する場合があり、それぞれを独立した AI 評価として
  * 保持し、買い目・的中状態・回収率も daily / realtime の両方で計算する。
  */
-const toComboPicks = (row: SujiRow | undefined): BettingPicks | undefined =>
+const toComboPicks = (row: AnaPicksRow | undefined): BettingPicks | undefined =>
   row && row.picks.length > 0
     ? { kind: "combos", combos: row.picks.map((p) => p.combo) }
     : undefined;
+
+/** 1 レース分の穴予想の買い目を、買い目スタイル別 → 状態別に引ける形。 */
+export type AnaPicksSlot = { readonly daily?: AnaPicksRow; readonly realtime?: AnaPicksRow };
+export type AnaPicksByStyle = {
+  readonly suji?: AnaPicksSlot;
+  readonly kimarite?: AnaPicksSlot;
+};
 
 const buildPredictorPrediction = (
   predictor: PredictorSpec,
@@ -377,8 +384,7 @@ const buildPredictorPrediction = (
   realtimeIdx: IndexRow | undefined,
   result: RaceResultRow | undefined,
   payout: RacePayoutRow | undefined,
-  sujiDaily?: SujiRow,
-  sujiRealtime?: SujiRow,
+  anaPicks?: AnaPicksByStyle,
 ): PredictorPrediction => {
   const aiEvaluationDaily = dailyIdx ? buildAiEvaluation(dailyIdx) : undefined;
   const aiEvaluationRealtime = realtimeIdx ? buildAiEvaluation(realtimeIdx) : undefined;
@@ -391,13 +397,15 @@ const buildPredictorPrediction = (
   // strengthOnlyBetting な予想者 (v8_aionly) は走行距離ではなく強さpt のみで
   // 候補を選定する (basis="strength"、しきい値 ±5.0pt)。
   const basis = bettingBasisFor(predictor.id);
-  // bettingStyle="suji" の予想者 (v9_suji) は fun-site で買い目を計算しない。
-  // boatracecsv が data/estimate/suji/ に確定させた出目をそのまま使う
-  // (フォーメーションでは表現できない出目集合のため)。
+  // 穴予想 (v9_suji = "suji" / v10_kimarite = "kimarite") は fun-site で
+  // 買い目を計算しない。boatracecsv が確定させた出目をそのまま使う
+  // (フォーメーションでは表現できない出目集合のため)。どちらの CSV を読むかは
+  // bettingStyle が決め、以降の表示・集計の経路は共通。
   const style = bettingStyleFor(predictor.id);
+  const ana = style === "formation" ? undefined : anaPicks?.[style];
   const dailyPicks =
-    style === "suji"
-      ? toComboPicks(sujiDaily)
+    style !== "formation"
+      ? toComboPicks(ana?.daily)
       : aiEvaluationDaily
         ? computeBettingPicks(
             computeOneMarkDistances(racers, aiEvaluationDaily, stOptions),
@@ -406,8 +414,8 @@ const buildPredictorPrediction = (
           )
         : undefined;
   const realtimePicks =
-    style === "suji"
-      ? toComboPicks(sujiRealtime)
+    style !== "formation"
+      ? toComboPicks(ana?.realtime)
       : aiEvaluationRealtime
         ? computeBettingPicks(
             computeOneMarkDistances(racers, aiEvaluationRealtime, stOptions),
@@ -418,15 +426,15 @@ const buildPredictorPrediction = (
   const betHitStatus = checkBettingHit(result, dailyPicks, realtimePicks);
   const betPayout = computeRaceBetPayoutSummary(dailyPicks, realtimePicks, result, payout);
   // 採点した買い目そのものを載せる。web はこれを描画するので、表示と集計が
-  // 食い違わない (v9_suji は CSV 由来で web 側から再計算できないため必須)。
-  const kimarite = (row: SujiRow | undefined): readonly string[] | undefined =>
-    style === "suji" && row ? row.picks.map((p) => p.kimarite) : undefined;
+  // 食い違わない (穴予想は CSV 由来で web 側から再計算できないため必須)。
+  const marks = (row: AnaPicksRow | undefined): readonly string[] | undefined =>
+    row ? row.picks.map((p) => p.kimarite) : undefined;
 
   return {
     dailyPicks,
     realtimePicks,
-    dailyKimarite: kimarite(sujiDaily),
-    realtimeKimarite: kimarite(sujiRealtime),
+    dailyKimarite: marks(ana?.daily),
+    realtimeKimarite: marks(ana?.realtime),
     predictorId: predictor.id,
     predictorName: predictor.displayName,
     slot: predictor.slot,
@@ -466,8 +474,8 @@ export const buildRacePrediction = (
   result: RaceResultRow | undefined,
   payout: RacePayoutRow | undefined,
   generatedAt: string,
-  /** 穴予想 v9_suji の買い目 (estimate/suji)。daily / realtime それぞれ。 */
-  sujiRows?: { readonly daily?: SujiRow; readonly realtime?: SujiRow },
+  /** 穴予想の買い目。買い目スタイル (suji / kimarite) ごとに daily / realtime。 */
+  anaPicks?: AnaPicksByStyle,
   /** 荒れ度メーター (estimate/kimarite)。daily / realtime それぞれ。 */
   kimariteRows?: { readonly daily?: KimariteRow; readonly realtime?: KimariteRow },
 ): RacePrediction => {
@@ -483,16 +491,7 @@ export const buildRacePrediction = (
   const predictors = activePredictors();
   const predictions: PredictorPrediction[] = predictors.map((p) => {
     const rows = indexRowsByPredictor.get(p.id) ?? {};
-    return buildPredictorPrediction(
-      p,
-      racers,
-      rows.daily,
-      rows.realtime,
-      result,
-      payout,
-      sujiRows?.daily,
-      sujiRows?.realtime,
-    );
+    return buildPredictorPrediction(p, racers, rows.daily, rows.realtime, result, payout, anaPicks);
   });
 
   // 後方互換: 既存 UI 用に primary predictor (= slot 最小) の値を平坦化
@@ -559,7 +558,8 @@ export const buildAllRacePredictions = (
   raceCards: readonly RaceCardRow[],
   stt: readonly SttRow[],
   racerSt: readonly RacerStRow[],
-  suji: readonly SujiRow[],
+  suji: readonly AnaPicksRow[],
+  kimaritePicks: readonly AnaPicksRow[],
   kimarite: readonly KimariteRow[],
   tkz: readonly TkzRow[],
   sui: readonly SuiRow[],
@@ -584,12 +584,21 @@ export const buildAllRacePredictions = (
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
-  // 穴予想 v9_suji の買い目。1 レースにつき daily / realtime の 2 行が来る。
-  const sujiByCode = new Map<string, { daily?: SujiRow; realtime?: SujiRow }>();
-  for (const row of suji) {
-    const slot = sujiByCode.get(row.raceCode) ?? {};
-    sujiByCode.set(row.raceCode, { ...slot, [row.state]: row });
-  }
+  // 穴予想の買い目。1 レースにつき daily / realtime の 2 行が来る。
+  // A案 (suji) と B案 (kimarite) を 1 つの Map にまとめ、予想者側は
+  // bettingStyle で自分のぶんだけ引く。
+  const anaByCode = new Map<string, { suji?: AnaPicksSlot; kimarite?: AnaPicksSlot }>();
+  const putAna = (style: "suji" | "kimarite", rows: readonly AnaPicksRow[]): void => {
+    for (const row of rows) {
+      const entry = anaByCode.get(row.raceCode) ?? {};
+      anaByCode.set(row.raceCode, {
+        ...entry,
+        [style]: { ...entry[style], [row.state]: row },
+      });
+    }
+  };
+  putAna("suji", suji);
+  putAna("kimarite", kimaritePicks);
   // 荒れ度メーター。同じく 1 レースにつき daily / realtime の 2 行。
   const kimariteByCode = new Map<string, { daily?: KimariteRow; realtime?: KimariteRow }>();
   for (const row of kimarite) {
@@ -631,7 +640,7 @@ export const buildAllRacePredictions = (
       resultByCode.get(cards.raceCode),
       payoutByCode.get(cards.raceCode),
       generatedAt,
-      sujiByCode.get(cards.raceCode),
+      anaByCode.get(cards.raceCode),
       kimariteByCode.get(cards.raceCode),
     ),
   );

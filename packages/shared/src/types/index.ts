@@ -22,7 +22,7 @@ export type {
 export type { MotorStatsRow } from "./motor-stats.js";
 export type { RacerStEntry, RacerStRow } from "./racer-st.js";
 export type { KimariteRow } from "./kimarite.js";
-export type { SujiPick, SujiRow } from "./suji.js";
+export type { AnaPick, AnaPicksRow } from "./ana.js";
 export type {
   OriginalExhibitionBoat,
   OriginalExhibitionRow,

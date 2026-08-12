@@ -127,12 +127,17 @@ export type PredictorSpec = {
    *   フォームレーションを **fun-site 側で計算**する(既存の全予想者)。
    * - `"suji"`: boatracecsv が確定させた出目を **CSV から読む**だけ
    *   (`v9_suji`。`data/estimate/suji/YYYY/MM/DD.csv`)。
-   *   フォーメーションでは表現できない出目集合になるため。
+   * - `"kimarite"`: 同じく CSV から読む穴予想 B案
+   *   (`v10_kimarite`。`data/estimate/kimarite/picks/YYYY/MM/DD.csv`)。
+   *
+   * `"suji"` / `"kimarite"` はどちらもフォーメーションでは表現できない
+   * 出目集合になるため、fun-site 側では計算しない。値の違いは
+   * **どの CSV を読むか**だけで、表示・集計の経路は共通。
    *
    * 解決は `bettingStyleFor(predictorId)` 経由で行う。バッチ(集計対象の買い目)と
    * web(表示する買い目)が食い違わないよう、必ず同じヘルパーを通すこと。
    */
-  readonly bettingStyle?: "formation" | "suji";
+  readonly bettingStyle?: "formation" | "suji" | "kimarite";
 };
 
 /**
@@ -281,6 +286,29 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-08-12",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
     bettingStyle: "suji",
+  },
+  {
+    id: "v10_kimarite",
+    displayName: "穴予想",
+    slot: 10,
+    status: "active",
+    // boatracecsv 側 registry.py と同期。
+    // 穴予想 (B案)。control (v1_basic) と同一の 5 成分で index / 強さpt は同値。
+    // 差分は買い目の作り方だけ:
+    //   Stage1  決まり手 × 1着コース の 32 クラス確率
+    //   Stage2  セル条件付きの 2-3 着表 P(2着, 3着 | セル)
+    //   合成    120 通り → Plackett-Luce(強さpt) と w:1−w でブレンド
+    //   買い目  1 コース頭を除いた上位 5 点
+    // A案 v9_suji と違い **1 レースの 5 点に複数の 1着艇が混ざる**。
+    //
+    // **A案との A/B は回収率では決着しない** (差 +4.2pt の検出に約 8.2 ヶ月)。
+    // 主判定は boatracecsv 側で月次集計する 3連単 log-loss
+    // (data/estimate/kimarite/tables/logloss.csv)。fun-site の回収率表示は
+    // ガードレール (破滅的な劣化の検知) としてのみ使う。
+    // 設計・検証: boatracecsv docs/design/ana_prediction.md §13 (B案)
+    startedAt: "2026-08-13",
+    componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
+    bettingStyle: "kimarite",
   },
   {
     id: "v8_aionly",

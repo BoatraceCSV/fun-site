@@ -80,6 +80,7 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   racer_st: "estimate/racer_st",
   suji: "estimate/suji",
   kimarite: "estimate/kimarite",
+  kimarite_picks: "estimate/kimarite/picks",
   results: "results/realtime",
   payouts: "results/payouts",
 };
@@ -111,6 +112,7 @@ const buildTrackedKeys = (): {
       "racer_st",
       "suji",
       "kimarite",
+      "kimarite_picks",
       "results",
       "payouts",
     ] as const

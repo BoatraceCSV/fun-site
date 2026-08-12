@@ -12,6 +12,7 @@ import {
   predictorCsvPath,
   predictorFromIndexCsvType,
 } from "../predictors.js";
+import { bettingStyleFor } from "../utils/one-mark-distance.js";
 
 describe("predictor registry", () => {
   it("has v1_basic active as the default predictor", () => {
@@ -183,6 +184,27 @@ describe("predictor registry", () => {
     for (const p of activePredictors()) {
       expect(allPredictors()).toContain(p);
     }
+  });
+});
+
+describe("穴予想 (v9_suji / v10_kimarite)", () => {
+  it("2 案とも control と同一成分で、差分は買い目の作り方だけ", () => {
+    // index / 強さpt は v1_basic と同値になる。回収率の差は買い目に由来する。
+    for (const id of ["v9_suji", "v10_kimarite"]) {
+      const p = predictorById(id);
+      expect(p?.status).toBe("active");
+      expect(p?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
+    }
+  });
+
+  it("買い目は boatracecsv 側の CSV から読む (fun-site では計算しない)", () => {
+    // bettingStyleFor が "formation" 以外を返す = CSV 由来。値の違いは
+    // どの CSV を読むかだけ (estimate/suji か estimate/kimarite/picks か)。
+    expect(bettingStyleFor("v9_suji")).toBe("suji");
+    expect(bettingStyleFor("v10_kimarite")).toBe("kimarite");
+    expect(bettingStyleFor("v1_basic")).toBe("formation");
+    expect(bettingStyleFor(undefined)).toBe("formation");
+    expect(bettingStyleFor("not_a_predictor")).toBe("formation");
   });
 });
 

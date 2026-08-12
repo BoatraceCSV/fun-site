@@ -92,15 +92,24 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 除外するのは、着順が出ず予想の当否を判定できないレースを母数に入れないため（購入額を
 計上しない扱いは全額返還の会計上も整合する）。
 
-### 穴予想の買い目 (v9_suji)
+### 穴予想の買い目 (v9_suji / v10_kimarite)
 
-データソース: BoatraceCSV `estimate/suji`
+データソース: BoatraceCSV `estimate/suji` と `estimate/kimarite/picks`
 
-`v9_suji`(スジ予想)は **buy list を CSV から読む**唯一の予想者。
-1着 = 1 コース以外で強さpt 最大の艇、2-3着 = スジ表 `P(2着,3着|1着)` の上位 5 ペア。
-出目ごとに決まり手注釈(「まくり差し」等)が付く。
+穴予想 2 案は **buy list を CSV から読む**予想者。どちらも 5 点。
+
+| | `v9_suji`(スジ予想、A案) | `v10_kimarite`(穴予想、B案) |
+| --- | --- | --- |
+| 1着 | 1 コース以外で強さpt 最大の艇(1 つに決まる) | 120 通りの確率の中で決まる(**5 点に複数の 1着艇が混ざる**) |
+| 2-3着 | スジ表 `P(2着,3着 \| 1着)` の上位 5 ペア | 決まり手セル条件付きの表 × 強さpt 変調 |
+| 強さpt | 1着の選定に直接使う | Stage2 の変調と Plackett-Luce とのブレンドに使う |
+
+出目ごとに決まり手注釈(「まくり差し」等)が付く。注釈は**両案共通の静的テーブル**由来。
 **レース単位の決まり手予測ではなく、出目 1 点ごとの説明**である点に注意
 (BoatraceCSV `docs/design/ana_prediction.md` §14)。
+
+> **2 案の優劣は回収率では決まらない。** 主判定は BoatraceCSV 側で月次集計する
+> 3連単 log-loss(同 §13.3)。fun-site の回収率はガードレール。
 
 ### 利用していないデータ
 
@@ -191,8 +200,9 @@ K-file 由来の翌日確定 `results/daily` は本サイトでは使わない�
 図は表示専用で買い目・回収率に効かず、予測区間を持つのは AI 推定 ST 版だけのため
 (BoatraceCSV `docs/design/slit_sim_plan.md` §9)。
 買い目候補の選定は既定で 1 マーク走行距離基準(各着の基準艇 ±0.10)。
-**`bettingStyle="suji"` な予想者(スジ予想 v9_suji)は fun-site で買い目を計算せず**、
-BoatraceCSV `estimate/suji` の出目をそのまま使う(`bettingStyleFor(predictorId)`)。
+**`bettingStyle` が `"formation"` 以外の予想者(穴予想 v9_suji / v10_kimarite)は
+fun-site で買い目を計算せず**、BoatraceCSV が出した出目をそのまま使う
+(`bettingStyleFor(predictorId)` が読む CSV を決める)。
 バッチが採点した買い目は `PredictorPrediction.dailyPicks` / `realtimePicks` に載り、
 web はそれを描画する — 表示と集計が構造的に一致する。
 **`strengthOnlyBetting` な予想者(AI予想 v8_aionly)のみ**、走行距離ではなく

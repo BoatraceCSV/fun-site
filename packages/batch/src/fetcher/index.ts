@@ -1,4 +1,5 @@
 import type {
+  AnaPicksRow,
   IndexRow,
   KimariteRow,
   MotorStatsRow,
@@ -11,11 +12,11 @@ import type {
   RecentFormRow,
   SttRow,
   SuiRow,
-  SujiRow,
   TitleRow,
   TkzRow,
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
+import { parseAnaPicks } from "./ana-picks-schemas.js";
 import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 import { parseKimarite } from "./kimarite-schemas.js";
 import { parseMotorStats } from "./motor-stats-schemas.js";
@@ -26,7 +27,6 @@ import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
-import { parseSuji } from "./suji-schemas.js";
 
 /**
  * 1 予想者ぶんの index 取得結果。
@@ -57,11 +57,16 @@ export type FetchedCsvData = {
   /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
   readonly motorStats: readonly MotorStatsRow[];
   /**
-   * 穴予想 v9_suji の買い目 (estimate/suji)。レース × 状態 で 1 行。
+   * 穴予想 A案 v9_suji の買い目 (estimate/suji)。レース × 状態 で 1 行。
    * fun-site は買い目を計算せず、この CSV の出目をそのまま使う
    * (boatracecsv docs/design/ana_prediction.md §13)。未生成時は空配列
    */
-  readonly suji: readonly SujiRow[];
+  readonly suji: readonly AnaPicksRow[];
+  /**
+   * 穴予想 B案 v10_kimarite の買い目 (estimate/kimarite/picks)。suji と同じ
+   * スキーマだが、1 レースの 5 点に複数の 1着艇が混ざる。未生成時は空配列
+   */
+  readonly kimaritePicks: readonly AnaPicksRow[];
   /**
    * 荒れ度メーター (estimate/kimarite)。レース × 状態 で 1 行。
    * 予想者に紐づかないレース単位の指標。未生成時は空配列
@@ -155,6 +160,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     motorStats,
     racerSt,
     suji,
+    kimaritePicks,
     kimarite,
     indexesByPredictor,
     results,
@@ -170,7 +176,8 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("recent_local", date, parseRecentForm),
     fetchAndParse("motor_stats", date, parseMotorStats),
     fetchAndParse("racer_st", date, parseRacerSt),
-    fetchAndParse("suji", date, parseSuji),
+    fetchAndParse("suji", date, parseAnaPicks),
+    fetchAndParse("kimarite_picks", date, parseAnaPicks),
     fetchAndParse("kimarite", date, parseKimarite),
     Promise.all(predictors.map((p) => fetchAndParseIndex(p, date))),
     fetchAndParse("results", date, parseResults),
@@ -189,6 +196,7 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     motorStats,
     racerSt,
     suji,
+    kimaritePicks,
     kimarite,
     indexesByPredictor,
     results,
@@ -200,7 +208,7 @@ export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
-export { parseSuji } from "./suji-schemas.js";
+export { parseAnaPicks } from "./ana-picks-schemas.js";
 export { parseKimarite } from "./kimarite-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";

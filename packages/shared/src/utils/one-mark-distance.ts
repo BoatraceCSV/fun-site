@@ -193,8 +193,10 @@ export const bettingBasisFor = (predictorId?: string): BettingBasis =>
  * 対になるヘルパー。バッチ(回収率の集計対象になる買い目)と web(画面に表示する
  * 買い目)が **同じ買い目になることを保証**するために両方からこれを呼ぶ。
  */
-export const bettingStyleFor = (predictorId?: string): "formation" | "suji" =>
-  predictorId && predictorById(predictorId)?.bettingStyle === "suji" ? "suji" : "formation";
+export const bettingStyleFor = (predictorId?: string): "formation" | "suji" | "kimarite" => {
+  const style = predictorId ? predictorById(predictorId)?.bettingStyle : undefined;
+  return style === "suji" || style === "kimarite" ? style : "formation";
+};
 
 /**
  * 予想者 ID ごとのしきい値オーバーライド。未登録の予想者は

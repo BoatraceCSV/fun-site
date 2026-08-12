@@ -14,12 +14,13 @@ interface Props {
   racers: readonly RaceRacer[];
   /**
    * バッチが採点した買い目。渡された場合はこちらを描画し、
-   * 内部での再計算はしない。`bettingStyle="suji"` の予想者 (v9_suji) は
-   * CSV 由来の出目なので web からは再計算できず、これが必須になる。
+   * 内部での再計算はしない。穴予想 (`bettingStyle="suji"` の v9_suji /
+   * `"kimarite"` の v10_kimarite) は CSV 由来の出目なので web からは
+   * 再計算できず、これが必須になる。
    */
   dailyPicks?: BettingPicks;
   realtimePicks?: BettingPicks;
-  /** 買い目 1 点ごとの決まり手注釈 (v9_suji)。picks と同順。 */
+  /** 買い目 1 点ごとの決まり手注釈 (穴予想のみ)。picks と同順。 */
   dailyKimarite?: readonly string[];
   realtimeKimarite?: readonly string[];
   /** 朝バッチ時点の AI 評価 (= 当日買い目の根拠)。無ければ当日買い目は表示されない。 */
