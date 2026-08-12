@@ -210,7 +210,11 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v4_motor",
     displayName: "モーター予想",
     slot: 4,
-    status: "active",
+    // 2026-08-10 退役。control (v1_basic) との同一レース比較で +0.30pt
+    // (95%CI [-2.4, +3.6], p=0.884, n=3035) と有意差なし。control との差が
+    // motor → motor4 の 1 成分のみで買い目も大きく重なるため control 単独に戻した。
+    // エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // 本命予想 (control, v1_basic) の着順ベース motor を、エキスパート評価
     // (平和島/唐津/大村/鳴門 の 4 場) との順位相関でチューニングした motor4 に
@@ -224,7 +228,11 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     id: "v5_slit",
     displayName: "スリット予想",
     slot: 5,
-    status: "active",
+    // 2026-08-10 退役。control (v1_basic) との同一レース比較で -2.72pt
+    // (95%CI [-7.0, +1.2], p=0.377, n=3035) と有意差なし。5 成分が control と
+    // 完全に同一で差は予測 ST のみのため、買い目が control と大きく重なる。
+    // エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // 本命予想 (control, v1_basic) と同一の 5 成分 (index / 強さpt は同値) で、
     // 1 マーク走行距離計算とスリット図の予測 ST だけを全国平均 ST から

@@ -50,14 +50,16 @@ describe("predictor registry", () => {
     expect(activePredictors().some((p) => p.id === "v3_tenkai")).toBe(false);
   });
 
-  it("has v4_motor active with motor replaced by motor4 (5成分, motor 差し替え)", () => {
+  it("keeps v4_motor as a retired entry (motor→motor4, past data preserved)", () => {
     // control (v1_basic) の着順ベース motor をチューニング版 motor4 に差し替えた
     // 5 成分構成 (成分数は control と同じで motor 指標だけ差し替え)。
+    // 2026-08-10 退役 (control と有意差なし / p=0.884)。recipe は履歴解釈のため保持。
     const v4 = predictorById("v4_motor");
     expect(v4).toBeDefined();
     expect(v4?.displayName).toBe("モーター予想");
     expect(v4?.slot).toBe(4);
-    expect(v4?.status).toBe("active");
+    expect(v4?.status).toBe("retired");
+    expect(activePredictors().some((p) => p.id === "v4_motor")).toBe(false);
     expect(v4?.componentKeys).toEqual(["waku", "racer", "motor4", "exhibit", "weather"]);
     expect(v4?.componentKeys).not.toContain("tenkai");
     // 着順ベースの motor は使わない (motor4 に置換済み)。
@@ -67,24 +69,25 @@ describe("predictor registry", () => {
     const v1Keys = predictorById("v1_basic")?.componentKeys ?? [];
     expect(v4?.componentKeys.length).toBe(v1Keys.length);
     expect(v4?.componentKeys).toEqual(v1Keys.map((k) => (k === "motor" ? "motor4" : k)));
-    // active predictor として含まれる。
-    expect(activePredictors().some((p) => p.id === "v4_motor")).toBe(true);
+    // 退役済みなので active には含まれない (上でも確認済み)。
+    expect(activePredictors().some((p) => p.id === "v4_motor")).toBe(false);
   });
 
-  it("has v5_slit active with control-identical components and AI-estimated ST", () => {
+  it("keeps v5_slit as a retired entry (control 同一成分 + AI 推定 ST)", () => {
     // control (v1_basic) と同一の 5 成分 (index / 強さpt は同値)。差分は
     // 1 マーク距離計算・スリット図の予測 ST のみ (全国平均ST → AI 推定 ST)。
+    // 2026-08-10 退役 (control と有意差なし / p=0.377)。useEstimatedST は保持。
     const v5 = predictorById("v5_slit");
     expect(v5).toBeDefined();
     expect(v5?.displayName).toBe("スリット予想");
     expect(v5?.slot).toBe(5);
-    expect(v5?.status).toBe("active");
+    expect(v5?.status).toBe("retired");
     expect(v5?.componentKeys).toEqual(predictorById("v1_basic")?.componentKeys);
     expect(v5?.useEstimatedST).toBe(true);
     // 他の予想者は予測 ST を差し替えない (既存処理へ影響なし)。
     expect(predictorById("v1_basic")?.useEstimatedST).toBeUndefined();
     expect(predictorById("v4_motor")?.useEstimatedST).toBeUndefined();
-    expect(activePredictors().some((p) => p.id === "v5_slit")).toBe(true);
+    expect(activePredictors().some((p) => p.id === "v5_slit")).toBe(false);
   });
 
   it("has v6_course retired with waku swapped for course", () => {
