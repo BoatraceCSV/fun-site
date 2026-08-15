@@ -1,6 +1,32 @@
 ---
 import type { RaceResultCourse } from "@fun-site/shared";
 import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BADGE_SIZE,
+  BADGE_X,
+  BOAT_HEIGHT_PX,
+  BOAT_LENGTH_SEC,
+  FIGURE_BG,
+  LANE_HEIGHT,
+  LANE_LINE,
+  LANES,
+  RIGHT_PAD,
+  ST_MAX,
+  ST_MIN,
+  ST_TICKS,
+  START_LINE_X,
+  TOP_PAD,
+  TRACK_LEFT,
+  TRACK_RIGHT,
+  TRACK_W,
+  VIEWBOX_H,
+  VIEWBOX_W,
+  WATER_FILL,
+  boatCanopyX,
+  boatHullPath,
+  clampBowX,
+  stToX,
+} from "../lib/start-diagram";
 
 interface Props {
   /** 確定結果の進入コース別 ST / F。並び順は問わない（内部でコース昇順にする）。 */
@@ -8,42 +34,6 @@ interface Props {
 }
 
 const { courses } = Astro.props;
-
-// 表示レンジ・図のサイズは StartPredictionDiagram と **同一**にする。
-// スタート予想と結果を同じ目盛りで見比べられることがこの図の目的なので、
-// 実測値に合わせてレンジを可変にしない（レンジ外の艇は端でクランプされるが、
-// 正確な値は右側の数値ラベルに必ず出る）。
-const ST_MIN = -0.05; // フライング側
-const ST_MAX = 0.3;
-const ST_SPAN = ST_MAX - ST_MIN;
-
-const VIEWBOX_W = 600;
-const VIEWBOX_H = 360;
-const LEFT_PAD = 60; // コース番号ラベル分
-const RIGHT_PAD = 80; // ST値ラベル分
-const TOP_PAD = 24;
-const BOTTOM_PAD = 36;
-const LANES = 6;
-const LANE_HEIGHT = (VIEWBOX_H - TOP_PAD - BOTTOM_PAD) / LANES;
-const TRACK_LEFT = LEFT_PAD;
-const TRACK_RIGHT = VIEWBOX_W - RIGHT_PAD;
-const TRACK_W = TRACK_RIGHT - TRACK_LEFT;
-
-// ST → x 座標。ST=0 でスタートライン。ST が大きいほど後方（左寄り）、
-// 負値（フライング）はスタートラインより前（右寄り）。
-const stToX = (st: number): number => {
-  const clamped = Math.min(Math.max(st, ST_MIN), ST_MAX);
-  return TRACK_RIGHT - ((clamped - ST_MIN) / ST_SPAN) * TRACK_W;
-};
-
-const startLineX = stToX(0);
-
-/** 艇の円の半径。中心をこのぶん内側に留めて水面からはみ出させない。 */
-const BOAT_R = 13;
-const clampBoatX = (x: number): number =>
-  Math.min(Math.max(x, TRACK_LEFT + BOAT_R), TRACK_RIGHT - BOAT_R);
-
-const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
 
 const sortedCourses = [...courses].sort((a, b) => a.courseNumber - b.courseNumber);
 
@@ -62,13 +52,13 @@ const stLabel = (c: RaceResultCourse): string =>
 
 const hasMissingSt = sortedCourses.some((c) => !hasSt(c));
 const hasFlying = sortedCourses.some((c) => c.flying);
-/** 表示レンジ外の艇。円は端で止まるので、数値ラベルが正なことを注記で断る。 */
+/** 表示レンジ外の艇。舳先は端で止まるので、数値ラベルが正なことを注記で断る。 */
 const hasClamped = sortedCourses.some(
   (c) => hasSt(c) && (c.startTiming < ST_MIN || c.startTiming > ST_MAX),
 );
 ---
 
-<figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
+<figure class="rounded-lg overflow-hidden border border-blue-100">
   <svg
     viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
     xmlns="http://www.w3.org/2000/svg"
@@ -76,26 +66,69 @@ const hasClamped = sortedCourses.some(
     aria-label="スタート結果図（進入順）"
     class="w-full h-auto"
   >
+    <rect x="0" y="0" width={VIEWBOX_W} height={VIEWBOX_H} fill={FIGURE_BG} />
+
     {/* 水面背景 */}
-    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill="#dbeafe" />
+    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill={WATER_FILL} />
 
     {/* レーン区切り */}
     {Array.from({ length: LANES + 1 }).map((_, i) => {
       const y = TOP_PAD + i * LANE_HEIGHT;
-      return <line x1={TRACK_LEFT} y1={y} x2={TRACK_RIGHT} y2={y} stroke="#bfdbfe" stroke-width="1" />;
+      return <line x1={TRACK_LEFT} y1={y} x2={TRACK_RIGHT} y2={y} stroke={LANE_LINE} stroke-width="1" />;
     })}
 
-    {/* スタートライン（赤、太線） */}
+    {/*
+      艇。舳先を ST の位置に置き、船尾へ 1 艇身 (0.135 秒) ぶん伸ばす。
+      船尾が水面左端をはみ出すぶんは、この後のカーテン矩形で隠す。
+      ST 未取得 (欠場・エンスト等) の艇は位置が決まらないので水面には出さない
+      （左の艇番バッジと右の "—" でその艇の存在は分かる）。
+    */}
+    {sortedCourses.filter(hasSt).map((c) => {
+      const i = sortedCourses.indexOf(c);
+      const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
+      const color = isValidBoatNumber(c.boatNumber) ? BOAT_COLORS[c.boatNumber] : undefined;
+      const fill = color?.hex ?? "#cbd5e1";
+      // フライングは艇を赤縁で強調する。1号艇は艇色が白なので通常時も縁を付ける。
+      const stroke = c.flying ? "#dc2626" : c.boatNumber === 1 ? "#94a3b8" : fill;
+      const textColor = color?.textHex ?? "#0f172a";
+      const bowX = clampBowX(stToX(c.startTiming));
+      return (
+        <g>
+          <path
+            d={boatHullPath(bowX, cy)}
+            fill={fill}
+            stroke={stroke}
+            stroke-width={c.flying ? 2.5 : 1.2}
+            stroke-linejoin="round"
+          />
+          {/* コックピット。艇の向き（右が進行方向）を分かりやすくする */}
+          <ellipse
+            cx={boatCanopyX(bowX)}
+            cy={cy}
+            rx={BOAT_HEIGHT_PX * 0.42}
+            ry={BOAT_HEIGHT_PX * 0.26}
+            fill={textColor}
+            opacity="0.28"
+          />
+        </g>
+      );
+    })}
+
+    {/* 水面外にはみ出した艇を隠すカーテン。以降のラベルはこの上に描く */}
+    <rect x="0" y="0" width={TRACK_LEFT} height={VIEWBOX_H} fill={FIGURE_BG} />
+    <rect x={TRACK_RIGHT} y="0" width={RIGHT_PAD} height={VIEWBOX_H} fill={FIGURE_BG} />
+
+    {/* スタートライン（赤、太線）。艇に隠れないよう艇の後に描く */}
     <line
-      x1={startLineX}
+      x1={START_LINE_X}
       y1={TOP_PAD}
-      x2={startLineX}
+      x2={START_LINE_X}
       y2={TOP_PAD + LANE_HEIGHT * LANES}
       stroke="#dc2626"
       stroke-width="2.5"
     />
     <text
-      x={startLineX}
+      x={START_LINE_X}
       y={TOP_PAD - 8}
       text-anchor="middle"
       font-size="11"
@@ -106,7 +139,7 @@ const hasClamped = sortedCourses.some(
     </text>
 
     {/* ST 目盛り */}
-    {tickValues.map((tv) => {
+    {ST_TICKS.map((tv) => {
       const x = stToX(tv);
       return (
         <g>
@@ -140,51 +173,43 @@ const hasClamped = sortedCourses.some(
       スタートタイミング(秒)
     </text>
 
-    {/* コース行 */}
+    {/* 艇番バッジ・コース番号・ST 値 */}
     {sortedCourses.map((c, i) => {
       const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
       const color = isValidBoatNumber(c.boatNumber) ? BOAT_COLORS[c.boatNumber] : undefined;
-      const fill = color?.hex ?? "#cbd5e1";
-      // フライングは艇を赤縁で強調する。1号艇は艇色が白なので通常時も縁を付ける。
-      const stroke = c.flying ? "#dc2626" : c.boatNumber === 1 ? "#94a3b8" : fill;
-      const textColor = color?.textHex ?? "#0f172a";
-      // ST 未取得の艇は位置が決まらないので、レーン左端に薄く置いて数値は "—" にする。
-      const boatX = hasSt(c) ? clampBoatX(stToX(c.startTiming)) : TRACK_LEFT + BOAT_R;
       return (
-        <g opacity={hasSt(c) ? 1 : 0.4}>
-          {/* コース番号 */}
+        <g>
+          {/* 艇番。艇体は ST が遅いほど水面外へ出るので番号はここに固定で出す */}
+          <rect
+            x={BADGE_X}
+            y={cy - BADGE_SIZE / 2}
+            width={BADGE_SIZE}
+            height={BADGE_SIZE}
+            rx="3"
+            fill={color?.hex ?? "#cbd5e1"}
+            stroke="#94a3b8"
+            stroke-width={c.boatNumber === 1 ? 1 : 0}
+          />
           <text
-            x={TRACK_LEFT - 14}
+            x={BADGE_X + BADGE_SIZE / 2}
+            y={cy + 4}
+            text-anchor="middle"
+            font-size="12"
+            font-weight="700"
+            fill={color?.textHex ?? "#0f172a"}
+          >
+            {c.boatNumber}
+          </text>
+          <text
+            x={TRACK_LEFT - 10}
             y={cy + 4}
             text-anchor="end"
-            font-size="13"
+            font-size="12"
             fill="#1e3a8a"
             font-weight="700"
           >
             {c.courseNumber}コース
           </text>
-
-          {/* 艇本体（円） */}
-          <circle
-            cx={boatX}
-            cy={cy}
-            r={BOAT_R}
-            fill={fill}
-            stroke={stroke}
-            stroke-width={c.flying ? 2.5 : 1.5}
-          />
-          <text
-            x={boatX}
-            y={cy + 4}
-            text-anchor="middle"
-            font-size="12"
-            font-weight="700"
-            fill={textColor}
-          >
-            {c.boatNumber}
-          </text>
-
-          {/* ST 実測値 */}
           <text
             x={TRACK_RIGHT + 8}
             y={cy + 4}
@@ -201,13 +226,20 @@ const hasClamped = sortedCourses.some(
   </svg>
   <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
     確定結果の進入コースと実測スタートタイミングです。目盛りはスタート予想図と同じなので、そのまま見比べられます。
+    艇の長さは <strong class="font-medium">1 艇身 = {BOAT_LENGTH_SEC.toFixed(3)}秒</strong>
+    （スリット付近の艇速 80km/h で艇長 3m を通過する時間）に合わせてあるので、前後の重なりがそのまま艇身差になります。
     {hasFlying && (
       <>
         {" "}
         <span class="text-red-600 font-medium">赤縁の艇と F 付きの値はフライング</span>です。
       </>
     )}
-    {hasClamped && <> 表示レンジ（-0.05〜0.30秒）を外れた艇は端で止めています。実測値は右の数値のとおりです。</>}
-    {hasMissingSt && <> STが取得できなかった艇（欠場・エンスト等）は左端に薄く表示しています。</>}
+    {hasClamped && (
+      <>
+        {" "}
+        表示レンジ（{ST_MIN.toFixed(2)}〜{ST_MAX.toFixed(2)}秒）を外れた艇は端で止めています。実測値は右の数値のとおりです。
+      </>
+    )}
+    {hasMissingSt && <> STが取得できなかった艇（欠場・エンスト等）は水面に出していません（右の値は —）。</>}
   </figcaption>
 </figure>

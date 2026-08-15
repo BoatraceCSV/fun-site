@@ -1,6 +1,30 @@
 ---
 import type { StartPrediction } from "@fun-site/shared";
 import { BOAT_COLORS, effectiveAvgST, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BADGE_SIZE,
+  BADGE_X,
+  BOAT_HEIGHT_PX,
+  BOAT_LENGTH_SEC,
+  FIGURE_BG,
+  LANE_HEIGHT,
+  LANE_LINE,
+  LANES,
+  RIGHT_PAD,
+  ST_TICKS,
+  START_LINE_X,
+  TOP_PAD,
+  TRACK_LEFT,
+  TRACK_RIGHT,
+  TRACK_W,
+  VIEWBOX_H,
+  VIEWBOX_W,
+  WATER_FILL,
+  boatCanopyX,
+  boatHullPath,
+  clampBowX,
+  stToX,
+} from "../lib/start-diagram";
 
 interface Props {
   start: StartPrediction;
@@ -14,34 +38,6 @@ interface Props {
 
 const { start, stNote } = Astro.props;
 
-// 表示レンジ（秒）。STの一般的な範囲をカバーする
-const ST_MIN = -0.05; // フライング側
-const ST_MAX = 0.3;
-const ST_SPAN = ST_MAX - ST_MIN;
-
-// 図のサイズ
-const VIEWBOX_W = 600;
-const VIEWBOX_H = 360;
-const LEFT_PAD = 60; // コース番号ラベル分
-const RIGHT_PAD = 80; // ST値ラベル分
-const TOP_PAD = 24;
-const BOTTOM_PAD = 36;
-const LANES = 6;
-const LANE_HEIGHT = (VIEWBOX_H - TOP_PAD - BOTTOM_PAD) / LANES;
-const TRACK_LEFT = LEFT_PAD;
-const TRACK_RIGHT = VIEWBOX_W - RIGHT_PAD;
-const TRACK_W = TRACK_RIGHT - TRACK_LEFT;
-
-// ST → x 座標。ST=0 でスタートラインの位置。STが大きいほど後方（左寄り）。
-const stToX = (st: number): number => {
-  const clamped = Math.min(Math.max(st, ST_MIN), ST_MAX);
-  // ST_MIN が右端、ST_MAX が左端
-  return TRACK_RIGHT - ((clamped - ST_MIN) / ST_SPAN) * TRACK_W;
-};
-
-// スタートラインの x 座標（ST=0 の位置）
-const startLineX = stToX(0);
-
 // 全国平均STが 0.00（=実績なし）の場合は遅め（NO_RECORD_ST_FALLBACK = 0.25）として
 // 描画する。1マーク距離計算（computeOneMarkDistances）と共通の補完ロジック。
 const stForDraw = (st: number): number => effectiveAvgST(st);
@@ -49,19 +45,14 @@ const stForDraw = (st: number): number => effectiveAvgST(st);
 // 進入コースごとに 1〜6 の lane を割り当て
 const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.courseNumber);
 
-// ST 軸の目盛りラベル
-const tickValues = [-0.05, 0, 0.1, 0.2, 0.3];
-
 // いずれかの艇に展示ST実測があるか（注記の出し分け用）
 const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != null);
 
 // いずれかの艇に予測区間（帯）があるか。AI推定ST版でのみ入る
-const hasBand = start.entries.some(
-  (e) => e.startTimingP25 != null && e.startTimingP75 != null,
-);
+const hasBand = start.entries.some((e) => e.startTimingP25 != null && e.startTimingP75 != null);
 ---
 
-<figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
+<figure class="rounded-lg overflow-hidden border border-blue-100">
   <svg
     viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
     xmlns="http://www.w3.org/2000/svg"
@@ -69,35 +60,86 @@ const hasBand = start.entries.some(
     aria-label="スタート予想図"
     class="w-full h-auto"
   >
+    <rect x="0" y="0" width={VIEWBOX_W} height={VIEWBOX_H} fill={FIGURE_BG} />
+
     {/* 水面背景 */}
-    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill="#dbeafe" />
+    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill={WATER_FILL} />
 
     {/* レーン区切り */}
     {Array.from({ length: LANES + 1 }).map((_, i) => {
       const y = TOP_PAD + i * LANE_HEIGHT;
+      return <line x1={TRACK_LEFT} y1={y} x2={TRACK_RIGHT} y2={y} stroke={LANE_LINE} stroke-width="1" />;
+    })}
+
+    {/*
+      艇。舳先を予測 ST の位置に置き、船尾へ 1 艇身 (0.135 秒) ぶん伸ばす。
+      船尾が水面左端をはみ出すぶんは、この後のカーテン矩形で隠す。
+    */}
+    {entriesByCourse.map((entry, i) => {
+      const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
+      const color = isValidBoatNumber(entry.boatNumber) ? BOAT_COLORS[entry.boatNumber] : undefined;
+      const fill = color?.hex ?? "#cbd5e1";
+      const stroke = entry.boatNumber === 1 ? "#94a3b8" : fill;
+      const textColor = color?.textHex ?? "#0f172a";
+      const bowX = clampBowX(stToX(stForDraw(entry.startTiming)));
+      // 予測区間は「舳先がどこに来るか」のブレ幅。艇体の下に細いバーで出す
+      // （艇が 1 艇身ぶんの長さを持つので、背後に敷くと艇に隠れて見えない）。
+      const band =
+        entry.startTimingP25 != null && entry.startTimingP75 != null
+          ? { left: stToX(entry.startTimingP75), right: stToX(entry.startTimingP25) }
+          : null;
       return (
-        <line
-          x1={TRACK_LEFT}
-          y1={y}
-          x2={TRACK_RIGHT}
-          y2={y}
-          stroke="#bfdbfe"
-          stroke-width="1"
-        />
+        <g>
+          <path
+            d={boatHullPath(bowX, cy)}
+            fill={fill}
+            stroke={stroke}
+            stroke-width="1.2"
+            stroke-linejoin="round"
+          />
+          {/* コックピット。艇の向き（右が進行方向）を分かりやすくする */}
+          <ellipse
+            cx={boatCanopyX(bowX)}
+            cy={cy}
+            rx={BOAT_HEIGHT_PX * 0.42}
+            ry={BOAT_HEIGHT_PX * 0.26}
+            fill={textColor}
+            opacity="0.28"
+          />
+
+          {/* 舳先位置の予測区間(25〜75パーセンタイル) */}
+          {band && (
+            <rect
+              x={band.left}
+              y={cy + BOAT_HEIGHT_PX / 2 + 3}
+              width={Math.max(band.right - band.left, 2)}
+              height="5"
+              rx="2.5"
+              fill={fill}
+              stroke="#64748b"
+              stroke-width="0.5"
+              opacity="0.85"
+            />
+          )}
+        </g>
       );
     })}
 
-    {/* スタートライン（赤、太線） */}
+    {/* 水面外にはみ出した艇を隠すカーテン。以降のラベルはこの上に描く */}
+    <rect x="0" y="0" width={TRACK_LEFT} height={VIEWBOX_H} fill={FIGURE_BG} />
+    <rect x={TRACK_RIGHT} y="0" width={RIGHT_PAD} height={VIEWBOX_H} fill={FIGURE_BG} />
+
+    {/* スタートライン（赤、太線）。艇に隠れないよう艇の後に描く */}
     <line
-      x1={startLineX}
+      x1={START_LINE_X}
       y1={TOP_PAD}
-      x2={startLineX}
+      x2={START_LINE_X}
       y2={TOP_PAD + LANE_HEIGHT * LANES}
       stroke="#dc2626"
       stroke-width="2.5"
     />
     <text
-      x={startLineX}
+      x={START_LINE_X}
       y={TOP_PAD - 8}
       text-anchor="middle"
       font-size="11"
@@ -108,7 +150,7 @@ const hasBand = start.entries.some(
     </text>
 
     {/* ST 目盛り */}
-    {tickValues.map((tv) => {
+    {ST_TICKS.map((tv) => {
       const x = stToX(tv);
       return (
         <g>
@@ -142,61 +184,43 @@ const hasBand = start.entries.some(
       スタートタイミング(秒)
     </text>
 
-    {/* コース行 */}
+    {/* 艇番バッジ・コース番号・ST 値（上: 予想/平均ST、下: 展示ST実測） */}
     {entriesByCourse.map((entry, i) => {
       const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
       const color = isValidBoatNumber(entry.boatNumber) ? BOAT_COLORS[entry.boatNumber] : undefined;
-      const fill = color?.hex ?? "#cbd5e1";
-      const stroke = entry.boatNumber === 1 ? "#94a3b8" : fill;
-      const textColor = color?.textHex ?? "#0f172a";
-      const boatX = stToX(stForDraw(entry.startTiming));
-      // 予測区間の帯。p25/p75 は AI 推定 ST 版にだけ入る。
-      // ST が大きいほど左なので p75 が左端、p25 が右端になる。
-      const band =
-        entry.startTimingP25 != null && entry.startTimingP75 != null
-          ? { left: stToX(entry.startTimingP75), right: stToX(entry.startTimingP25) }
-          : null;
       return (
         <g>
-          {/* 予測区間(25〜75パーセンタイル)の帯 */}
-          {band && (
-            <rect
-              x={band.left}
-              y={cy - 11}
-              width={Math.max(band.right - band.left, 1)}
-              height="22"
-              rx="4"
-              fill={fill}
-              opacity="0.22"
-            />
-          )}
-
-          {/* コース番号 */}
+          {/* 艇番。艇体は ST が遅いほど水面外へ出るので番号はここに固定で出す */}
+          <rect
+            x={BADGE_X}
+            y={cy - BADGE_SIZE / 2}
+            width={BADGE_SIZE}
+            height={BADGE_SIZE}
+            rx="3"
+            fill={color?.hex ?? "#cbd5e1"}
+            stroke="#94a3b8"
+            stroke-width={entry.boatNumber === 1 ? 1 : 0}
+          />
           <text
-            x={TRACK_LEFT - 14}
+            x={BADGE_X + BADGE_SIZE / 2}
+            y={cy + 4}
+            text-anchor="middle"
+            font-size="12"
+            font-weight="700"
+            fill={color?.textHex ?? "#0f172a"}
+          >
+            {entry.boatNumber}
+          </text>
+          <text
+            x={TRACK_LEFT - 10}
             y={cy + 4}
             text-anchor="end"
-            font-size="13"
+            font-size="12"
             fill="#1e3a8a"
             font-weight="700"
           >
             {entry.courseNumber}コース
           </text>
-
-          {/* 艇本体（円） */}
-          <circle cx={boatX} cy={cy} r="13" fill={fill} stroke={stroke} stroke-width="1.5" />
-          <text
-            x={boatX}
-            y={cy + 4}
-            text-anchor="middle"
-            font-size="12"
-            font-weight="700"
-            fill={textColor}
-          >
-            {entry.boatNumber}
-          </text>
-
-          {/* ST 値（上: 予想/平均ST、下: 展示ST実測） */}
           <text
             x={TRACK_RIGHT + 8}
             y={entry.exhibitionStartTiming != null ? cy - 2 : cy + 4}
@@ -230,10 +254,13 @@ const hasBand = start.entries.some(
       (start.usesEstimatedST
         ? "スタートタイミングは実測ST履歴から算出したAI推定STです。"
         : "スタートタイミングは選手の全国平均STです。")}
+    {" "}
+    艇の長さは <strong class="font-medium">1 艇身 = {BOAT_LENGTH_SEC.toFixed(3)}秒</strong>
+    （スリット付近の艇速 80km/h で艇長 3m を通過する時間）に合わせてあるので、前後の重なりがそのまま艇身差になります。
     {hasBand && (
       <>
         {" "}
-        帯は予測のブレ幅(25〜75パーセンタイル)で、実際のSTが約半分の確率でこの範囲に入ります。
+        艇体下のバーは舳先位置の予測のブレ幅(25〜75パーセンタイル)で、実際のSTが約半分の確率でこの範囲に入ります。
       </>
     )}
     {hasExhibitionSt && (

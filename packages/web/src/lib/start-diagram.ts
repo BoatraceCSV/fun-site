@@ -1,0 +1,116 @@
+/**
+ * スタート予想図 (`StartPredictionDiagram`) とスタート結果図
+ * (`StartResultDiagram`) が共有する座標系と艇の描画。
+ *
+ * 2 図は **同じ目盛りで見比べられること** が目的なので、レンジ・viewBox・
+ * レーン高・艇の大きさはここ 1 箇所だけで定義する。片方だけ変えないこと。
+ */
+
+/**
+ * 表示レンジ（秒）。負値側がフライング。
+ *
+ * 艇を 1 艇身ぶんの長さで描くようになったので、レンジは
+ * **「実際に出る ST の艇が船尾まで水面に収まること」** で決めている。
+ * 0.31 のような遅めのスタートは普通に出るため、そこで
+ * `stToX(0.31) - TRACK_LEFT >= BOAT_LENGTH_PX` を満たす必要があり、
+ * 逆算すると span >= 約 0.50 秒。フライング側も -0.10 まで見て 0.55 秒とした。
+ * （艇を点で描いていた頃は -0.05〜0.30 で足りていた。）
+ */
+export const ST_MIN = -0.1;
+export const ST_MAX = 0.45;
+export const ST_SPAN = ST_MAX - ST_MIN;
+
+export const VIEWBOX_W = 600;
+export const VIEWBOX_H = 360;
+/**
+ * 艇番バッジ + コース番号ラベル分。
+ *
+ * 艇番は艇体の上ではなくここに出す。艇は 1 艇身 = 0.135 秒ぶんの長さがあるので、
+ * ST が遅い艇ほど船尾が水面左端からはみ出す。艇体に番号を乗せると、その艇の
+ * 番号だけ読めなくなってしまう（参照した BOAT RACE 公式のスタート情報図も、
+ * 艇番は水面の外に別カラムで出している）。
+ */
+export const LEFT_PAD = 86;
+/** ST 値ラベル分 */
+export const RIGHT_PAD = 80;
+export const TOP_PAD = 24;
+export const BOTTOM_PAD = 36;
+export const LANES = 6;
+export const LANE_HEIGHT = (VIEWBOX_H - TOP_PAD - BOTTOM_PAD) / LANES;
+export const TRACK_LEFT = LEFT_PAD;
+export const TRACK_RIGHT = VIEWBOX_W - RIGHT_PAD;
+export const TRACK_W = TRACK_RIGHT - TRACK_LEFT;
+
+/** 図の地色。艇が水面からはみ出したぶんを隠すカーテンにも使う */
+export const FIGURE_BG = "#eff6ff";
+export const WATER_FILL = "#dbeafe";
+export const LANE_LINE = "#bfdbfe";
+
+export const ST_TICKS = [-0.1, 0, 0.1, 0.2, 0.3, 0.4];
+
+/**
+ * ST → x 座標。ST=0 がスタートライン。ST が大きいほど後方（左寄り）で、
+ * 負値（フライング）はスタートラインより前（右寄り）。
+ */
+export const stToX = (st: number): number => {
+  const clamped = Math.min(Math.max(st, ST_MIN), ST_MAX);
+  return TRACK_RIGHT - ((clamped - ST_MIN) / ST_SPAN) * TRACK_W;
+};
+
+export const START_LINE_X = stToX(0);
+
+/**
+ * 1 艇身ぶんの時間 (秒)。
+ *
+ * スリット付近の艇速 80km/h = 22.22 m/s、艇長 3m なので
+ * 3 / 22.22 ≒ 0.135 秒 で 1 艇身。**艇はこの時間ぶんの長さで描く**ので、
+ * 図の上での前後の重なりがそのまま艇身差として読める。
+ *
+ * 参考にした BOAT RACE 公式のスタート情報図は艇画像 54px・目盛り約 178px/秒
+ * (≒ 0.30 秒/艇身) で、実寸より 2 倍以上長い。ここでは物理どおりに合わせる。
+ */
+export const BOAT_LENGTH_SEC = 0.135;
+export const BOAT_LENGTH_PX = (BOAT_LENGTH_SEC / ST_SPAN) * TRACK_W;
+/** 艇の幅（図の縦方向）。縦軸は距離軸ではないのでレーン内に収まる値を選ぶ */
+export const BOAT_HEIGHT_PX = 26;
+
+/**
+ * 艇の舳先 x。レンジ外の艇でも舳先だけは水面に残す。
+ * 船尾側は `TRACK_LEFT` より左へはみ出すが、カーテンの矩形で隠す。
+ */
+export const clampBowX = (x: number): number => Math.min(Math.max(x, TRACK_LEFT + 12), TRACK_RIGHT);
+
+/**
+ * 真上から見た艇の輪郭パス。舳先 `(bowX, cy)` を右端に置き、船尾が左へ
+ * `BOAT_LENGTH_PX` 伸びる。ST は **舳先がスタートラインを通過した時刻** なので、
+ * 円の中心ではなく舳先を ST の位置に合わせる。
+ */
+export const boatHullPath = (bowX: number, cy: number): string => {
+  const len = BOAT_LENGTH_PX;
+  const half = BOAT_HEIGHT_PX / 2;
+  const sternX = bowX - len;
+  // 舳先のテーパーが終わる位置（ここから船尾までは平行な舷）。
+  // 艇は 1 艇身ぶんの長さがあり縦横比が細長いので、テーパーを長く取ると
+  // 矢印に見えてしまう。艇幅と同程度に抑えて舳先を立てる。
+  const shoulderX = bowX - Math.min(len * 0.3, BOAT_HEIGHT_PX);
+  const r = 5; // 船尾の角丸
+  const top = cy - half;
+  const bottom = cy + half;
+  return [
+    `M ${bowX} ${cy}`,
+    `L ${shoulderX} ${top}`,
+    `L ${sternX + r} ${top}`,
+    `Q ${sternX} ${top} ${sternX} ${top + r}`,
+    `L ${sternX} ${bottom - r}`,
+    `Q ${sternX} ${bottom} ${sternX + r} ${bottom}`,
+    `L ${shoulderX} ${bottom}`,
+    "Z",
+  ].join(" ");
+};
+
+/** コックピット（キャノピー）の中心 x。艇に見せるための陰影 */
+export const boatCanopyX = (bowX: number): number => bowX - BOAT_LENGTH_PX * 0.42;
+
+/** 左カラムの艇番バッジ（角丸正方形）の位置とサイズ */
+export const BADGE_SIZE = 20;
+export const BADGE_X = 2;
