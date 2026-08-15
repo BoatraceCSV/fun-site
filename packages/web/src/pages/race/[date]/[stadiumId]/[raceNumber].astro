@@ -10,6 +10,7 @@ import {
   getStadiumById,
   parseRaceCode,
   predictorById,
+  showsAiPanelsFor,
 } from "@fun-site/shared";
 import PredictorCard from "../../../../components/PredictorCard.astro";
 import RacePreviewSection from "../../../../components/RacePreviewSection.astro";
@@ -332,6 +333,9 @@ const predictorPredictions: readonly PredictorPrediction[] =
       pp.slot === 1
         ? prediction.aiEvaluation
         : (pp.aiEvaluationRealtime ?? pp.aiEvaluationDaily);
+    // AI 評価の内訳 / スタート予想 / 1マーク予想 の 3 パネルを出すか。
+    // 買い目がこれらと無関係な予想者 (穴予想 v10_kimarite) では出さない。
+    const showsAiPanels = showsAiPanelsFor(pp.predictorId);
     // recipeNote: 本命予想 (control) からの差分説明。予想者ごとに固有文言。
     const recipeNote =
       pp.predictorId === "v4_motor"
@@ -354,8 +358,9 @@ const predictorPredictions: readonly PredictorPrediction[] =
         <PredictorCard
           prediction={pp}
           racers={prediction.racers}
-          startPrediction={startPrediction}
-          oneMarkAiEvaluation={oneMarkAiEvaluation}
+          showChart={showsAiPanels}
+          startPrediction={showsAiPanels ? startPrediction : undefined}
+          oneMarkAiEvaluation={showsAiPanels ? oneMarkAiEvaluation : undefined}
           useOneMarkEstimatedST={usesEstimatedST}
           recipeNote={recipeNote}
         />

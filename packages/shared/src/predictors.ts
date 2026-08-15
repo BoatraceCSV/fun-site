@@ -153,6 +153,23 @@ export type PredictorSpec = {
    * web(表示する買い目)が食い違わないよう、必ず同じヘルパーを通すこと。
    */
   readonly bettingStyle?: "formation" | "suji" | "kimarite";
+  /**
+   * 予想者カードに AI 評価まわりの 3 パネル
+   * (「AI 評価の内訳」チャート / 「スタート予想」図 / 「1マーク予想」図) を出すか。
+   * 未指定 (= true) は従来どおり全て出す。
+   *
+   * **表示専用のフラグ**。買い目にも回収率にも集計にも影響しないので、
+   * boatracecsv 側 registry.py に対応するフィールドは無い。
+   *
+   * false にするのは、買い目が CSV 由来 (`bettingStyle` が `"formation"` 以外) で
+   * 1 マーク走行距離を使わない予想者 (`v9_suji` / `v10_kimarite`)。
+   * 出したままだと「この図から買い目が出ている」と誤読させる。また 3 パネルは
+   * 予想者間でほぼ同じ絵になるため、本命予想 (`v1_basic`) のカードに出ている
+   * ぶんと重複する。
+   *
+   * 解決は `showsAiPanelsFor(predictorId)` 経由で行う。
+   */
+  readonly showsAiPanels?: boolean;
 };
 
 /**
@@ -313,6 +330,9 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-08-12",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
     bettingStyle: "suji",
+    // 買い目がスジ表由来で 1 マーク走行距離を使わず、AI 評価の内訳は本命予想
+    // (index / 強さpt が同値) のカードに出ているぶんと重複するため 3 パネルとも外す。
+    showsAiPanels: false,
   },
   {
     id: "v10_kimarite",
@@ -338,6 +358,10 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     startedAt: "2026-08-13",
     componentKeys: ["waku", "racer", "motor", "exhibit", "weather"],
     bettingStyle: "kimarite",
+    // 買い目が決まり手×1着コースの確率表由来で 1 マーク走行距離を使わず、
+    // AI 評価の内訳は本命予想 (index / 強さpt が同値) のカードに出ているぶんと
+    // 重複するため 3 パネルとも外す。
+    showsAiPanels: false,
   },
   {
     id: "v8_aionly",
@@ -439,4 +463,15 @@ export function predictorFromIndexCsvType(csvType: string): PredictorSpec | unde
 /** 予想者 `predictor` 用の Pub/Sub csv_type 文字列を組み立てる。 */
 export function indexCsvTypeFor(predictor: PredictorSpec): string {
   return `index:${predictor.id}`;
+}
+
+/**
+ * 予想者カードに AI 評価まわりの 3 パネル
+ * (「AI 評価の内訳」/「スタート予想」/「1マーク予想」) を出すかを ID から解決する。
+ * レジストリ (`PredictorSpec.showsAiPanels`) が唯一の情報源で、
+ * 未登録 ID / 未指定なら既定の true。
+ */
+export function showsAiPanelsFor(predictorId?: string): boolean {
+  if (!predictorId) return true;
+  return predictorById(predictorId)?.showsAiPanels !== false;
 }

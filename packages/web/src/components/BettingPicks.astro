@@ -3,6 +3,7 @@ import type { AiEvaluation, BetHitStatus, BettingPicks, RaceRacer } from "@fun-s
 import {
   BOAT_COLORS,
   bettingBasisFor,
+  bettingStyleFor,
   bettingToleranceFor,
   computeBettingPicks,
   computeOneMarkDistances,
@@ -62,6 +63,9 @@ const stOptions = oneMarkDistanceOptionsFor(predictorId);
 /** 買い目候補の選定基準。strengthOnlyBetting な予想者 (v8_aionly) は走行距離
  *  ではなく強さpt のみで選定する。バッチ側と同じヘルパーで解決する。 */
 const basis = bettingBasisFor(predictorId);
+
+/** 買い目の作り方。"formation" 以外 (v9_suji / v10_kimarite) は 1 マーク走行距離を使わない。 */
+const style = bettingStyleFor(predictorId);
 
 /** しきい値の説明文。全着順同値なら "±X"、異なれば着順別に列挙。 */
 const toleranceLabel =
@@ -237,7 +241,11 @@ const boatBoxStyle = (boatNumber: number): string => {
   ))}
 </div>
 <p class="text-xs text-gray-500 mt-3">
-  {basis === "strength" ? (
+  {style === "suji" ? (
+    <>1コース以外で強さptが最大の艇を1着に固定し、スジ表 P(2着, 3着 | 1着) の上位 5 ペアを組み合わせた 5 点です（フォーメーションではなく出目そのもの）。1マーク予想の走行距離は買い目の選定に使いません。</>
+  ) : style === "kimarite" ? (
+    <>決まり手 × 1着コースの確率表から組み立てた上位 5 点です（フォーメーションではなく出目そのもの）。1マーク予想の走行距離は買い目の選定に使いません。</>
+  ) : basis === "strength" ? (
     <>AI 総合評価の強さポイントを基準に、各着順の上位艇から {toleranceLabel}pt 以内の艇を候補としています（三連単フォーメーションの目安）。予測STは買い目の選定に使いません。</>
   ) : (
     <>1マーク予想の走行距離を基準に、各着順の上位艇から {toleranceLabel} 以内の艇を候補としています（三連単フォーメーションの目安）。

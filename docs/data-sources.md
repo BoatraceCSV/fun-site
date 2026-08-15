@@ -82,7 +82,8 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 |---|---|
 | `RacePrediction` | レース 1 件分の統合予想。バッチが書き出し、Astro が読み込む |
 | `PredictorPrediction` | `RacePrediction.predictions[]` の要素。1 予想者 / 1 レースの AI 評価 + 買い目 + 回収率 |
-| `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt, および UI 表示用の icon / badgeTailwindClass)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
+| `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt, および UI 表示用の icon / badgeTailwindClass / showsAiPanels)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
+| `showsAiPanels` / `showsAiPanelsFor` | 予想者カードに AI 評価まわりの 3 パネル (「AI 評価の内訳」チャート / 「スタート予想」図 / 「1マーク予想」図) を出すか。未指定 = true。**表示専用**で買い目・回収率・集計には影響しないため boatracecsv 側 registry.py に対応フィールドは無い。`false` は買い目が CSV 由来 (`bettingStyle` が `"formation"` 以外) の `v9_suji`(スジ予想) / `v10_kimarite`(穴予想) — 1 マーク走行距離を使わないので出したままだと「この図から買い目が出ている」と誤読させ、かつ 3 者は index / 強さpt が同値なので本命予想 (`v1_basic`) のカードと重複する。現行 active では 3 パネルが出るのは本命予想のカードだけ |
 | `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
 | `RacePreview` / `RacePreviewBoat` / `RaceWeather` / `OriginalExhibition` / `OriginalExhibitionView` | 直前情報。`RacePrediction.preview` にぶら下がり、tkz（体重・展示タイム・チルト、`exhibitionTime` は 0→null）・sui（水面気象、天候はコード生値）・original_exhibition（場別オリジナル展示、`labels` + 艇別 `values`）を結合。いずれの CSV も未取得のレースでは `preview` 自体が undefined |
 | `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順列の可視化は `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`） |
