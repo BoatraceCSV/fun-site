@@ -9,19 +9,15 @@ interface Props {
 const { recentForm } = Astro.props;
 const boats = [...recentForm.boats].sort((a, b) => a.boatNumber - b.boatNumber);
 
-/** 着順マークの配色（SessionResultsGrid と統一） */
-const rankClass = (rank: number): string => {
-  if (rank === 1) return "bg-blue-600 text-white";
-  if (rank === 2) return "bg-emerald-500 text-white";
-  if (rank === 3) return "bg-amber-400 text-amber-950";
-  return "bg-gray-200 text-gray-700";
-};
-
-/** 特殊トークン（F/L/欠 等）の配色 */
-const tokenClass = (token: string): string => {
-  if (token === "F") return "bg-red-100 text-red-700";
-  if (token === "L") return "bg-amber-100 text-amber-800";
-  return "bg-gray-300 text-gray-700";
+/**
+ * 着順は色を付けない（SessionResultsGrid / Waku10Section と統一）。
+ * この節のデータ（recent_national / recent_local）には各走の枠番・進入コースが
+ * 無いため、バッジ配色による枠番表現は行えない。
+ */
+const tokenTextClass = (token: string): string => {
+  if (token === "F") return "text-red-600";
+  if (token === "L") return "text-amber-600";
+  return "text-gray-500";
 };
 
 /** 期間表示 "5/28〜6/2"。日付が無ければ空 */
@@ -79,14 +75,14 @@ const formatPeriod = (s: RecentFormSessionView): string => {
                           <span class="inline-block w-1.5" />
                         ) : mark.kind === "rank" ? (
                           <span
-                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none ${rankClass(mark.rank)} ${mark.yusho ? "ring-1 ring-offset-1 ring-rose-400" : ""}`}
+                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[11px] font-bold leading-none tabular-nums text-gray-800 ${mark.yusho ? "ring-1 ring-rose-400" : ""}`}
                             title={mark.yusho ? `優勝戦 ${mark.rank}着` : `${mark.rank}着`}
                           >
                             {mark.rank}
                           </span>
                         ) : (
                           <span
-                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none ${tokenClass(mark.token)}`}
+                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[11px] font-bold leading-none ${tokenTextClass(mark.token)}`}
                           >
                             {mark.token}
                           </span>

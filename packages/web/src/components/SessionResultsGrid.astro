@@ -26,7 +26,10 @@ for (const slot of played) {
   }
 }
 
-/** 対象レースの枠番 → バッジ配色（艇番カラー）。枠番不明はグレー */
+/**
+ * バッジ配色は **そのレースでの枠番**（艇番カラー）、中の数字は **進入コース**。
+ * 枠番不明はグレー。
+ */
 const laneStyle = (lane: number): string => {
   if (!isValidBoatNumber(lane)) return "background-color: #e5e7eb; color: #374151;";
   const c = BOAT_COLORS[lane];
@@ -34,12 +37,12 @@ const laneStyle = (lane: number): string => {
   return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
 };
 
-/** 進入コースの丸バッジ配色（コース番号の艇色）。不明はグレー */
-const courseStyle = (course: number): string => {
-  if (!isValidBoatNumber(course)) return "background-color: #e5e7eb; color: #374151;";
-  const c = BOAT_COLORS[course];
-  const border = course === 1 ? " border: 1px solid #cbd5e1;" : "";
-  return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
+/** 着順は色を付けない。特殊トークン (F/L 等) のみ文字色で区別する */
+const rankTextClass = (rank: string): string => {
+  if (rank === "F") return "text-red-600";
+  if (rank === "L") return "text-amber-600";
+  if (rank === "" || /^[1-6]$/.test(rank)) return "text-gray-800";
+  return "text-gray-500";
 };
 
 /** ST 表記。負値 (F) は "F" を付け、未計測は空 */
@@ -74,21 +77,16 @@ const slotTitle = (s: SessionResultSlot): string => {
                   {s.race > 0 ? `${s.race}R` : "—"}
                 </span>
                 <span
-                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none my-0.5"
-                  style={laneStyle(s.lane)}
+                  class={`text-xs font-bold leading-none my-0.5 tabular-nums ${rankTextClass(s.rank)}`}
                 >
                   {s.rank || "·"}
                 </span>
-                {s.entryCourse > 0 ? (
-                  <span
-                    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-[9px] leading-none"
-                    style={courseStyle(s.entryCourse)}
-                  >
-                    {s.entryCourse}
-                  </span>
-                ) : (
-                  <span class="h-3.5" />
-                )}
+                <span
+                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none"
+                  style={laneStyle(s.lane)}
+                >
+                  {s.entryCourse > 0 ? s.entryCourse : "·"}
+                </span>
                 <span class="text-[9px] text-gray-400 leading-none tabular-nums">
                   {stText(s.st)}
                 </span>
