@@ -18,6 +18,7 @@ import UpsetMeter from "../../../../components/UpsetMeter.astro";
 import RacerTable from "../../../../components/RacerTable.astro";
 import RaceResultSection from "../../../../components/RaceResultSection.astro";
 import RecentFormSection from "../../../../components/RecentFormSection.astro";
+import SessionResultsTable from "../../../../components/SessionResultsTable.astro";
 import StadiumSeriesSummary from "../../../../components/StadiumSeriesSummary.astro";
 import TokutenHayamiSection from "../../../../components/TokutenHayamiSection.astro";
 import Waku10Section from "../../../../components/Waku10Section.astro";
@@ -111,6 +112,12 @@ const stadiumName = stadium?.name ?? prediction.stadiumName;
 const title = `${stadiumName} ${prediction.raceNumber}R - ${prediction.raceName || "スタート予想"}`;
 const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
+
+// 今節成績表は、いずれかの選手に出走済みスロットがある場合のみ出す
+// (初日は全員未出走なのでセクションごと消す)。
+const hasSessionResults = prediction.racers.some((r) =>
+  r.sessionResults.some((s) => s.rank !== "" || s.race > 0),
+);
 
 // 予想者ごとの予想。新スキーマで predictions[] が存在すればそれを使う。
 // 旧 JSON (predictions 未設定) では aiEvaluation 単体から仮想 PredictorPrediction
@@ -397,11 +404,19 @@ const predictorPredictions: readonly PredictorPrediction[] =
     </section>
   )}
 
-  {/* 出走表 */}
+  {/* 出走表（基本情報） */}
   {prediction.racers.length > 0 && (
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
       <h2 class="font-bold text-lg mb-3">出走表</h2>
-      <RacerTable racers={prediction.racers} />
+      <RacerTable racers={prediction.racers} stadiumId={prediction.stadiumId} />
+    </section>
+  )}
+
+  {/* 今節成績。初日など全員未出走のレースでは非表示。 */}
+  {prediction.racers.length > 0 && hasSessionResults && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">今節成績</h2>
+      <SessionResultsTable racers={prediction.racers} />
     </section>
   )}
 

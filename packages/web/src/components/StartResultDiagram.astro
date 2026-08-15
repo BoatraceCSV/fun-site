@@ -45,7 +45,7 @@ const hasSt = (c: RaceResultCourse): boolean => c.startTiming !== 0;
 
 /**
  * ST ラベル。フライングは負の符号を出さず `F.03` 表記にする
- * （SessionResultsGrid / 出走表の今節成績と同じ書き方）。
+ * （SessionResultsTable / 出走表の今節成績と同じ書き方）。
  */
 const stLabel = (c: RaceResultCourse): string =>
   c.flying ? `F${Math.abs(c.startTiming).toFixed(2).slice(1)}` : c.startTiming.toFixed(2);

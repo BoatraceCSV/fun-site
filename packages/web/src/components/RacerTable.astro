@@ -1,13 +1,14 @@
 ---
 import type { RaceRacer } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
-import SessionResultsGrid from "./SessionResultsGrid.astro";
+import { BOAT_COLORS, getStadiumById, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   racers: readonly RaceRacer[];
+  /** 開催場 ID。支部が地元かどうかの判定に使う */
+  stadiumId: string;
 }
 
-const { racers } = Astro.props;
+const { racers, stadiumId } = Astro.props;
 const sorted = [...racers].sort((a, b) => a.boatNumber - b.boatNumber);
 
 const rankColor = (rank: string): string => {
@@ -17,157 +18,171 @@ const rankColor = (rank: string): string => {
   return "text-gray-500";
 };
 
-/** いずれかの選手に節間成績があるか（ある場合のみ今節ブロックを出す） */
-const hasAnySessionResults = sorted.some((r) =>
-  r.sessionResults.some((s) => s.rank !== "" || s.race > 0),
-);
+/**
+ * 支部は「兵庫」「東京」のように接尾辞なしで入る一方、会場マスタは「兵庫県」
+ * 「東京都」なので、会場側の接尾辞を落として突き合わせる（北海道は例外）。
+ */
+const prefecture = getStadiumById(stadiumId)?.prefecture ?? "";
+const localBranch = prefecture === "北海道" ? prefecture : prefecture.replace(/[都府県]$/, "");
+const isLocal = (branch: string): boolean => branch !== "" && branch === localBranch;
 
 /**
- * 1号艇の艇色は白で境界が見えないため、カード左端のアクセント線だけ淡いグレーに寄せる。
+ * 比較用のセル強調。項目ごとに **1 位と 2 位の値** を求め、その値を持つセルの
+ * 背景色を変える（同値は同順なので 3 艇以上が塗られることもある）。
+ * 0 は未計測（データ無し）なので順位付けの対象外。
  */
-const accentColor = (hex: string | undefined): string =>
-  hex === "#FFFFFF" ? "#cbd5e1" : (hex ?? "#999");
+type TopTwo = { first: number | undefined; second: number | undefined };
+
+const topTwo = (values: readonly number[], order: "asc" | "desc"): TopTwo => {
+  const uniq = [...new Set(values.filter((v) => v > 0))].sort((a, b) =>
+    order === "asc" ? a - b : b - a,
+  );
+  return { first: uniq[0], second: uniq[1] };
+};
+
+const avgStTop = topTwo(
+  sorted.map((r) => r.nationalAvgST),
+  "asc",
+);
+const nationalWinTop = topTwo(
+  sorted.map((r) => r.nationalWinRate),
+  "desc",
+);
+const localWinTop = topTwo(
+  sorted.map((r) => r.localWinRate),
+  "desc",
+);
+const motorTop = topTwo(
+  sorted.map((r) => r.motorTop3Rate),
+  "desc",
+);
+
+const highlight = (value: number, top: TopTwo): string => {
+  if (value <= 0) return "";
+  if (value === top.first) return "bg-amber-200 text-amber-900 font-bold";
+  if (value === top.second) return "bg-amber-100 text-amber-800";
+  return "";
+};
+
+/** 0（未計測）は "—" */
+const num = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : "—");
 ---
 
 {/*
-  出走表は 8 項目 × 6 艇。<table> だと iPhone 幅 (390px) で列を隠すしかなく、
-  当地・モーター・ボートが見えなくなっていたため、1 艇 = 1 カードに変更した。
-  値ごとにラベルを持たせることで、ヘッダ行なしでも項目が分かる。
+  基本情報は 6 列 × 6 艇の <table>。カード（1 艇 = 1 カード）だと項目が縦に散って
+  艇どうしの比較ができないため、比較したい 4 指標（平均ST / 全国勝率 / 当地勝率 /
+  モーター3連率）を同じ列に落としている。列数を 6 に絞ることで iPhone 幅
+  (375px) でも横スクロールなしで収まる。今節成績は別表 (SessionResultsTable)。
 */}
-<div class="space-y-2">
-  {sorted.map((racer) => {
-    const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
-    return (
-      <div
-        class="rounded-md border border-gray-100 border-l-4 p-3"
-        style={`border-left-color: ${accentColor(color?.hex)};`}
-      >
-        <div class="flex items-start gap-2">
-          <span
-            class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0"
-            style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
-          >
-            {racer.boatNumber}
-          </span>
-          <div class="min-w-0 flex-1">
-            <div class="font-medium text-sm flex items-center gap-1 flex-wrap">
-              <span>{racer.racerName}</span>
-              {racer.flyingCount > 0 && (
+<div class="space-y-3">
+  <div class="overflow-x-auto">
+    <table class="w-full text-[11px] border-collapse">
+      <thead>
+        <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+          <th scope="col" class="text-left py-1 px-0.5 font-medium">枠</th>
+          <th scope="col" class="text-left py-1 px-0.5 font-medium">選手</th>
+          <th scope="col" class="text-right py-1 px-0.5 font-medium">平均ST</th>
+          <th scope="col" class="text-right py-1 px-0.5 font-medium">全国<br />勝率</th>
+          <th scope="col" class="text-right py-1 px-0.5 font-medium">当地<br />勝率</th>
+          <th scope="col" class="text-right py-1 px-0.5 font-medium">モーター<br />3連率</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((racer) => {
+          const color = isValidBoatNumber(racer.boatNumber)
+            ? BOAT_COLORS[racer.boatNumber]
+            : undefined;
+          return (
+            <tr class="border-b border-gray-100">
+              <td class="py-1 px-0.5 align-top">
                 <span
-                  class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-red-100 text-red-700"
-                  title={`フライング ${racer.flyingCount} 本`}
+                  class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
+                  style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
                 >
-                  F{racer.flyingCount}
+                  {racer.boatNumber}
                 </span>
-              )}
-              {racer.lateCount > 0 && (
-                <span
-                  class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-amber-100 text-amber-800"
-                  title={`出遅れ ${racer.lateCount} 本`}
-                >
-                  L{racer.lateCount}
-                </span>
-              )}
-              {racer.prizeExcluded && (
-                <span
-                  class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-gray-200 text-gray-600"
-                  title="賞金除外（補欠出走等）"
-                >
-                  賞除
-                </span>
-              )}
-            </div>
-            <div class="text-xs text-gray-500">
-              {racer.age > 0 && <span>{racer.age}歳</span>}
-              {racer.branch && <span class="ml-1">{racer.branch}</span>}
-              {racer.hometown && racer.hometown !== racer.branch && (
-                <span class="ml-1 text-gray-400">/ {racer.hometown}</span>
-              )}
-            </div>
-          </div>
-          <div class="text-right shrink-0 leading-tight">
-            <div class={`text-xs font-semibold ${rankColor(racer.classGrade)}`}>
-              {racer.classGrade}
-            </div>
-            <div class="text-[10px] text-gray-400">
-              平均ST
-              <span class="ml-1 font-mono text-xs text-gray-700 tabular-nums">
-                {racer.nationalAvgST > 0 ? racer.nationalAvgST.toFixed(2) : "—"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <dl class="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1.5">
-          <div>
-            <dt class="text-[10px] text-gray-400 leading-none">全国 勝率/2連/3連</dt>
-            <dd class="mt-0.5 font-mono text-xs text-gray-800 tabular-nums whitespace-nowrap">
-              {racer.nationalWinRate.toFixed(2)}
-              <span class="text-gray-300">/</span>
-              {racer.nationalTop2Rate.toFixed(1)}
-              <span class="text-gray-300">/</span>
-              {racer.nationalTop3Rate.toFixed(1)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[10px] text-gray-400 leading-none">当地 勝率/2連/3連</dt>
-            <dd class="mt-0.5 font-mono text-xs text-gray-800 tabular-nums whitespace-nowrap">
-              {racer.localWinRate.toFixed(2)}
-              <span class="text-gray-300">/</span>
-              {racer.localTop2Rate.toFixed(1)}
-              <span class="text-gray-300">/</span>
-              {racer.localTop3Rate.toFixed(1)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[10px] text-gray-400 leading-none">
-              モーター<span class="ml-1 font-mono">#{racer.motorNumber}</span> 2連/3連
-            </dt>
-            <dd class="mt-0.5 font-mono text-xs text-gray-800 tabular-nums whitespace-nowrap">
-              {racer.motorTop2Rate.toFixed(1)}
-              <span class="text-gray-300">/</span>
-              {racer.motorTop3Rate.toFixed(1)}
-            </dd>
-            {racer.motorStats && (
-              <dd class="text-[10px] text-gray-500">
-                {(racer.motorStats.championCount > 0 || racer.motorStats.finalAppearances > 0) && (
-                  <span title="優勝回数 / 優出回数">
-                    優{racer.motorStats.championCount}・優出{racer.motorStats.finalAppearances}
+              </td>
+              <td class="py-1 px-0.5 align-top">
+                <div class="flex items-center gap-1 flex-wrap text-[12px] font-medium leading-tight">
+                  <span>{racer.racerName}</span>
+                  {racer.flyingCount > 0 && (
+                    <span
+                      class="inline-block px-1 py-0.5 rounded text-[9px] font-bold leading-none bg-red-100 text-red-700"
+                      title={`フライング ${racer.flyingCount} 本`}
+                    >
+                      F{racer.flyingCount}
+                    </span>
+                  )}
+                  {racer.lateCount > 0 && (
+                    <span
+                      class="inline-block px-1 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-800"
+                      title={`出遅れ ${racer.lateCount} 本`}
+                    >
+                      L{racer.lateCount}
+                    </span>
+                  )}
+                  {racer.prizeExcluded && (
+                    <span
+                      class="inline-block px-1 py-0.5 rounded text-[9px] font-bold leading-none bg-gray-200 text-gray-600"
+                      title="賞金除外（補欠出走等）"
+                    >
+                      賞除
+                    </span>
+                  )}
+                </div>
+                <div class="text-[10px] text-gray-500 leading-tight">
+                  <span class={`font-semibold ${rankColor(racer.classGrade)}`}>
+                    {racer.classGrade}
                   </span>
-                )}
-                {racer.motorStats.avgLapSec != null && (
-                  <span class="ml-1" title="期内平均ラップ秒">
-                    Lap{racer.motorStats.avgLapSec.toFixed(2)}
-                  </span>
-                )}
-              </dd>
-            )}
-          </div>
-          <div>
-            <dt class="text-[10px] text-gray-400 leading-none">
-              ボート<span class="ml-1 font-mono">#{racer.boatBodyNumber}</span> 2連/3連
-            </dt>
-            <dd class="mt-0.5 font-mono text-xs text-gray-800 tabular-nums whitespace-nowrap">
-              {racer.boatTop2Rate.toFixed(1)}
-              <span class="text-gray-300">/</span>
-              {racer.boatTop3Rate.toFixed(1)}
-            </dd>
-          </div>
-        </dl>
+                  {racer.age > 0 && <span class="ml-1">{racer.age}歳</span>}
+                  {racer.branch && (
+                    <span
+                      class={`ml-1 ${isLocal(racer.branch) ? "text-emerald-600 font-bold" : ""}`}
+                      title={isLocal(racer.branch) ? "地元支部" : undefined}
+                    >
+                      {racer.branch}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td
+                class={`py-1 px-0.5 text-right align-top tabular-nums font-mono text-gray-800 ${highlight(racer.nationalAvgST, avgStTop)}`}
+              >
+                {num(racer.nationalAvgST, 2)}
+              </td>
+              <td
+                class={`py-1 px-0.5 text-right align-top tabular-nums font-mono text-gray-800 ${highlight(racer.nationalWinRate, nationalWinTop)}`}
+              >
+                {num(racer.nationalWinRate, 2)}
+              </td>
+              <td
+                class={`py-1 px-0.5 text-right align-top tabular-nums font-mono text-gray-800 ${highlight(racer.localWinRate, localWinTop)}`}
+              >
+                {num(racer.localWinRate, 2)}
+              </td>
+              <td
+                class={`py-1 px-0.5 text-right align-top tabular-nums font-mono text-gray-800 ${highlight(racer.motorTop3Rate, motorTop)}`}
+              >
+                {num(racer.motorTop3Rate, 1)}
+                <span class="block text-[9px] font-normal text-gray-400">
+                  #{racer.motorNumber}
+                </span>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
 
-        {hasAnySessionResults && (
-          <div class="mt-2 pt-2 border-t border-gray-100">
-            <SessionResultsGrid slots={racer.sessionResults} />
-          </div>
-        )}
-      </div>
-    );
-  })}
-  {hasAnySessionResults && (
-    <p class="text-[11px] text-gray-400">
-      「今節」は今節の各走の成績です。R = レース番号、進 = 進入コース
-      （バッジの色はそのレースでの枠番、数字は進入コース）、
-      ST = スタートタイミング（先頭の 0 を省略、F はフライング）、着 = 着順。
-    </p>
-  )}
+  <p class="text-[11px] text-gray-400">
+    平均ST・全国勝率・当地勝率・モーター3連対率は、
+    <span class="inline-block px-1 rounded bg-amber-200 text-amber-900 font-bold">1位</span>
+    と
+    <span class="inline-block px-1 rounded bg-amber-100 text-amber-800">2位</span>
+    を背景色で示しています（平均STは小さいほど上位、同値は同順）。 支部が
+    <span class="text-emerald-600 font-bold">緑色</span>の選手は地元支部（
+    {localBranch || "—"}）です。モーター欄の
+    <span class="font-mono">#</span>はモーター番号。
+  </p>
 </div>

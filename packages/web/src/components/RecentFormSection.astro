@@ -10,7 +10,7 @@ const { recentForm } = Astro.props;
 const boats = [...recentForm.boats].sort((a, b) => a.boatNumber - b.boatNumber);
 
 /**
- * 着順は色を付けない（SessionResultsGrid / Waku10Section と統一）。
+ * 着順は色を付けない（SessionResultsTable / Waku10Section と統一）。
  * この節のデータ（recent_national / recent_local）には各走の枠番・進入コースが
  * 無いため、バッジ配色による枠番表現は行えない。
  */
