@@ -49,6 +49,30 @@ const origColumnMins: (number | null)[] = orig
   : [];
 const hasOriginalExhibition =
   orig != null && orig.labels.length > 0 && origBoats.some((b) => b.values.some((v) => v != null));
+
+/**
+ * 展示とオリジナル展示は同じ「艇番 × 計測値」なので 1 つの表にまとめる。
+ * 2 表に分けると同じ艇の行を目で往復することになるうえ、艇番列も 2 回出る。
+ * 行は両者の艇番の和集合（片方にしか無い艇があっても落とさない）。
+ */
+const origLabels = hasOriginalExhibition && orig ? orig.labels : [];
+const boatById = new Map(boats.map((b) => [b.boatNumber, b]));
+const origById = new Map(origBoats.map((b) => [b.boatNumber, b]));
+const boatNumbers = [
+  ...new Set([...boatById.keys(), ...(hasOriginalExhibition ? origById.keys() : [])]),
+].sort((a, b) => a - b);
+
+/** 表の凡例。存在する列に応じて主語を変える（JSX で組むと空白が入るので文字列で作る） */
+const previewNote = ((): string => {
+  const subject =
+    hasExhibition && hasOriginalExhibition
+      ? "展示タイムとオリジナル展示の各項目"
+      : hasExhibition
+        ? "展示タイム"
+        : "オリジナル展示の各項目";
+  const base = `締切5分前のスナップショットです。${subject}は数値が小さいほど速く、最速艇を青字で表示しています。`;
+  return hasOriginalExhibition ? `${base}オリジナル展示の計測項目は場により異なります。` : base;
+})();
 ---
 
 <div>
@@ -90,91 +114,100 @@ const hasOriginalExhibition =
     </div>
   )}
 
-  {hasExhibition && (
+  {/*
+    展示 + オリジナル展示の統合表。iPhone 幅で 8 列前後を横スクロールせずに
+    収めるため、セル padding は px-1、単位 (kg) はヘッダ側へ逃がしている。
+    オリジナル展示の計測項目は場により本数が変わるので、収まらない場によっては
+    `overflow-x-auto` のスクロールにフォールバックする。
+  */}
+  {(hasExhibition || hasOriginalExhibition) && (
     <div class="overflow-x-auto">
-      <table class="w-full text-sm border-collapse">
-        <thead>
-          <tr class="bg-gray-100 text-gray-600">
-            <th scope="col" class="px-2 py-2 text-left">艇</th>
-            <th scope="col" class="px-2 py-2 text-right">展示タイム</th>
-            <th scope="col" class="px-2 py-2 text-right">体重</th>
-            <th scope="col" class="px-2 py-2 text-right hidden sm:table-cell">体重調整</th>
-            <th scope="col" class="px-2 py-2 text-right">チルト</th>
+      <table class="w-full text-xs border-collapse">
+        <thead class="bg-gray-100 text-gray-600">
+          <tr class="text-[10px]">
+            <th scope="col" rowspan={2} class="px-1 py-1 text-left align-bottom">艇</th>
+            {hasExhibition && (
+              <th scope="colgroup" colspan={4} class="px-1 py-1 text-center font-medium">
+                展示
+              </th>
+            )}
+            {hasOriginalExhibition && (
+              <th
+                scope="colgroup"
+                colspan={origLabels.length}
+                class="px-1 py-1 text-center font-medium border-l border-gray-300"
+              >
+                オリジナル展示
+              </th>
+            )}
           </tr>
-        </thead>
-        <tbody>
-          {boats.map((b) => {
-            const color = isValidBoatNumber(b.boatNumber) ? BOAT_COLORS[b.boatNumber] : undefined;
-            const isFastest = b.exhibitionTime != null && b.exhibitionTime === fastestExhibition;
-            return (
-              <tr class="border-b border-gray-100">
-                <td class="px-2 py-2">
-                  <span
-                    class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
-                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${b.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
-                  >
-                    {b.boatNumber}
-                  </span>
-                </td>
-                <td class="px-2 py-2 text-right font-mono text-xs">
-                  {b.exhibitionTime != null ? (
-                    <span class={isFastest ? "font-bold text-blue-600" : ""}>
-                      {b.exhibitionTime.toFixed(2)}
-                    </span>
-                  ) : (
-                    <span class="text-gray-400">—</span>
-                  )}
-                </td>
-                <td class="px-2 py-2 text-right font-mono text-xs">
-                  {b.weightKg > 0 ? `${b.weightKg.toFixed(1)}kg` : "—"}
-                </td>
-                <td class="px-2 py-2 text-right font-mono text-xs hidden sm:table-cell">
-                  {b.weightAdjustKg > 0 ? `+${b.weightAdjustKg.toFixed(1)}` : "—"}
-                </td>
-                <td class="px-2 py-2 text-right font-mono text-xs">{b.tilt.toFixed(1)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p class="text-[11px] text-gray-400 mt-2">
-        展示タイムは数値が小さいほど速く、最速艇を青字で表示しています。締切5分前のスナップショットです。
-      </p>
-    </div>
-  )}
-
-  {hasOriginalExhibition && orig && (
-    <div class="overflow-x-auto mt-4">
-      <h3 class="text-sm font-semibold text-gray-700 mb-2">オリジナル展示</h3>
-      <table class="w-full text-sm border-collapse">
-        <thead>
-          <tr class="bg-gray-100 text-gray-600">
-            <th scope="col" class="px-2 py-2 text-left">艇</th>
-            {orig.labels.map((label) => (
-              <th scope="col" class="px-2 py-2 text-right">{label}</th>
+          <tr class="text-[10px]">
+            {hasExhibition && (
+              <>
+                <th scope="col" class="px-1 pb-1 text-right font-medium">タイム</th>
+                <th scope="col" class="px-1 pb-1 text-right font-medium">体重kg</th>
+                <th scope="col" class="px-1 pb-1 text-right font-medium">調整</th>
+                <th scope="col" class="px-1 pb-1 text-right font-medium">チルト</th>
+              </>
+            )}
+            {origLabels.map((label, i) => (
+              <th
+                scope="col"
+                class={`px-1 pb-1 text-right font-medium ${i === 0 ? "border-l border-gray-300" : ""}`}
+              >
+                {label}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {origBoats.map((b) => {
-            const color = isValidBoatNumber(b.boatNumber) ? BOAT_COLORS[b.boatNumber] : undefined;
+          {boatNumbers.map((boatNumber) => {
+            const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
+            const b = boatById.get(boatNumber);
+            const o = origById.get(boatNumber);
+            const isFastest =
+              b?.exhibitionTime != null && b.exhibitionTime === fastestExhibition;
             return (
               <tr class="border-b border-gray-100">
-                <td class="px-2 py-2">
+                <td class="px-1 py-1">
                   <span
-                    class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
-                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${b.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
                   >
-                    {b.boatNumber}
+                    {boatNumber}
                   </span>
                 </td>
-                {orig.labels.map((_, col) => {
-                  const v = b.values[col];
-                  const isFastest = v != null && v === origColumnMins[col];
-                  return (
-                    <td class="px-2 py-2 text-right font-mono text-xs">
-                      {v != null ? (
+                {hasExhibition && (
+                  <>
+                    <td class="px-1 py-1 text-right font-mono tabular-nums">
+                      {b?.exhibitionTime != null ? (
                         <span class={isFastest ? "font-bold text-blue-600" : ""}>
+                          {b.exhibitionTime.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span class="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td class="px-1 py-1 text-right font-mono tabular-nums">
+                      {b != null && b.weightKg > 0 ? b.weightKg.toFixed(1) : "—"}
+                    </td>
+                    <td class="px-1 py-1 text-right font-mono tabular-nums">
+                      {b != null && b.weightAdjustKg > 0 ? `+${b.weightAdjustKg.toFixed(1)}` : "—"}
+                    </td>
+                    <td class="px-1 py-1 text-right font-mono tabular-nums">
+                      {b != null ? b.tilt.toFixed(1) : "—"}
+                    </td>
+                  </>
+                )}
+                {origLabels.map((_, col) => {
+                  const v = o?.values[col];
+                  const isColFastest = v != null && v === origColumnMins[col];
+                  return (
+                    <td
+                      class={`px-1 py-1 text-right font-mono tabular-nums ${col === 0 ? "border-l border-gray-200" : ""}`}
+                    >
+                      {v != null ? (
+                        <span class={isColFastest ? "font-bold text-blue-600" : ""}>
                           {v.toFixed(2)}
                         </span>
                       ) : (
@@ -188,9 +221,7 @@ const hasOriginalExhibition =
           })}
         </tbody>
       </table>
-      <p class="text-[11px] text-gray-400 mt-2">
-        計測項目は場により異なります。各項目とも数値が小さいほど速く、最速艇を青字で表示しています。
-      </p>
+      <p class="text-[11px] text-gray-400 mt-2">{previewNote}</p>
     </div>
   )}
 </div>
