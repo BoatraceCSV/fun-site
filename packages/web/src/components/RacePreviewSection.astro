@@ -52,9 +52,8 @@ const speedCellClass = (v: number | null | undefined, ranks: FastestTwo): string
 
 const exhibitionRanks = fastestTwo(boats.map((b) => b.exhibitionTime));
 
-const hasExhibition = boats.some(
-  (b) => b.exhibitionTime != null || b.weightKg > 0 || b.tilt !== 0,
-);
+// 表に出すのは展示タイムのみ（体重・調整・チルトは載せない）。
+const hasExhibition = boats.some((b) => b.exhibitionTime != null);
 
 // オリジナル展示（場別計測項目）。各列ごとに 1 位 / 2 位を強調する。
 const orig = preview.originalExhibition;
@@ -130,19 +129,33 @@ const previewNote = ((): string => {
   )}
 
   {/*
-    展示 + オリジナル展示の統合表。iPhone 幅で 8 列前後を横スクロールせずに
-    収めるため、セル padding は px-1、単位 (kg) はヘッダ側へ逃がしている。
-    オリジナル展示の計測項目は場により本数が変わるので、収まらない場によっては
-    `overflow-x-auto` のスクロールにフォールバックする。
+    展示タイム + オリジナル展示の統合表。オリジナル展示の計測項目は場により
+    本数が変わるので、収まらない場によっては `overflow-x-auto` のスクロールに
+    フォールバックする。
   */}
   {(hasExhibition || hasOriginalExhibition) && (
     <div class="overflow-x-auto">
       <table class="w-full text-xs border-collapse">
         <thead class="bg-gray-100 text-gray-600">
+          {/*
+            ヘッダは 2 段（オリジナル展示があるときのみ）。展示タイムとオリジナル展示の
+            各項目はどちらも「小さいほど速いタイム」なので、色付きのタイム列が
+            そのまま横に並ぶ。
+          */}
           <tr class="text-[10px]">
-            <th scope="col" rowspan={2} class="px-1 py-1 text-left align-bottom">艇</th>
+            <th
+              scope="col"
+              rowspan={hasOriginalExhibition ? 2 : 1}
+              class="px-1 py-1 text-left align-bottom"
+            >
+              艇
+            </th>
             {hasExhibition && (
-              <th scope="colgroup" colspan={4} class="px-1 py-1 text-center font-medium">
+              <th
+                scope="col"
+                rowspan={hasOriginalExhibition ? 2 : 1}
+                class="px-1 py-1 text-right align-bottom font-medium"
+              >
                 展示
               </th>
             )}
@@ -156,29 +169,18 @@ const previewNote = ((): string => {
               </th>
             )}
           </tr>
-          <tr class="text-[10px]">
-            {/*
-              展示タイムは展示 4 項目の右端に置く。オリジナル展示の各項目と
-              同じ「小さいほど速いタイム」なので、色付きのタイム列を隣り合わせて
-              まとめて見比べられるようにするため。
-            */}
-            {hasExhibition && (
-              <>
-                <th scope="col" class="px-1 pb-1 text-right font-medium">体重kg</th>
-                <th scope="col" class="px-1 pb-1 text-right font-medium">調整</th>
-                <th scope="col" class="px-1 pb-1 text-right font-medium">チルト</th>
-                <th scope="col" class="px-1 pb-1 text-right font-medium">タイム</th>
-              </>
-            )}
-            {origLabels.map((label, i) => (
-              <th
-                scope="col"
-                class={`px-1 pb-1 text-right font-medium ${i === 0 ? "border-l border-gray-300" : ""}`}
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
+          {hasOriginalExhibition && (
+            <tr class="text-[10px]">
+              {origLabels.map((label, i) => (
+                <th
+                  scope="col"
+                  class={`px-1 pb-1 text-right font-medium ${i === 0 ? "border-l border-gray-300" : ""}`}
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          )}
         </thead>
         <tbody>
           {boatNumbers.map((boatNumber) => {
@@ -196,26 +198,15 @@ const previewNote = ((): string => {
                   </span>
                 </td>
                 {hasExhibition && (
-                  <>
-                    <td class="px-1 py-1 text-right font-mono tabular-nums">
-                      {b != null && b.weightKg > 0 ? b.weightKg.toFixed(1) : "—"}
-                    </td>
-                    <td class="px-1 py-1 text-right font-mono tabular-nums">
-                      {b != null && b.weightAdjustKg > 0 ? `+${b.weightAdjustKg.toFixed(1)}` : "—"}
-                    </td>
-                    <td class="px-1 py-1 text-right font-mono tabular-nums">
-                      {b != null ? b.tilt.toFixed(1) : "—"}
-                    </td>
-                    <td
-                      class={`px-1 py-1 text-right font-mono tabular-nums ${speedCellClass(b?.exhibitionTime, exhibitionRanks)}`}
-                    >
-                      {b?.exhibitionTime != null ? (
-                        b.exhibitionTime.toFixed(2)
-                      ) : (
-                        <span class="text-gray-400">—</span>
-                      )}
-                    </td>
-                  </>
+                  <td
+                    class={`px-1 py-1 text-right font-mono tabular-nums ${speedCellClass(b?.exhibitionTime, exhibitionRanks)}`}
+                  >
+                    {b?.exhibitionTime != null ? (
+                      b.exhibitionTime.toFixed(2)
+                    ) : (
+                      <span class="text-gray-400">—</span>
+                    )}
+                  </td>
                 )}
                 {origLabels.map((_, col) => {
                   const v = o?.values[col];
