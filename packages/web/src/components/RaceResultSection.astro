@@ -1,6 +1,7 @@
 ---
 import type { PredictorPrediction, RaceResultRow } from "@fun-site/shared";
 import { BOAT_COLORS, getPredictorBadge, isValidBoatNumber } from "@fun-site/shared";
+import StartResultDiagram from "./StartResultDiagram.astro";
 
 interface Props {
   result: RaceResultRow;
@@ -88,43 +89,15 @@ const recordedAtLabel = formatRecordedAt(result.recordedAt);
     </div>
   )}
 
+  {/*
+    スタート（進入順）はスタート予想と同じ図で出す。表だと予想図と形式が違って
+    見比べられなかったため、目盛り・レーン・スタートラインを共通にした
+    `StartResultDiagram` に置き換えている（コース / 艇 / ST / F は図に全部載る）。
+  */}
   {sortedCourses.length > 0 && (
-    <div class="overflow-x-auto mb-4">
+    <div class="mb-4">
       <p class="text-xs text-gray-500 mb-1">スタート（進入順）</p>
-      <table class="w-full text-sm border-collapse">
-        <thead>
-          <tr class="bg-gray-50 text-gray-600 text-xs">
-            <th scope="col" class="px-2 py-1 text-left">コース</th>
-            <th scope="col" class="px-2 py-1 text-left">艇</th>
-            <th scope="col" class="px-2 py-1 text-right">ST</th>
-            <th scope="col" class="px-2 py-1 text-center">F</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedCourses.map((c) => {
-            const color = isValidBoatNumber(c.boatNumber) ? BOAT_COLORS[c.boatNumber] : undefined;
-            return (
-              <tr class="border-b border-gray-100">
-                <td class="px-2 py-1">{c.courseNumber}</td>
-                <td class="px-2 py-1">
-                  <span
-                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
-                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};`}
-                  >
-                    {c.boatNumber}
-                  </span>
-                </td>
-                <td class="px-2 py-1 text-right font-mono text-xs">
-                  {c.startTiming ? c.startTiming.toFixed(2) : "—"}
-                </td>
-                <td class="px-2 py-1 text-center">
-                  {c.flying && <span class="text-red-600 font-bold">F</span>}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <StartResultDiagram courses={sortedCourses} />
     </div>
   )}
 
