@@ -92,35 +92,58 @@ export const clampBowXIn = (x: number, trackLeft: number, trackRight: number): n
 export const clampBowX = (x: number): number => clampBowXIn(x, TRACK_LEFT, TRACK_RIGHT);
 
 /**
- * 真上から見た艇の輪郭パス。舳先 `(bowX, cy)` を右端に置き、船尾が左へ
- * `len` 伸びる。ST は **舳先がスタートラインを通過した時刻** なので、
- * 円の中心ではなく舳先を値の位置に合わせる。
+ * 舳先が左を向く図（1マーク予想図）用の舳先 x。右向きの `clampBowXIn` と鏡像で、
+ * 船尾が右へ伸びるぶんだけ舳先を水面右端から内側に留める。
  */
-export const boatHullPath = (bowX: number, cy: number, len: number = BOAT_LENGTH_PX): string => {
+export const clampBowXInLeft = (x: number, trackLeft: number, trackRight: number): number =>
+  Math.min(Math.max(x, trackLeft), trackRight - 12);
+
+/**
+ * 真上から見た艇の輪郭パス。舳先 `(bowX, cy)` を進行方向の端に置き、船尾が
+ * 反対側へ `len` 伸びる。ST は **舳先がスタートラインを通過した時刻** なので、
+ * 円の中心ではなく舳先を値の位置に合わせる。
+ *
+ * `dir` は進行方向（`1` = 右向き、`-1` = 左向き）。図の中で艇が左へ進むなら
+ * `-1` を渡して鏡像の艇を描く。
+ */
+const hullPath = (bowX: number, cy: number, len: number, dir: 1 | -1): string => {
   const half = BOAT_HEIGHT_PX / 2;
-  const sternX = bowX - len;
+  const sternX = bowX - dir * len;
   // 舳先のテーパーが終わる位置（ここから船尾までは平行な舷）。
   // 艇は 1 艇身ぶんの長さがあり縦横比が細長いので、テーパーを長く取ると
   // 矢印に見えてしまう。艇幅と同程度に抑えて舳先を立てる。
-  const shoulderX = bowX - Math.min(len * 0.3, BOAT_HEIGHT_PX);
+  const shoulderX = bowX - dir * Math.min(len * 0.3, BOAT_HEIGHT_PX);
   const r = 5; // 船尾の角丸
+  const rx = r * dir; // 横方向は船体の内側へ向かうよう向きで符号を反転する
   const top = cy - half;
   const bottom = cy + half;
   return [
     `M ${bowX} ${cy}`,
     `L ${shoulderX} ${top}`,
-    `L ${sternX + r} ${top}`,
+    `L ${sternX + rx} ${top}`,
     `Q ${sternX} ${top} ${sternX} ${top + r}`,
     `L ${sternX} ${bottom - r}`,
-    `Q ${sternX} ${bottom} ${sternX + r} ${bottom}`,
+    `Q ${sternX} ${bottom} ${sternX + rx} ${bottom}`,
     `L ${shoulderX} ${bottom}`,
     "Z",
   ].join(" ");
 };
 
+/** 舳先が右を向く艇（進行方向が右の図＝スタート予想図・スタート結果図） */
+export const boatHullPath = (bowX: number, cy: number, len: number = BOAT_LENGTH_PX): string =>
+  hullPath(bowX, cy, len, 1);
+
+/** 舳先が左を向く艇（進行方向が左の図＝1マーク予想図）。`boatHullPath` の鏡像 */
+export const boatHullPathLeft = (bowX: number, cy: number, len: number = BOAT_LENGTH_PX): string =>
+  hullPath(bowX, cy, len, -1);
+
 /** コックピット（キャノピー）の中心 x。艇に見せるための陰影 */
 export const boatCanopyX = (bowX: number, len: number = BOAT_LENGTH_PX): number =>
   bowX - len * 0.42;
+
+/** 左向きの艇のコックピット中心 x（`boatCanopyX` の鏡像） */
+export const boatCanopyXLeft = (bowX: number, len: number = BOAT_LENGTH_PX): number =>
+  bowX + len * 0.42;
 
 /** 左カラムの艇番バッジ（角丸正方形）の位置とサイズ */
 export const BADGE_SIZE = 20;

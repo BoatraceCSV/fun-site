@@ -7,10 +7,10 @@ import {
   FIGURE_BG,
   LANE_LINE,
   WATER_FILL,
-  boatCanopyX,
-  boatHullPath,
+  boatCanopyXLeft,
+  boatHullPathLeft,
   boatLengthPx,
-  clampBowXIn,
+  clampBowXInLeft,
 } from "../lib/start-diagram";
 
 interface Props {
@@ -110,7 +110,9 @@ const ONE_MARK_BOAT_LENGTH_PX = boatLengthPx(DIST_SPAN, TRACK_W);
 
     {/*
       艇。スタート図と同じく舳先を値の位置に置き、船尾へ 1 艇身ぶん伸ばす。
-      船尾が水面左端をはみ出すぶんは、この後のカーテン矩形で隠す。
+      この図は距離が大きいほど左（＝艇が左へ進む）なので、艇はスタート図の
+      鏡像＝舳先が左向きで描き、船尾は右へ伸びる。
+      船尾が水面右端をはみ出すぶんは、この後のカーテン矩形で隠す。
     */}
     {rows.map((row, i) => {
       const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
@@ -118,19 +120,19 @@ const ONE_MARK_BOAT_LENGTH_PX = boatLengthPx(DIST_SPAN, TRACK_W);
       const fill = color?.hex ?? "#cbd5e1";
       const stroke = row.boatNumber === 1 ? "#94a3b8" : fill;
       const textColor = color?.textHex ?? "#0f172a";
-      const bowX = clampBowXIn(distToX(row.distance), TRACK_LEFT, TRACK_RIGHT);
+      const bowX = clampBowXInLeft(distToX(row.distance), TRACK_LEFT, TRACK_RIGHT);
       return (
         <g>
           <path
-            d={boatHullPath(bowX, cy, ONE_MARK_BOAT_LENGTH_PX)}
+            d={boatHullPathLeft(bowX, cy, ONE_MARK_BOAT_LENGTH_PX)}
             fill={fill}
             stroke={stroke}
             stroke-width="1.2"
             stroke-linejoin="round"
           />
-          {/* コックピット。艇の向き（右が進行方向）を分かりやすくする */}
+          {/* コックピット。艇の向き（左が進行方向）を分かりやすくする */}
           <ellipse
-            cx={boatCanopyX(bowX, ONE_MARK_BOAT_LENGTH_PX)}
+            cx={boatCanopyXLeft(bowX, ONE_MARK_BOAT_LENGTH_PX)}
             cy={cy}
             rx={BOAT_HEIGHT_PX * 0.42}
             ry={BOAT_HEIGHT_PX * 0.26}
@@ -216,7 +218,7 @@ const ONE_MARK_BOAT_LENGTH_PX = boatLengthPx(DIST_SPAN, TRACK_W);
       return (
         <g>
           {/* 枠番ラベル。艇番はここに出るので艇体には乗せない
-              （距離が大きい艇ほど船尾が水面外へ出るため） */}
+              （艇は左向きなので、距離が小さい艇ほど船尾が水面右端の外へ出る） */}
           <text
             x={TRACK_LEFT - 14}
             y={cy + 4}
