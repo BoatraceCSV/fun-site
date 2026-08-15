@@ -1,6 +1,17 @@
 ---
 import type { AiEvaluation, RaceRacer } from "@fun-site/shared";
 import { BOAT_COLORS, computeOneMarkDistances, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BOAT_HEIGHT_PX,
+  BOAT_LENGTH_SEC,
+  FIGURE_BG,
+  LANE_LINE,
+  WATER_FILL,
+  boatCanopyX,
+  boatHullPath,
+  boatLengthPx,
+  clampBowXIn,
+} from "../lib/start-diagram";
 
 interface Props {
   racers: readonly RaceRacer[];
@@ -17,9 +28,16 @@ const { racers, aiEvaluation, useEstimatedST = false } = Astro.props;
 // 表示順 (top → bottom 固定)
 const DISPLAY_ORDER = [5, 3, 6, 1, 4, 2] as const;
 
-// 軸スケール: 0〜0.5（distance = (1 - avgST) + (strengthPt / 50) - 1.6）
+/**
+ * 軸スケール（distance = (1 - avgST) + (strengthPt / 50) - 1.6）。
+ *
+ * span を 1.0 にしているのはスタート図と同じ理屈で、艇を 1 艇身
+ * (0.135) の長さで描くため。span 0.5 だと 1 艇身が水面幅の 27% を占め、
+ * 進行距離 0.365 を超える艇＝**上位艇ほど**船尾が水面外に出てしまう。
+ * span 1.0 なら 1 艇身は 13.5% になり、スタート図と艇の見え方も揃う。
+ */
 const DIST_MIN = 0;
-const DIST_MAX = 0.5;
+const DIST_MAX = 1;
 const DIST_SPAN = DIST_MAX - DIST_MIN;
 
 // 図のサイズ（StartPredictionDiagram と同等）
@@ -59,10 +77,17 @@ const rows = DISPLAY_ORDER.map((boatNumber) => {
 });
 
 // 距離軸の目盛りラベル
-const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
+const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+
+/**
+ * 艇はスタート図と同じ形・同じ換算で描く。横軸 `(1 - 予測ST) + 強さpt/50 - 1.6`
+ * は ST と同じ「秒」次元なので、1 艇身 = 0.135 秒 がそのまま使える
+ * （艇の前後の重なりがそのまま艇身差として読める）。
+ */
+const ONE_MARK_BOAT_LENGTH_PX = boatLengthPx(DIST_SPAN, TRACK_W);
 ---
 
-<figure class="bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
+<figure class="rounded-lg overflow-hidden border border-blue-100">
   <svg
     viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
     xmlns="http://www.w3.org/2000/svg"
@@ -70,25 +95,57 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
     aria-label="1マーク予想図"
     class="w-full h-auto"
   >
+    <rect x="0" y="0" width={VIEWBOX_W} height={VIEWBOX_H} fill={FIGURE_BG} />
+
     {/* 水面背景 */}
-    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill="#dbeafe" />
+    <rect x={TRACK_LEFT} y={TOP_PAD} width={TRACK_W} height={LANE_HEIGHT * LANES} fill={WATER_FILL} />
 
     {/* レーン区切り */}
     {Array.from({ length: LANES + 1 }).map((_, i) => {
       const y = TOP_PAD + i * LANE_HEIGHT;
       return (
-        <line
-          x1={TRACK_LEFT}
-          y1={y}
-          x2={TRACK_RIGHT}
-          y2={y}
-          stroke="#bfdbfe"
-          stroke-width="1"
-        />
+        <line x1={TRACK_LEFT} y1={y} x2={TRACK_RIGHT} y2={y} stroke={LANE_LINE} stroke-width="1" />
       );
     })}
 
-    {/* 1マーク基準線（赤、太線） */}
+    {/*
+      艇。スタート図と同じく舳先を値の位置に置き、船尾へ 1 艇身ぶん伸ばす。
+      船尾が水面左端をはみ出すぶんは、この後のカーテン矩形で隠す。
+    */}
+    {rows.map((row, i) => {
+      const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
+      const color = isValidBoatNumber(row.boatNumber) ? BOAT_COLORS[row.boatNumber] : undefined;
+      const fill = color?.hex ?? "#cbd5e1";
+      const stroke = row.boatNumber === 1 ? "#94a3b8" : fill;
+      const textColor = color?.textHex ?? "#0f172a";
+      const bowX = clampBowXIn(distToX(row.distance), TRACK_LEFT, TRACK_RIGHT);
+      return (
+        <g>
+          <path
+            d={boatHullPath(bowX, cy, ONE_MARK_BOAT_LENGTH_PX)}
+            fill={fill}
+            stroke={stroke}
+            stroke-width="1.2"
+            stroke-linejoin="round"
+          />
+          {/* コックピット。艇の向き（右が進行方向）を分かりやすくする */}
+          <ellipse
+            cx={boatCanopyX(bowX, ONE_MARK_BOAT_LENGTH_PX)}
+            cy={cy}
+            rx={BOAT_HEIGHT_PX * 0.42}
+            ry={BOAT_HEIGHT_PX * 0.26}
+            fill={textColor}
+            opacity="0.28"
+          />
+        </g>
+      );
+    })}
+
+    {/* 水面外にはみ出した艇を隠すカーテン。以降のラベルはこの上に描く */}
+    <rect x="0" y="0" width={TRACK_LEFT} height={VIEWBOX_H} fill={FIGURE_BG} />
+    <rect x={TRACK_RIGHT} y="0" width={RIGHT_PAD} height={VIEWBOX_H} fill={FIGURE_BG} />
+
+    {/* 1マーク基準線（赤、太線）。艇に隠れないよう艇の後に描く */}
     <line
       x1={baselineX}
       y1={TOP_PAD}
@@ -153,17 +210,13 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
       1マークからの進行距離（(1 - 予測ST) + 強さpt/50 - 1.6）
     </text>
 
-    {/* レーン行（5,3,6,1,4,2 固定） */}
+    {/* 枠番ラベルと距離値（5,3,6,1,4,2 固定） */}
     {rows.map((row, i) => {
       const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
-      const color = isValidBoatNumber(row.boatNumber) ? BOAT_COLORS[row.boatNumber] : undefined;
-      const fill = color?.hex ?? "#cbd5e1";
-      const stroke = row.boatNumber === 1 ? "#94a3b8" : fill;
-      const textColor = color?.textHex ?? "#0f172a";
-      const boatX = distToX(row.distance);
       return (
         <g>
-          {/* 枠番ラベル */}
+          {/* 枠番ラベル。艇番はここに出るので艇体には乗せない
+              （距離が大きい艇ほど船尾が水面外へ出るため） */}
           <text
             x={TRACK_LEFT - 14}
             y={cy + 4}
@@ -173,19 +226,6 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
             font-weight="700"
           >
             {row.boatNumber}号艇
-          </text>
-
-          {/* 艇本体（円） */}
-          <circle cx={boatX} cy={cy} r="13" fill={fill} stroke={stroke} stroke-width="1.5" />
-          <text
-            x={boatX}
-            y={cy + 4}
-            text-anchor="middle"
-            font-size="12"
-            font-weight="700"
-            fill={textColor}
-          >
-            {row.boatNumber}
           </text>
 
           {/* 距離値 */}
@@ -203,8 +243,10 @@ const tickValues = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
     })}
   </svg>
   <figcaption class="text-xs text-gray-500 px-3 py-2 bg-white border-t border-blue-100">
-    各艇の進行距離 = (1 − 予測ST) + 強さpt ÷ 50 − 1.6（表示範囲 0.00〜0.50）。予測STは{
+    各艇の進行距離 = (1 − 予測ST) + 強さpt ÷ 50 − 1.6（表示範囲 {DIST_MIN.toFixed(2)}〜{DIST_MAX.toFixed(2)}）。予測STは{
       useEstimatedST ? "実測ST履歴から算出したAI推定ST" : "選手の全国平均ST"
-    }です。レーン並びは 5・3・6・1・4・2 で固定表示しています。
+    }です。艇の長さはスタート図と同じ <strong class="font-medium">1 艇身 = {BOAT_LENGTH_SEC.toFixed(3)}</strong>
+    （横軸も ST と同じ秒の次元）に合わせてあるので、前後の重なりがそのまま艇身差になります。
+    レーン並びは 5・3・6・1・4・2 で固定表示しています。
   </figcaption>
 </figure>
