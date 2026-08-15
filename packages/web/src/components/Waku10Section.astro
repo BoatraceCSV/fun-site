@@ -20,12 +20,16 @@ const rankTextClass = (rank: string): string => {
 /**
  * バッジ配色は **枠番**（このセクションでは当該艇の枠番で固定）、
  * 中の数字は **進入コース**。SessionResultsGrid と同じ規則。
+ *
+ * グレードは文字では出さず、**IP 以外（G3/G2/G1/SG）を太い紫の枠線**で表す。
+ * 1号艇は艇色が白で境界が消えるため、IP のときだけ淡いグレーの細枠を足す。
  */
-const laneStyle = (lane: number): string => {
-  if (!isValidBoatNumber(lane)) return "background-color: #e5e7eb; color: #374151;";
-  const c = BOAT_COLORS[lane];
-  const border = lane === 1 ? " border: 1px solid #cbd5e1;" : "";
-  return `background-color: ${c.hex}; color: ${c.textHex};${border}`;
+const runBadgeStyle = (lane: number, grade: string): string => {
+  const fill = isValidBoatNumber(lane)
+    ? `background-color: ${BOAT_COLORS[lane].hex}; color: ${BOAT_COLORS[lane].textHex};`
+    : "background-color: #e5e7eb; color: #374151;";
+  if (grade !== "" && grade !== "IP") return `${fill} border: 2px solid #7e22ce;`;
+  return lane === 1 ? `${fill} border: 1px solid #cbd5e1;` : fill;
 };
 
 const runTitle = (run: Waku10RunView): string => {
@@ -66,22 +70,37 @@ const num = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : 
         </div>
 
         {boat.runs.length > 0 ? (
-          <div class="flex flex-wrap items-start gap-1">
-            {/* 過去1走 = 前走 が左。新 → 古 の順に並べる */}
-            {boat.runs.map((run) => (
-              <div class="flex flex-col items-center gap-0.5 w-6" title={runTitle(run)}>
-                <span class={`text-xs font-bold leading-none tabular-nums ${rankTextClass(run.rank)}`}>
-                  {run.rank}
-                </span>
-                <span
-                  class={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none ${run.courseIsAsWaku ? "opacity-50" : ""}`}
-                  style={laneStyle(boat.boatNumber)}
-                >
-                  {run.entryCourse}
-                </span>
-                <span class="text-[9px] text-gray-400 leading-none">{run.grade}</span>
-              </div>
-            ))}
+          /*
+            行は上から 進（進入コース）/ 着（着順）。左端のラベル列と各走の列は
+            行ごとに同じ固定高 (h-5 / h-4) と同じ `gap-0.5` を使って揃えている。
+          */
+          <div class="flex items-start gap-x-2">
+            <div class="flex flex-col gap-0.5 shrink-0 text-[9px] text-gray-400 leading-none">
+              <span class="h-5 flex items-center">進</span>
+              <span class="h-4 flex items-center">着</span>
+            </div>
+            <div class="flex flex-wrap items-start gap-1">
+              {/* 過去1走 = 前走 が左。新 → 古 の順に並べる */}
+              {boat.runs.map((run) => (
+                <div class="flex flex-col items-center gap-0.5 w-5" title={runTitle(run)}>
+                  {/*
+                    枠なり進入は数字だけ薄くする。バッジ全体を薄くすると
+                    枠番（背景色）とグレード（紫の太枠）の情報まで鈍るため。
+                  */}
+                  <span
+                    class="w-5 h-5 flex items-center justify-center rounded text-[11px] font-bold leading-none"
+                    style={runBadgeStyle(boat.boatNumber, run.grade)}
+                  >
+                    <span class={run.courseIsAsWaku ? "opacity-40" : ""}>{run.entryCourse}</span>
+                  </span>
+                  <span
+                    class={`h-4 flex items-center text-xs font-bold leading-none tabular-nums ${rankTextClass(run.rank)}`}
+                  >
+                    {run.rank}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : (
           <span class="text-[11px] text-gray-400">この枠番での出走歴なし</span>
@@ -91,8 +110,9 @@ const num = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : 
   })}
   <p class="text-[11px] text-gray-400">
     各選手が<strong class="font-medium">今回と同じ枠番</strong>で出走した直近10走（左が前走）。
-    上段が着順、中段が進入コース（バッジの色は枠番、数字は進入コース。薄い表示は枠なり進入）、
-    下段がグレードです。
+    進 = 進入コース（バッジの色は枠番、数字は進入コース。数字が薄いものは枠なり進入）、着 = 着順。
+    <strong class="font-medium text-purple-700">紫の太枠</strong>は IP 以外のグレード（G3 / G2 / G1 / SG）で、
+    グレード名はバッジのツールチップに出ます。
     勝率・平均ST・平均スタート順もこの枠番でのものです。
   </p>
 </div>

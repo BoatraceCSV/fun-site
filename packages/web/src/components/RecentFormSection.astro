@@ -61,34 +61,36 @@ const formatPeriod = (s: RecentFormSessionView): string => {
           {groups.map(([label, sessions]) => (
             <div class="flex items-start gap-2">
               <span class="text-[11px] text-gray-400 w-8 shrink-0 pt-1">{label}</span>
-              <div class="flex flex-wrap gap-x-3 gap-y-2">
+              {/*
+                着順は 1 トークン = 1 文字なので、区切りを入れずに "435F2" と詰めて
+                節名と同じ行に置く。日区切りだけ細い空きを挟む。
+              */}
+              <div class="flex flex-col gap-0.5 min-w-0">
                 {sessions.map((s) => (
-                  <div class="flex flex-col gap-0.5">
-                    <div class="flex items-center gap-1 text-[10px] text-gray-500">
-                      {s.grade && <span class="font-medium">{s.grade}</span>}
-                      {s.stadiumName && <span>{s.stadiumName}</span>}
-                      {formatPeriod(s) && <span class="text-gray-400">{formatPeriod(s)}</span>}
-                    </div>
-                    <div class="flex flex-wrap items-center gap-0.5">
+                  <div class="flex items-center gap-x-1.5 text-[10px] text-gray-500">
+                    {s.grade && <span class="font-medium shrink-0">{s.grade}</span>}
+                    {s.stadiumName && <span class="shrink-0">{s.stadiumName}</span>}
+                    {formatPeriod(s) && (
+                      <span class="text-gray-400 shrink-0 tabular-nums">{formatPeriod(s)}</span>
+                    )}
+                    <span class="flex items-center text-xs font-bold leading-none tabular-nums">
                       {tokenizeRankString(s.ranks).map((mark) =>
                         mark.kind === "separator" ? (
-                          <span class="inline-block w-1.5" />
+                          <span class="inline-block w-1" />
                         ) : mark.kind === "rank" ? (
                           <span
-                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[11px] font-bold leading-none tabular-nums text-gray-800 ${mark.yusho ? "ring-1 ring-rose-400" : ""}`}
+                            class={`inline-block rounded-[2px] text-gray-800 ${mark.yusho ? "ring-1 ring-rose-400" : ""}`}
                             title={mark.yusho ? `優勝戦 ${mark.rank}着` : `${mark.rank}着`}
                           >
                             {mark.rank}
                           </span>
                         ) : (
-                          <span
-                            class={`inline-flex items-center justify-center w-4 h-4 rounded text-[11px] font-bold leading-none ${tokenTextClass(mark.token)}`}
-                          >
+                          <span class={`inline-block ${tokenTextClass(mark.token)}`}>
                             {mark.token}
                           </span>
                         ),
                       )}
-                    </div>
+                    </span>
                   </div>
                 ))}
               </div>

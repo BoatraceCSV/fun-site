@@ -63,32 +63,45 @@ const slotTitle = (s: SessionResultSlot): string => {
 };
 ---
 
+{/*
+  行は上から R（開催日レース）/ 進（進入コース）/ ST / 着（着順）。
+  左端のラベル列と各走の列は、行ごとに同じ固定高 (h-3 / h-5 / h-3 / h-4) と
+  同じ `gap-0.5` を使うことで揃えている。高さを変えるときは両方を直すこと。
+*/}
 {
   played.length > 0 ? (
     <div class="flex flex-wrap items-start gap-x-2 gap-y-1">
-      <span class="text-[10px] text-gray-400 pt-3">今節</span>
+      <div class="flex flex-col gap-0.5 shrink-0 text-[9px] text-gray-400 leading-none">
+        <span class="h-3 flex items-center">今節</span>
+        <span class="h-3 flex items-center">R</span>
+        <span class="h-5 flex items-center">進</span>
+        <span class="h-3 flex items-center">ST</span>
+        <span class="h-4 flex items-center">着</span>
+      </div>
       {byDay.map(({ day, slots: daySlots }) => (
-        <div class="flex flex-col items-start">
-          <span class="text-[9px] text-gray-400 leading-none mb-0.5">{day}日目</span>
+        <div class="flex flex-col gap-0.5 items-start">
+          <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none">
+            {day}日目
+          </span>
           <div class="flex items-start gap-1">
             {daySlots.map((s) => (
-              <div class="flex flex-col items-center w-8" title={slotTitle(s)}>
-                <span class="text-[9px] text-gray-400 leading-none tabular-nums">
+              <div class="flex flex-col gap-0.5 items-center w-8" title={slotTitle(s)}>
+                <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none tabular-nums">
                   {s.race > 0 ? `${s.race}R` : "—"}
                 </span>
                 <span
-                  class={`text-xs font-bold leading-none my-0.5 tabular-nums ${rankTextClass(s.rank)}`}
-                >
-                  {s.rank || "·"}
-                </span>
-                <span
-                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold leading-none"
+                  class="w-5 h-5 flex items-center justify-center rounded text-[11px] font-bold leading-none"
                   style={laneStyle(s.lane)}
                 >
                   {s.entryCourse > 0 ? s.entryCourse : "·"}
                 </span>
-                <span class="text-[9px] text-gray-400 leading-none tabular-nums">
+                <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none tabular-nums">
                   {stText(s.st)}
+                </span>
+                <span
+                  class={`h-4 flex items-center text-xs font-bold leading-none tabular-nums ${rankTextClass(s.rank)}`}
+                >
+                  {s.rank || "·"}
                 </span>
               </div>
             ))}
