@@ -116,23 +116,23 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
       </div>
     )}
 
-    {/* スタート予想・1マーク予想 (primary predictor のカードにのみ表示)。
-         小さく横並びに収めるため 2 カラムグリッドで描画する。 */}
+    {/* スタート予想・1マーク予想。
+         2 カラムに並べると iPhone 幅で図がカード幅の半分まで縮み、艇バッジと
+         ST 数字が潰れて読めないので、縦積みにしてそれぞれカード幅いっぱいに
+         描く (SVG は viewBox + w-full なので幅なりに拡大される)。 */}
     {showDiagrams && (
-      <div class="border-t border-gray-100 pt-3">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">スタート予想</h3>
-            <StartPredictionDiagram start={startPrediction!} stNote={startNote} />
-          </div>
-          <div>
-            <h3 class="text-sm font-semibold text-gray-700 mb-2">1マーク予想</h3>
-            <OneMarkPredictionDiagram
-              racers={racers}
-              aiEvaluation={oneMarkAiEvaluation!}
-              useEstimatedST={useOneMarkEstimatedST}
-            />
-          </div>
+      <div class="border-t border-gray-100 pt-3 space-y-4">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">スタート予想</h3>
+          <StartPredictionDiagram start={startPrediction!} stNote={startNote} />
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">1マーク予想</h3>
+          <OneMarkPredictionDiagram
+            racers={racers}
+            aiEvaluation={oneMarkAiEvaluation!}
+            useEstimatedST={useOneMarkEstimatedST}
+          />
         </div>
       </div>
     )}
