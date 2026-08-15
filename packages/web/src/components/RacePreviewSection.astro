@@ -26,26 +26,41 @@ const formatObservedAt = (raw: string): string => {
   return m ? `${m[1]}:${m[2]}` : raw;
 };
 
-/** 展示タイムの最速艇（小さいほど速い）を強調するため最小値を求める */
-const exhibitionTimes = boats
-  .map((b) => b.exhibitionTime)
-  .filter((t): t is number => t != null && t > 0);
-const fastestExhibition = exhibitionTimes.length > 0 ? Math.min(...exhibitionTimes) : null;
+/**
+ * タイム系の列で 1 番速い値と 2 番目に速い値（小さいほど速い）。
+ * 同値の艇が複数いる場合は同順位として扱いたいので、**重複を潰した値**の
+ * 昇順で 1 位 / 2 位を取る（1 位タイが 2 艇なら 2 位は次に小さい値になる）。
+ */
+type FastestTwo = { first: number | null; second: number | null };
+const fastestTwo = (values: readonly (number | null | undefined)[]): FastestTwo => {
+  const sorted = [...new Set(values.filter((v): v is number => v != null && v > 0))].sort(
+    (a, b) => a - b,
+  );
+  return { first: sorted[0] ?? null, second: sorted[1] ?? null };
+};
+
+/**
+ * タイム系セルの背景色。得点率早見表と同じ「セル枠いっぱいを塗る」やり方で、
+ * 1 番速い艇を濃い青、2 番目を薄い青にする（速さの色は従来から青）。
+ */
+const speedCellClass = (v: number | null | undefined, ranks: FastestTwo): string => {
+  if (v == null) return "";
+  if (ranks.first != null && v === ranks.first) return "bg-blue-100 text-blue-900 font-bold";
+  if (ranks.second != null && v === ranks.second) return "bg-blue-50 text-blue-800";
+  return "";
+};
+
+const exhibitionRanks = fastestTwo(boats.map((b) => b.exhibitionTime));
 
 const hasExhibition = boats.some(
   (b) => b.exhibitionTime != null || b.weightKg > 0 || b.tilt !== 0,
 );
 
-// オリジナル展示（場別計測項目）。各列ごとに最速（最小値）を強調する。
+// オリジナル展示（場別計測項目）。各列ごとに 1 位 / 2 位を強調する。
 const orig = preview.originalExhibition;
 const origBoats = orig ? [...orig.boats].sort((a, b) => a.boatNumber - b.boatNumber) : [];
-const origColumnMins: (number | null)[] = orig
-  ? orig.labels.map((_, col) => {
-      const vals = origBoats
-        .map((b) => b.values[col])
-        .filter((v): v is number => v != null && v > 0);
-      return vals.length > 0 ? Math.min(...vals) : null;
-    })
+const origColumnRanks: FastestTwo[] = orig
+  ? orig.labels.map((_, col) => fastestTwo(origBoats.map((b) => b.values[col])))
   : [];
 const hasOriginalExhibition =
   orig != null && orig.labels.length > 0 && origBoats.some((b) => b.values.some((v) => v != null));
@@ -70,7 +85,7 @@ const previewNote = ((): string => {
       : hasExhibition
         ? "展示タイム"
         : "オリジナル展示の各項目";
-  const base = `締切5分前のスナップショットです。${subject}は数値が小さいほど速く、最速艇を青字で表示しています。`;
+  const base = `締切5分前のスナップショットです。${subject}は数値が小さいほど速く、列ごとに1番速い艇を濃い青、2番目を薄い青の背景で表示しています。`;
   return hasOriginalExhibition ? `${base}オリジナル展示の計測項目は場により異なります。` : base;
 })();
 ---
@@ -142,12 +157,17 @@ const previewNote = ((): string => {
             )}
           </tr>
           <tr class="text-[10px]">
+            {/*
+              展示タイムは展示 4 項目の右端に置く。オリジナル展示の各項目と
+              同じ「小さいほど速いタイム」なので、色付きのタイム列を隣り合わせて
+              まとめて見比べられるようにするため。
+            */}
             {hasExhibition && (
               <>
-                <th scope="col" class="px-1 pb-1 text-right font-medium">タイム</th>
                 <th scope="col" class="px-1 pb-1 text-right font-medium">体重kg</th>
                 <th scope="col" class="px-1 pb-1 text-right font-medium">調整</th>
                 <th scope="col" class="px-1 pb-1 text-right font-medium">チルト</th>
+                <th scope="col" class="px-1 pb-1 text-right font-medium">タイム</th>
               </>
             )}
             {origLabels.map((label, i) => (
@@ -165,8 +185,6 @@ const previewNote = ((): string => {
             const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
             const b = boatById.get(boatNumber);
             const o = origById.get(boatNumber);
-            const isFastest =
-              b?.exhibitionTime != null && b.exhibitionTime === fastestExhibition;
             return (
               <tr class="border-b border-gray-100">
                 <td class="px-1 py-1">
@@ -180,15 +198,6 @@ const previewNote = ((): string => {
                 {hasExhibition && (
                   <>
                     <td class="px-1 py-1 text-right font-mono tabular-nums">
-                      {b?.exhibitionTime != null ? (
-                        <span class={isFastest ? "font-bold text-blue-600" : ""}>
-                          {b.exhibitionTime.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span class="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td class="px-1 py-1 text-right font-mono tabular-nums">
                       {b != null && b.weightKg > 0 ? b.weightKg.toFixed(1) : "—"}
                     </td>
                     <td class="px-1 py-1 text-right font-mono tabular-nums">
@@ -197,22 +206,25 @@ const previewNote = ((): string => {
                     <td class="px-1 py-1 text-right font-mono tabular-nums">
                       {b != null ? b.tilt.toFixed(1) : "—"}
                     </td>
+                    <td
+                      class={`px-1 py-1 text-right font-mono tabular-nums ${speedCellClass(b?.exhibitionTime, exhibitionRanks)}`}
+                    >
+                      {b?.exhibitionTime != null ? (
+                        b.exhibitionTime.toFixed(2)
+                      ) : (
+                        <span class="text-gray-400">—</span>
+                      )}
+                    </td>
                   </>
                 )}
                 {origLabels.map((_, col) => {
                   const v = o?.values[col];
-                  const isColFastest = v != null && v === origColumnMins[col];
+                  const ranks = origColumnRanks[col] ?? { first: null, second: null };
                   return (
                     <td
-                      class={`px-1 py-1 text-right font-mono tabular-nums ${col === 0 ? "border-l border-gray-200" : ""}`}
+                      class={`px-1 py-1 text-right font-mono tabular-nums ${col === 0 ? "border-l border-gray-200" : ""} ${speedCellClass(v, ranks)}`}
                     >
-                      {v != null ? (
-                        <span class={isColFastest ? "font-bold text-blue-600" : ""}>
-                          {v.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span class="text-gray-400">—</span>
-                      )}
+                      {v != null ? v.toFixed(2) : <span class="text-gray-400">—</span>}
                     </td>
                   );
                 })}
