@@ -90,7 +90,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `RaceWaku10` / `RacerWaku10` / `Waku10RunView` | 枠番別過去10走。`RacePrediction.waku10` にぶら下がる。waku10 を艇番で突合し、着順が空のスロット（出走歴 10 走未満）は除外、進入コースは空欄（枠なり進入）を枠番で補完して `courseIsAsWaku` で補完済みかを示す。CSV 未取得のレースでは `waku10` 自体が undefined |
 | `RaceTokutenHayami` | 得点率早見。`RacePrediction.tokutenHayami` にぶら下がる。上流は公開済み (`status=1`) の行しか書かないので、**行があれば表示できる**。予選最終日を過ぎた節・得点率早見を出さない節では行が来ないため undefined |
 | `MotorStats`（`RaceRacer.motorStats`） | モーター期成績。motor_stats を `(場コード-モーター番号)` で各艇に突合（同一キーは記録日が新しい行を採用）。3連率・3連率順位・優勝/優出回数・平均ラップ秒を保持。当該場が motor_stats 未収録のレースでは undefined |
-| `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt） |
+| `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt、および成分pt そのもの `components`（偏差値スケール。選手pt の内訳ページが使う。古い JSON では未設定）） |
 | `BetHitStatus` | 当日買い目・直前買い目の三連単フォーメーションが結果と一致したか |
 | `BetPayoutResult` / `RaceBetPayoutSummary` / `DailyBetPayoutAggregate` | 3連単 フォーメーションを 1 点 ¥100 で買った場合の払戻 / 回収率（レース単位 / 当日集計） |
 | `BettingTolerance` / `bettingToleranceFor` | 買い目の着順別しきい値（1着 / 2着 / 3着 の ± 許容幅）と予想者 ID からの解決関数。距離基準の既定は全着順 ±0.10（`DEFAULT_BETTING_TOLERANCE`）、強さpt 基準（`strengthOnlyBetting` な予想者。`bettingBasisFor` で解決。現行 active には該当なし）は全着順 ±5.0pt（`STRENGTH_BETTING_TOLERANCE`。距離式が強さpt/50 を項に持つため距離 ±0.10 と等価スケール）。`BETTING_TOLERANCE_BY_PREDICTOR` に予想者別オーバーライドを定義（現状オーバーライド無し。以前は `v2_tenkai`=モーター評価変更予想に 1着0.02 / 2着0.10 / 3着0.20 を設定していたが 2026-06-13 に本命予想へ揃えるため削除）。再最適化の根拠は boatracecsv 側 [`notebooks/threshold_optimization.ipynb`](https://github.com/BoatraceCSV) |

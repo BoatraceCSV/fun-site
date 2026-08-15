@@ -140,13 +140,20 @@ const buildAiEvaluation = (idx: IndexRow): AiEvaluation => {
   const isDaily = idx.state === "daily";
   const entries: AiEvaluationEntry[] = idx.entries.map((e) => {
     const contribution: Partial<Record<ComponentKey, number>> = {};
+    // 成分pt（偏差値）は 0 に潰さずそのまま持つ。偏差値スケールの 0 は「中立」ではなく
+    // 「平均から -5σ」を意味してしまうため。daily の preview 由来成分には中立値 50 が
+    // 入っており、UI 側は contribution と同じく isPreviewDerivedComponent で伏せる。
+    const components: Partial<Record<ComponentKey, number>> = {};
     for (const key of idx.componentKeys) {
       const raw = e.contributions[key] ?? 0;
       contribution[key] = isDaily && isPreviewDerivedComponent(key) ? 0 : raw;
+      const pt = e.components[key];
+      if (pt !== undefined) components[key] = pt;
     }
     return {
       boatNumber: e.boatNumber,
       contribution,
+      components,
       strengthPt: e.strengthPt,
     };
   });

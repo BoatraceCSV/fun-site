@@ -13,7 +13,12 @@
 
 export type RankMark =
   | { readonly kind: "rank"; readonly rank: number; readonly yusho: boolean }
-  | { readonly kind: "token"; readonly token: string }
+  /**
+   * 着順以外のトークン。`yusho` は `[F]` `[妨]` のように **優勝戦の括弧の中に
+   * 着順以外が入っていた** ことを示す（通常の `F` と区別する必要がある呼び出し元が
+   * あるため。選手pt の素点計算では括弧内の非着順トークンは読み捨てられる）。
+   */
+  | { readonly kind: "token"; readonly token: string; readonly yusho?: true }
   | { readonly kind: "separator" };
 
 /** 全角/半角の数字 1 文字を数値に変換。数字でなければ null */
@@ -61,7 +66,7 @@ export const tokenizeRankString = (raw: string): RankMark[] => {
       if (d != null) {
         marks.push({ kind: "rank", rank: d, yusho: true });
       } else if (inner.length > 0) {
-        marks.push({ kind: "token", token: inner });
+        marks.push({ kind: "token", token: inner, yusho: true });
       }
       continue;
     }

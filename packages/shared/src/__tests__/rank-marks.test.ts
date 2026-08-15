@@ -38,6 +38,19 @@ describe("tokenizeRankString", () => {
     ]);
   });
 
+  it("括弧内が着順でない [F] / [妨] は yusho 付きの token にする", () => {
+    // bare な F と区別できないと、選手pt の素点計算が BoatraceCSV とずれる
+    // (括弧付きは得点にも出走回数にも計上されない)。
+    expect(tokenizeRankString("F[妨]")).toEqual([
+      { kind: "token", token: "F" },
+      { kind: "token", token: "妨", yusho: true },
+    ]);
+  });
+
+  it("空の括弧 [] は何も生成しない", () => {
+    expect(tokenizeRankString("１[]")).toEqual([{ kind: "rank", rank: 1, yusho: false }]);
+  });
+
   it("先頭・末尾・連続のスペースを正規化する", () => {
     const marks = tokenizeRankString("　１　　２　");
     expect(marks).toEqual([

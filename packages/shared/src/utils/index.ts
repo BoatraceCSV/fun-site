@@ -37,6 +37,22 @@ export { checkBettingHit, isBetHit, type BetHitStatus } from "./bet-hit.js";
 export { extractTopThree, isSettledResult } from "./race-result.js";
 export { tokenizeRankString, type RankMark } from "./rank-marks.js";
 export {
+  NOT_RACER_RESPONSIBLE_TOKENS,
+  RACER_PT_GRADE_BUCKET_LABELS,
+  RACER_PT_SCORE_TABLE,
+  RACER_RESPONSIBLE_TOKENS,
+  computeRacerPtBreakdown,
+  racerPtGradeBucket,
+  racerPtScoreFor,
+  racerPtSessionInputs,
+  roundHalfToEven,
+  type RacerPtBreakdown,
+  type RacerPtGradeBucket,
+  type RacerPtMark,
+  type RacerPtSession,
+  type RacerPtSessionInput,
+} from "./racer-pt.js";
+export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,
   computeBetPayout,

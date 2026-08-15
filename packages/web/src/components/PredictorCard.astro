@@ -44,6 +44,11 @@ interface Props {
    * `OneMarkPredictionDiagram` へ転送する。
    */
   useOneMarkEstimatedST?: boolean;
+  /**
+   * AI 評価内訳の「選手」から張る、選手pt の計算根拠ページへの URL。
+   * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
+   */
+  racerPtHref?: string;
 }
 
 const {
@@ -55,6 +60,7 @@ const {
   startNote,
   recipeNote,
   useOneMarkEstimatedST = false,
+  racerPtHref,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -112,7 +118,7 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
     {showChart && chartEval && (
       <div class="border-t border-gray-100 pt-3">
         <h3 class="text-sm font-semibold text-gray-700 mb-2">AI 評価の内訳</h3>
-        <AiEvaluationChart evaluation={chartEval} />
+        <AiEvaluationChart evaluation={chartEval} racerPtHref={racerPtHref} />
       </div>
     )}
 

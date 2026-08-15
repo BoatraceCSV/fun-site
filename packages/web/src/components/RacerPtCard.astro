@@ -1,0 +1,364 @@
+---
+import type { RaceRacer, RacerPtBreakdown, RacerPtSession } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  COMPONENT_MISSING_FALLBACK,
+  RACER_PT_GRADE_BUCKET_LABELS,
+  isValidBoatNumber,
+} from "@fun-site/shared";
+
+interface Props {
+  racer: RaceRacer;
+  /** 素点（算出基準点）の内訳。web 側で recentForm から再計算したもの */
+  breakdown: RacerPtBreakdown;
+  /** 選手pt（偏差値）。index CSV 由来。古い JSON では undefined */
+  racerPt: number | undefined;
+  /** 寄与pt = 場別重み × 選手pt。index CSV 由来 */
+  contribution: number | undefined;
+  /** 強さpt（この艇の 5 成分の寄与合計） */
+  strengthPt: number;
+  /** 近況5節が取得できているか。false なら素点の根拠を出せない */
+  hasRecentForm: boolean;
+}
+
+const { racer, breakdown, racerPt, contribution, strengthPt, hasRecentForm } = Astro.props;
+
+const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
+
+/**
+ * 素点が計算できなかった（近5節の出走履歴が無い）ケース。新人・長期離脱明けが大半で、
+ * BoatraceCSV 側は平均 50 ではなく 30 で補完する（平均扱いだと過大評価になるため）。
+ */
+const isFallback = hasRecentForm && breakdown.basePoint === null;
+const fallbackPt = COMPONENT_MISSING_FALLBACK.racer ?? 50;
+
+/** 場別重み w。寄与 = w × 選手pt の関係から逆算する（weights CSV は未取り込み） */
+const weight =
+  racerPt !== undefined && contribution !== undefined && racerPt !== 0
+    ? contribution / racerPt
+    : undefined;
+
+/** 偏差値 → z。「平均から何σ上か」の言い換えに使う */
+const z = racerPt !== undefined ? (racerPt - 50) / 10 : undefined;
+
+/** 強さptに占める選手ptの寄与割合 */
+const sharePct =
+  contribution !== undefined && strengthPt > 0 ? (contribution / strengthPt) * 100 : undefined;
+
+const num = (v: number | undefined, digits: number): string =>
+  v === undefined ? "—" : v.toFixed(digits);
+
+/** 未計測（0）は "—" */
+const stat = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : "—");
+
+/** 期間表示 "5/28〜6/2" */
+const formatPeriod = (s: RacerPtSession): string => {
+  const md = (d: string): string => {
+    const m = d.match(/^\d{4}-(\d{2})-(\d{2})$/);
+    return m ? `${Number(m[1])}/${Number(m[2])}` : "";
+  };
+  const a = md(s.startDate);
+  const b = md(s.endDate);
+  return a && b ? `${a}〜${b}` : a || b;
+};
+
+const rankColor = (rank: string): string => {
+  if (rank === "A1") return "text-red-600";
+  if (rank === "A2") return "text-orange-500";
+  if (rank === "B1") return "text-gray-700";
+  return "text-gray-500";
+};
+
+const nationalSessions = breakdown.sessions.filter((s) => s.source === "national");
+const localSessions = breakdown.sessions.filter((s) => s.source === "local");
+const groups = (
+  [
+    ["全国", nationalSessions],
+    ["当地", localSessions],
+  ] as const
+).filter(([, sessions]) => sessions.length > 0);
+
+const hasDuplicated = breakdown.sessions.some((s) => s.duplicated);
+---
+
+<section
+  class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+  id={`boat-${racer.boatNumber}`}
+  aria-label={`${racer.boatNumber}号艇 ${racer.racerName} の選手pt`}
+>
+  {/* ヘッダ: 枠番 / 選手名 / 級別・年齢・支部 */}
+  <header class="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-wrap">
+    <span
+      class="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0"
+      style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+    >
+      {racer.boatNumber}
+    </span>
+    <h2 class="font-bold text-base">{racer.racerName}</h2>
+    <span class={`text-xs font-semibold ${rankColor(racer.classGrade)}`}>{racer.classGrade}</span>
+    <span class="text-xs text-gray-500">
+      {racer.age > 0 && `${racer.age}歳`}
+      {racer.branch && ` ${racer.branch}`}
+      {racer.registrationNumber > 0 && ` / 登録${racer.registrationNumber}`}
+    </span>
+    {racer.flyingCount > 0 && (
+      <span class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-red-100 text-red-700">
+        F{racer.flyingCount}
+      </span>
+    )}
+    {racer.lateCount > 0 && (
+      <span class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-amber-100 text-amber-800">
+        L{racer.lateCount}
+      </span>
+    )}
+    {racer.prizeExcluded && (
+      <span class="inline-block px-1 py-0.5 rounded text-[10px] font-bold leading-none bg-gray-200 text-gray-600">
+        賞除
+      </span>
+    )}
+  </header>
+
+  <div class="p-4 space-y-4">
+    {/* 基本情報。出走表では 4 指標に絞っているのでここで全項目を出す */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">基本情報</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px] border-collapse">
+          <thead>
+            <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+              <th scope="col" class="text-left py-1 px-1 font-medium">区分</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">勝率</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">2連率</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">3連率</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">平均ST</th>
+            </tr>
+          </thead>
+          <tbody class="tabular-nums font-mono text-gray-800">
+            <tr class="border-b border-gray-100">
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600">全国</th>
+              <td class="text-right py-1 px-1">{stat(racer.nationalWinRate, 2)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.nationalTop2Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.nationalTop3Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.nationalAvgST, 2)}</td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600">当地</th>
+              <td class="text-right py-1 px-1">{stat(racer.localWinRate, 2)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.localTop2Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.localTop3Rate, 1)}</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+            </tr>
+            <tr class="border-b border-gray-100">
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600">
+                モーター<span class="text-gray-400">#{racer.motorNumber}</span>
+              </th>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+              <td class="text-right py-1 px-1">{stat(racer.motorTop2Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.motorTop3Rate, 1)}</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+            </tr>
+            <tr>
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600">
+                ボート<span class="text-gray-400">#{racer.boatBodyNumber}</span>
+              </th>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+              <td class="text-right py-1 px-1">{stat(racer.boatTop2Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.boatTop3Rate, 1)}</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-gray-400 mt-1">
+        平均STは全国のみ公表。モーター・ボートに勝率・平均STの区分はありません。
+      </p>
+    </div>
+
+    {/* 選手pt サマリー: 結論を先に出す */}
+    <div class="rounded-md bg-emerald-50 border border-emerald-200 p-3">
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-xs font-bold text-emerald-800">選手pt</span>
+        <span class="text-2xl font-bold font-mono tabular-nums text-emerald-900">
+          {num(racerPt, 2)}
+        </span>
+        {z !== undefined && (
+          <span class="text-[11px] text-emerald-700">
+            （この場の平均より {z >= 0 ? "+" : ""}{z.toFixed(2)}σ）
+          </span>
+        )}
+      </div>
+
+      {/* 素点 → 選手pt → 寄与 のフロー */}
+      <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-emerald-900">
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-emerald-700">素点</span>
+          <span class="font-mono font-bold tabular-nums">
+            {isFallback ? "—" : (breakdown.basePoint ?? "—")}
+          </span>
+        </li>
+        <li aria-hidden="true" class="text-emerald-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-emerald-700">選手pt</span>
+          <span class="font-mono font-bold tabular-nums">{num(racerPt, 2)}</span>
+        </li>
+        <li aria-hidden="true" class="text-emerald-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-emerald-700">寄与</span>
+          <span class="font-mono font-bold tabular-nums">{num(contribution, 2)}</span>
+          {sharePct !== undefined && (
+            <span class="text-emerald-700">
+              （強さpt {strengthPt.toFixed(2)} の {sharePct.toFixed(1)}%）
+            </span>
+          )}
+        </li>
+      </ol>
+
+      {weight !== undefined && (
+        <p class="mt-1.5 text-[10px] text-emerald-700">
+          選手pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 選手pt。
+          重みは直近6ヶ月のデータから場別・月次で学習された値です。
+        </p>
+      )}
+
+      {isFallback && (
+        <p class="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+          近5節に有効な出走履歴が無いため素点を計算できません（新人・長期離脱明けなど）。
+          この場合の選手ptは平均の 50 ではなく <span class="font-mono font-bold">{fallbackPt}</span>
+          で補完されます。平均扱いにすると実績の無い選手を過大評価してしまうためです。
+        </p>
+      )}
+    </div>
+
+    {/* 素点の計算根拠 */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">素点の計算根拠</h3>
+
+      {!hasRecentForm ? (
+        <p class="text-[11px] text-gray-500">
+          近況5節データ（recent_national / recent_local）が未取得のため、内訳を表示できません。
+        </p>
+      ) : breakdown.sessions.length === 0 ? (
+        <p class="text-[11px] text-gray-500">対象となる節がありません。</p>
+      ) : (
+        <div class="space-y-2">
+          {groups.map(([label, sessions]) => (
+            <div>
+              <div class="text-[10px] font-bold text-gray-400 mb-0.5">{label}5節</div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-[11px] border-collapse">
+                  <thead>
+                    <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                      <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">節</th>
+                      <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">
+                        グレード
+                      </th>
+                      <th scope="col" class="text-left py-1 px-1 font-medium">着順（適用スコア）</th>
+                      <th scope="col" class="text-right py-1 px-1 font-medium whitespace-nowrap">
+                        得点
+                      </th>
+                      <th scope="col" class="text-right py-1 px-1 font-medium whitespace-nowrap">
+                        走
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((s) => (
+                      <tr class="border-b border-gray-100 align-top">
+                        <td class="py-1 px-1 whitespace-nowrap">
+                          <span class="text-gray-700">{s.stadiumName || "—"}</span>
+                          <span class="block text-[10px] text-gray-400 tabular-nums">
+                            {formatPeriod(s)}
+                          </span>
+                          {s.duplicated && (
+                            <span
+                              class="inline-block mt-0.5 px-1 rounded text-[9px] font-bold leading-none bg-violet-100 text-violet-700"
+                              title="同じ節が全国5節と当地5節の両方に含まれており、素点では 2 回計上されます"
+                            >
+                              二重計上
+                            </span>
+                          )}
+                        </td>
+                        <td class="py-1 px-1 whitespace-nowrap">
+                          <span class="text-gray-700">{s.grade || "—"}</span>
+                          <span class="block text-[10px] text-gray-400">
+                            {RACER_PT_GRADE_BUCKET_LABELS[s.bucket]}
+                          </span>
+                        </td>
+                        <td class="py-1 px-1">
+                          <span class="flex flex-wrap items-end gap-x-0.5 gap-y-1">
+                            {s.marks.map((mark) =>
+                              mark.kind === "separator" ? (
+                                <span class="inline-block w-1.5" aria-hidden="true" />
+                              ) : mark.kind === "rank" ? (
+                                <span
+                                  class={`inline-flex flex-col items-center leading-none rounded-[2px] px-0.5 ${mark.yusho ? "ring-1 ring-rose-400" : ""}`}
+                                  title={`${mark.yusho ? "優勝戦 " : ""}${mark.rank}着 → ${mark.score}点`}
+                                >
+                                  <span class="text-xs font-bold text-gray-800 tabular-nums">
+                                    {mark.rank}
+                                  </span>
+                                  <span class="text-[9px] text-emerald-700 tabular-nums">
+                                    {mark.score}
+                                  </span>
+                                </span>
+                              ) : mark.kind === "responsible" ? (
+                                <span
+                                  class="inline-flex flex-col items-center leading-none rounded-[2px] px-0.5 bg-red-50"
+                                  title={`${mark.token}（選手責任）→ 0点だが出走1回に計上`}
+                                >
+                                  <span class="text-xs font-bold text-red-600">{mark.token}</span>
+                                  <span class="text-[9px] text-red-500 tabular-nums">0</span>
+                                </span>
+                              ) : (
+                                <span
+                                  class="inline-flex flex-col items-center leading-none rounded-[2px] px-0.5"
+                                  title={`${mark.token}（選手責任外）→ 得点・出走とも計上しない`}
+                                >
+                                  <span class="text-xs font-bold text-gray-300">{mark.token}</span>
+                                  <span class="text-[9px] text-gray-300">除外</span>
+                                </span>
+                              ),
+                            )}
+                          </span>
+                        </td>
+                        <td class="py-1 px-1 text-right font-mono tabular-nums text-gray-800">
+                          {s.score}
+                        </td>
+                        <td class="py-1 px-1 text-right font-mono tabular-nums text-gray-800">
+                          {s.runs}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+
+          {/* 合計行 */}
+          <div class="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-700">
+            <span class="font-mono tabular-nums">
+              合計 {breakdown.totalScore}点 ÷ {breakdown.totalRuns}走 ={" "}
+              {breakdown.totalRuns > 0
+                ? (breakdown.totalScore / breakdown.totalRuns).toFixed(2)
+                : "—"}
+            </span>
+            <span class="mx-1">→</span>
+            <span class="font-bold">
+              素点 <span class="font-mono tabular-nums">{breakdown.basePoint ?? "—"}</span>
+            </span>
+            <span class="ml-1 text-gray-400">（四捨五入ではなく偶数丸め）</span>
+          </div>
+
+          {hasDuplicated && (
+            <p class="text-[10px] text-violet-700">
+              <span class="font-bold">二重計上</span>
+              の節は全国5節と当地5節の両方に含まれるため、素点では 2 回数えられます。
+              当地での実績が実質的に 2 倍の重みで効く、という挙動です。
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</section>

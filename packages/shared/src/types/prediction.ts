@@ -131,6 +131,17 @@ export type AiEvaluationContribution = Readonly<Partial<Record<ComponentKey, num
 export type AiEvaluationEntry = {
   readonly boatNumber: number;
   readonly contribution: AiEvaluationContribution;
+  /**
+   * 成分pt（偏差値スケール 50±10）。index CSV の `N枠_{label}` 列そのもので、
+   * `contribution` = 場別重み × この値の関係にある。選手pt の内訳ページが
+   * 偏差値そのものを出すために使う。
+   *
+   * 古い JSON では未設定のため、UI 側は undefined フォールバックすること。
+   *
+   * 注意: state=daily では preview 由来成分（展示 / 気象）は実測値ではなく
+   * 中立値 50 が入る（`contribution` 側はこの場合 0 に潰してある）。
+   */
+  readonly components?: AiEvaluationContribution;
   /** 強さpt（合計値の参考） */
   readonly strengthPt: number;
 };
