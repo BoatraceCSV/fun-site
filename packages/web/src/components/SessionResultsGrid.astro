@@ -70,11 +70,11 @@ const slotTitle = (s: SessionResultSlot): string => {
 */}
 {
   played.length > 0 ? (
-    <div class="flex flex-wrap items-start gap-x-2 gap-y-1">
+    <div class="flex flex-wrap items-start gap-x-1 gap-y-1">
       <div class="flex flex-col gap-0.5 shrink-0 text-[9px] text-gray-400 leading-none">
         <span class="h-3 flex items-center">今節</span>
         <span class="h-3 flex items-center">R</span>
-        <span class="h-5 flex items-center">進</span>
+        <span class="h-[18px] flex items-center">進</span>
         <span class="h-3 flex items-center">ST</span>
         <span class="h-4 flex items-center">着</span>
       </div>
@@ -83,19 +83,20 @@ const slotTitle = (s: SessionResultSlot): string => {
           <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none">
             {day}日目
           </span>
-          <div class="flex items-start gap-1">
+          <div class="flex items-start gap-0.5">
             {daySlots.map((s) => (
-              <div class="flex flex-col gap-0.5 items-center w-8" title={slotTitle(s)}>
+              <div class="flex flex-col gap-0.5 items-center w-[18px]" title={slotTitle(s)}>
                 <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none tabular-nums">
                   {s.race > 0 ? `${s.race}R` : "—"}
                 </span>
                 <span
-                  class="w-5 h-5 flex items-center justify-center rounded text-[11px] font-bold leading-none"
+                  class="w-[18px] h-[18px] flex items-center justify-center rounded text-[11px] font-bold leading-none"
                   style={laneStyle(s.lane)}
                 >
                   {s.entryCourse > 0 ? s.entryCourse : "·"}
                 </span>
-                <span class="h-3 flex items-center text-[9px] text-gray-400 leading-none tabular-nums">
+                {/* フライング表記 "F.03" が 20px 幅に収まるよう ST だけ 8px にする */}
+                <span class="h-3 flex items-center text-[8px] text-gray-400 leading-none tabular-nums">
                   {stText(s.st)}
                 </span>
                 <span

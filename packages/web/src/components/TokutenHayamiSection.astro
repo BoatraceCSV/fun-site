@@ -26,24 +26,29 @@ const scoreRateText = (racer: TokutenHayamiRacer): string =>
  */
 const ifRankClass = (status: number | null): string => {
   if (status === null || status === 0) return "text-gray-500";
-  if ((status & 4) !== 0) return "bg-amber-100 text-amber-900 font-bold rounded";
-  if ((status & 2) !== 0) return "bg-amber-50 text-amber-800 rounded";
+  if ((status & 4) !== 0) return "bg-amber-100 text-amber-900 font-bold";
+  if ((status & 2) !== 0) return "bg-amber-50 text-amber-800";
   if ((status & 1) !== 0) return "text-amber-800 font-medium";
   return "text-gray-500";
 };
 ---
 
 <div class="space-y-3">
+  {/*
+    iPhone 幅 (375px) で横スクロールせずに 10 列すべて収まるよう、フォントと
+    セル padding を絞っている。着順別セルの背景色は `<td>` 側に付けて
+    セル枠いっぱいを塗る（内側 span に付けると文字幅ぶんしか塗られない）。
+  */}
   <div class="overflow-x-auto">
-    <table class="w-full text-sm border-collapse">
+    <table class="w-full text-[11px] border-collapse">
       <thead>
-        <tr class="border-b border-gray-200 text-gray-500 text-[11px]">
-          <th class="text-left py-1 px-1 font-medium">枠</th>
-          <th class="text-left py-1 px-1 font-medium">選手</th>
-          <th class="text-right py-1 px-1 font-medium">得点率</th>
-          <th class="text-right py-1 px-1 font-medium">順位</th>
+        <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+          <th class="text-left py-1 px-0.5 font-medium">枠</th>
+          <th class="text-left py-1 px-0.5 font-medium">選手</th>
+          <th class="text-right py-1 px-0.5 font-medium">得点率</th>
+          <th class="text-right py-1 px-0.5 font-medium">順位</th>
           {[1, 2, 3, 4, 5, 6].map((k) => (
-            <th class="text-right py-1 px-1 font-medium tabular-nums">{k}着</th>
+            <th class="text-right py-1 px-0.5 font-medium tabular-nums">{k}着</th>
           ))}
         </tr>
       </thead>
@@ -54,44 +59,34 @@ const ifRankClass = (status: number | null): string => {
             : undefined;
           return (
             <tr class="border-b border-gray-100">
-              <td class="py-1.5 px-1">
+              <td class="py-1 px-0.5">
                 <span
-                  class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold"
+                  class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
                   style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
                 >
                   {racer.boatNumber}
                 </span>
               </td>
-              <td class="py-1.5 px-1">
-                <span class="whitespace-nowrap">{racer.racerName}</span>
-                {racer.classGrade && (
-                  <span class="ml-1 text-[10px] text-gray-400">{racer.classGrade}</span>
-                )}
-                {racer.otherRaceNumber !== null && (
-                  <span class="ml-1 text-[10px] text-gray-400">
-                    (本日{racer.otherRaceNumber}Rも出走)
-                  </span>
-                )}
-              </td>
+              <td class="py-1 px-0.5 text-[10px] whitespace-nowrap">{racer.racerName}</td>
               <td
-                class={`py-1.5 px-1 text-right tabular-nums font-bold ${
+                class={`py-1 px-0.5 text-right tabular-nums font-bold ${
                   racer.withinBorder ? "text-amber-700" : "text-gray-800"
                 }`}
               >
                 {scoreRateText(racer)}
               </td>
               <td
-                class={`py-1.5 px-1 text-right tabular-nums ${
+                class={`py-1 px-0.5 text-right tabular-nums ${
                   racer.withinBorder ? "text-amber-700 font-bold" : "text-gray-600"
                 }`}
               >
                 {racer.rank !== null ? racer.rank : "—"}
               </td>
               {racer.ifRanks.map((cell) => (
-                <td class="py-1.5 px-0.5 text-right tabular-nums">
-                  <span class={`inline-block px-1 py-0.5 text-[11px] ${ifRankClass(cell.status)}`}>
-                    {cell.scoreRate !== null ? cell.scoreRate.toFixed(2) : "—"}
-                  </span>
+                <td
+                  class={`py-1 px-0.5 text-right text-[10px] tabular-nums ${ifRankClass(cell.status)}`}
+                >
+                  {cell.scoreRate !== null ? cell.scoreRate.toFixed(2) : "—"}
                 </td>
               ))}
             </tr>
