@@ -309,6 +309,14 @@ const predictorPredictions: readonly PredictorPrediction[] =
     </section>
   )}
 
+  {/* 出走表（基本情報） */}
+  {prediction.racers.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">出走表</h2>
+      <RacerTable racers={prediction.racers} stadiumId={prediction.stadiumId} />
+    </section>
+  )}
+
   {/* 荒れ度メーター (レース単位。予想者に紐づかないので予想者カードの外に 1 回だけ) */}
   {prediction.upsetMeter && (
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
@@ -401,14 +409,6 @@ const predictorPredictions: readonly PredictorPrediction[] =
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
       <h2 class="font-bold text-lg mb-3">枠番別過去10走</h2>
       <Waku10Section waku10={prediction.waku10} />
-    </section>
-  )}
-
-  {/* 出走表（基本情報） */}
-  {prediction.racers.length > 0 && (
-    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 class="font-bold text-lg mb-3">出走表</h2>
-      <RacerTable racers={prediction.racers} stadiumId={prediction.stadiumId} />
     </section>
   )}
 

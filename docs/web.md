@@ -10,7 +10,7 @@
 |---|---|---|
 | `index.astro` | `/` | トップ。当日開催中 24 場の次レースを一覧表示。下部から `/archive/` へ導線 |
 | `stadium/[stadiumId]/index.astro` | `/stadium/{01-24}/` | 会場別。当日 1〜12R |
-| `race/[date]/[stadiumId]/[raceNumber].astro` | `/race/{YYYY-MM-DD}/{01-24}/{1-12}/` | レース詳細。セクション順は レース結果 → 荒れ度メーター → 予想者カード → 直前情報 → 得点率早見 → 枠番別過去10走 → 出走表 → 今節成績 → 近況5節。今節成績セクションは、いずれかの選手に出走済みの節間スロットがある場合のみ出す（初日は全員未出走なのでセクションごと消える）。`prediction.predictions[]` をループして各予想者ぶんの `PredictorCard` を縦並び描画。上部の 1R-12R リンクバーは確定済みタイルに「確定」バッジと、**直前買い目が的中した予想者ぶんのアイコン**（`PredictorSpec.icon`。本命 🎯 / スジ 🧩 / 穴 💎）を slot 昇順で並べる |
+| `race/[date]/[stadiumId]/[raceNumber].astro` | `/race/{YYYY-MM-DD}/{01-24}/{1-12}/` | レース詳細。セクション順は レース結果 → 出走表 → 荒れ度メーター → 予想者カード → 直前情報 → 得点率早見 → 枠番別過去10走 → 今節成績 → 近況5節。今節成績セクションは、いずれかの選手に出走済みの節間スロットがある場合のみ出す（初日は全員未出走なのでセクションごと消える）。`prediction.predictions[]` をループして各予想者ぶんの `PredictorCard` を縦並び描画。上部の 1R-12R リンクバーは確定済みタイルに「確定」バッジと、**直前買い目が的中した予想者ぶんのアイコン**（`PredictorSpec.icon`。本命 🎯 / スジ 🧩 / 穴 💎）を slot 昇順で並べる |
 | `predictors/index.astro` | `/predictors/` | 予想者比較。`src/data/predictors/stats.json` を読み、active 予想者の通算回収率・月次推移・採用成分を表で表示 |
 | `stats/index.astro` | `/stats/` | 統計。`src/data/predictors/breakdown.json` を読み、各予想者の直前回収率・的中率を時系列推移 (累積、`TrendLineChart` の折れ線) と 6 軸 (場別 / グレード別 / 買い目点数別 / 本命枠番別 / 配当帯別 / 風速別) のテーブルで表示。各セルは n とセットで出し、`n < 20` は参考値として淡色表示 |
 | `archive/index.astro` | `/archive/` | 過去公開日付のインデックス。月別グルーピング |
