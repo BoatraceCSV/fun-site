@@ -1,0 +1,404 @@
+---
+import type { MotorPtSessionBreakdown, RacePrediction, RaceRacer } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  MOTOR_NEGATIVE_SCORE,
+  MOTOR_PT_GRADE_BUCKET_LABELS,
+  MOTOR_PT_PARAMS,
+  MOTOR_PT_SCORE_TABLE,
+  computeMotorSessionBreakdown,
+  getStadiumById,
+  isValidBoatNumber,
+  parseRaceCode,
+} from "@fun-site/shared";
+import MotorPtCard from "../../../../../components/MotorPtCard.astro";
+import BaseLayout from "../../../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+  for (const date of dates) {
+    for (const prediction of await loadPredictions(date)) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      paths.push({
+        params: {
+          date: parsed.date,
+          stadiumId: parsed.stadiumId,
+          raceNumber: String(prediction.raceNumber),
+        },
+        props: { prediction },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/`;
+const title = `${stadiumName} ${prediction.raceNumber}R モーター詳細 - モーターptの読み方`;
+
+/*
+  モーターpt は index CSV の成分の 1 つ。preview 由来ではないので daily 行と realtime 行で
+  値は変わらないが、強さpt（寄与の分母）は realtime で更新されるため、評価の状態を
+  明示したうえで realtime を優先して使う。`aiEvaluation` は primary predictor の
+  realtime ?? daily を平坦化したもの。
+*/
+const evaluation = prediction.aiEvaluation;
+const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
+
+type MotorPtView = {
+  readonly racer: RaceRacer;
+  readonly session: MotorPtSessionBreakdown;
+  readonly motorPt: number | undefined;
+  readonly contribution: number | undefined;
+  readonly strengthPt: number;
+};
+
+const views: MotorPtView[] = [...prediction.racers]
+  .sort((a, b) => a.boatNumber - b.boatNumber)
+  .map((racer) => {
+    const entry = entryByBoat.get(racer.boatNumber);
+    return {
+      racer,
+      session: computeMotorSessionBreakdown(
+        racer.sessionResults,
+        racer.classGrade,
+        prediction.grade ?? "",
+      ),
+      // motor4 は v4_motor 系（退役済み）のモーターpt。過去日の JSON で primary が
+      // 差し替わっていた場合に備えてフォールバックする。
+      motorPt: entry?.components?.motor ?? entry?.components?.motor4,
+      contribution: entry?.contribution.motor ?? entry?.contribution.motor4,
+      strengthPt: entry?.strengthPt ?? 0,
+    };
+  });
+
+/** モーターpt の場内順位（1 が最上位）。未取得の艇は順位を付けない */
+const ptRank = new Map<number, number>();
+[...views]
+  .filter((v) => v.motorPt !== undefined)
+  .sort((a, b) => (b.motorPt ?? 0) - (a.motorPt ?? 0))
+  .forEach((v, i) => ptRank.set(v.racer.boatNumber, i + 1));
+
+const maxPt = Math.max(1, ...views.map((v) => v.motorPt ?? 0));
+
+/** 今節の走りが 1 走でもあるか（初日は全艇 0 走なので参考値の列ごと落とす） */
+const hasSessionRuns = views.some((v) => v.session.runs.length > 0);
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+---
+
+<BaseLayout title={title}>
+  {/* パンくず */}
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
+    <span class="mx-1">/</span>
+    <a href={raceHref} class="hover:text-blue-600">{prediction.raceNumber}R</a>
+    <span class="mx-1">/</span>
+    <span>モーター詳細</span>
+  </nav>
+
+  {/* ヘッダ */}
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
+      <span>{stadiumName}</span>
+      <span class="text-blue-600">{prediction.raceNumber}R</span>
+      <span class="text-base text-gray-700 font-normal">モーター詳細</span>
+    </h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {prediction.raceDate}
+      {prediction.raceName && ` / ${prediction.raceName}`}
+      {" / AI総合評価の"}
+      <span class="font-bold text-orange-700">モーターpt</span>
+      が何を測っている数字なのかを開示するページです。
+    </p>
+  </header>
+
+  {/* 6艇まとめ */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">モーターpt 一覧</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[11px] border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+            <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium">モーター</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium w-1/3">モーターpt</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">期3連</th>
+            {hasSessionRuns && <th scope="col" class="text-right py-1 px-1 font-medium">今節</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {views.map((v) => {
+            const color = isValidBoatNumber(v.racer.boatNumber)
+              ? BOAT_COLORS[v.racer.boatNumber]
+              : undefined;
+            const rank = ptRank.get(v.racer.boatNumber);
+            const widthPct = v.motorPt !== undefined ? (v.motorPt / maxPt) * 100 : 0;
+            const stats = v.racer.motorStats;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="py-1 px-1 align-middle">
+                  <span
+                    class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${v.racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {v.racer.boatNumber}
+                  </span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <a
+                    href={`#boat-${v.racer.boatNumber}`}
+                    class="text-[12px] font-medium text-blue-700 hover:underline font-mono tabular-nums"
+                  >
+                    #{v.racer.motorNumber}
+                  </a>
+                  <span class="block text-[10px] text-gray-400">{v.racer.racerName}</span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <span class="flex items-center gap-1.5">
+                    <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
+                      <span
+                        class="block h-full bg-orange-500"
+                        style={`width: ${widthPct}%`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="font-mono tabular-nums text-gray-800 w-9 text-right">
+                      {num(v.motorPt, 1)}
+                    </span>
+                    {rank !== undefined && (
+                      <span
+                        class={`w-5 text-[10px] text-right ${rank === 1 ? "font-bold text-orange-700" : "text-gray-400"}`}
+                      >
+                        {rank}位
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                  {num(v.contribution, 2)}
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                  {v.strengthPt.toFixed(2)}
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                  {stats && stats.top3Rate > 0 ? (
+                    <>
+                      {stats.top3Rate.toFixed(1)}
+                      {stats.top3Rank > 0 && (
+                        <span class="block text-[10px] text-gray-400">{stats.top3Rank}位</span>
+                      )}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                {hasSessionRuns && (
+                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                    {num(v.session.average, 1)}
+                    <span class="block text-[10px] text-gray-400">{v.session.countedRuns}打点</span>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-2">
+      モーターptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × モーターpt で、
+      強さptはこの寄与を含む5成分の合計です。
+      {hasSessionRuns && "「今節」列は今節の走りをスコア表で採点した参考値で、モーターptには含まれません。"}
+      評価は
+      <span class="font-mono">{evaluation.state === "realtime" ? "直前情報反映後" : "朝バッチ時点"}</span>
+      のもの（モーターpt自体は直前情報では変わりません）。
+    </p>
+  </section>
+
+  {/* モーターごとの内訳 */}
+  <div class="space-y-4 mb-6">
+    {views.map((v) => (
+      <MotorPtCard
+        racer={v.racer}
+        session={v.session}
+        motorPt={v.motorPt}
+        contribution={v.contribution}
+        strengthPt={v.strengthPt}
+      />
+    ))}
+  </div>
+
+  {/* 計算ロジックの解説 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <details>
+      <summary class="font-bold text-lg cursor-pointer">モーターptの計算ロジック</summary>
+
+      <div class="mt-3 space-y-4 text-sm text-gray-700">
+        <div>
+          <h3 class="font-bold text-sm mb-1">3段階で決まる</h3>
+          <ol class="list-decimal list-inside space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">素点</span> = 当場の直近
+              {MOTOR_PT_PARAMS.historySessions}節ぶんの走を着順スコア表で採点し、
+              時間減衰・コース補正・ベイズ収縮をかけた加重平均。
+              <span class="font-bold">当日を含む節は対象外</span>です
+            </li>
+            <li>
+              <span class="font-bold">モーターpt</span> = 50 + 10 × (素点 − μ) ÷ σ。
+              μ・σ は開催場ごとに学習した平均・標準偏差
+            </li>
+            <li>
+              <span class="font-bold">寄与</span> = 場別重み w × モーターpt。
+              5成分の寄与を合計したものが強さptになります（重みの合計は 1）
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">着順スコア表</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-[11px] border-collapse">
+              <thead>
+                <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                  <th scope="col" class="text-left py-1 px-1 font-medium">級別</th>
+                  <th scope="col" class="text-left py-1 px-1 font-medium">グレード</th>
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <th scope="col" class="text-right py-1 px-1 font-medium">{n}着</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody class="font-mono tabular-nums text-gray-800">
+                {MOTOR_PT_SCORE_TABLE.map((row) => (
+                  <tr class="border-b border-gray-100">
+                    <th
+                      scope="row"
+                      class="text-left py-1 px-1 font-sans font-medium text-gray-600 whitespace-nowrap"
+                    >
+                      {row.racerClass}
+                    </th>
+                    <td class="py-1 px-1 font-sans text-gray-500 whitespace-nowrap">
+                      {MOTOR_PT_GRADE_BUCKET_LABELS[row.bucket]}
+                    </td>
+                    {row.points.map((score) => (
+                      <td class="text-right py-1 px-1">{score}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-[11px] text-gray-500 mt-1">
+            測りたいのは<span class="font-bold">モーターの出来</span>なので、
+            上位級の選手が上位に入っても割り引きます（同じ 1 着でも B2 は 125点、A1 の一般戦は
+            50点）。B1・B2 は開催グレードで分けません。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">着順以外のトークンの扱い</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold text-red-600">転・落・沈・エ</span>（機材起因）—
+              <span class="font-bold">{MOTOR_NEGATIVE_SCORE}点</span>で打点にも数えます
+            </li>
+            <li>
+              <span class="font-bold text-gray-400">F・L・失・妨・欠・不</span>（選手起因・無効走）—
+              得点・打点とも<span class="font-bold">計上しません</span>
+            </li>
+          </ul>
+          <p class="text-[11px] text-gray-500 mt-1">
+            F・L の扱いが選手ptと逆（選手ptでは 0点で出走回数に計上し、素点を強く下げる）なのは、
+            フライングはモーターの出来ではなく選手のスタートだからです。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">素点の集計（3つの補正）</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">時間減衰</span> — 各走の重みは
+              <span class="font-mono">exp(−ln2 × 経過日数 ÷ {MOTOR_PT_PARAMS.decayHalfLifeDays})</span>。
+              半減期 {MOTOR_PT_PARAMS.decayHalfLifeDays} 日で、整備による短期の変化を追えるようにする
+            </li>
+            <li>
+              <span class="font-bold">コース補正</span> — 生の得点ではなく
+              <span class="font-mono">(得点 − μ_セル) ÷ σ_セル</span> の z 残差を集計する。
+              セルは 級別 × グレード × 進入コース で、1コースの 1着と 6コースの 1着の価値差を吸収する。
+              サンプルが {MOTOR_PT_PARAMS.laneBaselineMinSamples} 未満のセルは 級別 × グレード の平均に
+              フォールバックし、σ には下限 {MOTOR_PT_PARAMS.laneBaselineSdFloor} を置く
+            </li>
+            <li>
+              <span class="font-bold">ベイズ収縮</span> — 走数が少ないモーター（期切替直後・休場明け）を
+              平均（z 残差 0）へ縮める。<span class="font-mono">n_eff ÷ (n_eff + {MOTOR_PT_PARAMS.shrinkagePriorK})</span> 倍で、
+              実効 {MOTOR_PT_PARAMS.shrinkagePriorK} 走で 50% の収縮
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">補足</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              節の検出は当場の開催日を最大 {MOTOR_PT_PARAMS.lookbackDays} 日遡って行い、
+              <span class="font-bold">モーター期の起算日より前の節は除外</span>します
+              （期が替わればモーターは別物なので）
+            </li>
+            <li>
+              有効な走が 1 本も無いモーターの素点は欠損になり、モーターptは平均の 50 で補完されます
+            </li>
+            <li>
+              出走表のモーター2連率・3連率や期成績（3連率・優勝/優出・平均ラップ）は
+              <span class="font-bold">モーターptの入力ではありません</span>。
+              モーターptは着順を級別・グレード・コースで補正して測り直した別の指標です
+            </li>
+            <li>
+              モーターptは展示・気象と違い朝バッチの時点で確定し、直前情報では更新されません
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <p class="text-[13px]">
+            素点の再現には当場の過去 {MOTOR_PT_PARAMS.historySessions} 節ぶんの出走表（全モーターの
+            全走）と、コース補正のための全24場横断のベースラインが必要です。fun-site が取得しているのは
+            当日ぶんの CSV だけなので、モーターptは
+            <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>しています。
+            計算過程まで開示しているのは
+            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
+            （入力の近況5節を手元に持っているため）だけです。
+          </p>
+        </div>
+
+        <p class="text-[11px] text-gray-500">
+          データと計算式の一次情報は
+          <a
+            href="https://github.com/BoatraceCSV/boatracecsv.github.io/blob/main/docs/design/motor_ability_index_v2.md"
+            class="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer">BoatraceCSV のモーター能力指数 v2 設計書</a
+          >を参照してください。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <div class="text-center mt-6">
+    <a href={raceHref} class="text-blue-600 hover:text-blue-800 text-sm">
+      ← {stadiumName} {prediction.raceNumber}R に戻る
+    </a>
+  </div>
+</BaseLayout>

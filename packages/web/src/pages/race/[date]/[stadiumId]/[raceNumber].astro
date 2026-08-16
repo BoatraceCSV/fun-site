@@ -114,6 +114,8 @@ const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
 // 選手pt の計算根拠ページ。AI 評価内訳の「選手」凡例から張る。active な予想者は
 // 5 成分が同一で選手ptも同値なので、どのカードから飛んでも同じページでよい。
 const racerPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/racers/`;
+// モーターpt の詳細ページ。同じく AI 評価内訳の「モーター」凡例から張る。
+const motorPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/motors/`;
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
 // 今節成績表は、いずれかの選手に出走済みスロットがある場合のみ出す
@@ -382,6 +384,7 @@ const predictorPredictions: readonly PredictorPrediction[] =
           useOneMarkEstimatedST={usesEstimatedST}
           recipeNote={recipeNote}
           racerPtHref={racerPtHref}
+          motorPtHref={motorPtHref}
         />
       </section>
     );

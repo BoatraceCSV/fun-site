@@ -53,6 +53,26 @@ export {
   type RacerPtSessionInput,
 } from "./racer-pt.js";
 export {
+  MOTOR_NEGATIVE_SCORE,
+  MOTOR_NEGATIVE_TOKENS,
+  MOTOR_PT_GRADE_BUCKET_LABELS,
+  MOTOR_PT_PARAMS,
+  MOTOR_PT_SCORE_TABLE,
+  MOTOR_SKIP_TOKENS,
+  computeMotorSessionBreakdown,
+  motorPtRaceGradeBucket,
+  motorPtScoreRow,
+  normalizeMotorFinishToken,
+  resolveMotorPtBucket,
+  scoreMotorRun,
+  type MotorPtGradeBucket,
+  type MotorPtRacerClass,
+  type MotorPtRun,
+  type MotorPtRunMark,
+  type MotorPtScoreRow,
+  type MotorPtSessionBreakdown,
+} from "./motor-pt.js";
+export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,
   computeBetPayout,

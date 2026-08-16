@@ -15,9 +15,28 @@ interface Props {
    * 渡された場合のみ、凡例の「選手」が計算根拠へのリンクになる。
    */
   racerPtHref?: string;
+  /**
+   * モーターpt の詳細ページ (`/race/{date}/{stadiumId}/{raceNumber}/motors/`) への URL。
+   * 渡された場合のみ、凡例の「モーター」が詳細へのリンクになる。
+   */
+  motorPtHref?: string;
 }
 
-const { evaluation, racerPtHref } = Astro.props;
+const { evaluation, racerPtHref, motorPtHref } = Astro.props;
+
+/** 成分キー → 計算根拠ページの URL と凡例リンクの title。 */
+const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>> = {
+  ...(racerPtHref
+    ? { racer: { href: racerPtHref, title: "選手ptの計算根拠（近況5節の着順・適用スコア）を表示" } }
+    : {}),
+  // motor4 は退役した v4_motor 系のモーターpt。指標は違うが解説ページは共通でよい。
+  ...(motorPtHref
+    ? {
+        motor: { href: motorPtHref, title: "モーターptの読み方（スコア表・補正・期成績）を表示" },
+        motor4: { href: motorPtHref, title: "モーターptの読み方（スコア表・補正・期成績）を表示" },
+      }
+    : {}),
+};
 
 const isDaily = evaluation.state === "daily";
 
@@ -68,7 +87,7 @@ const axisMax = Math.ceil(rawMax / 10) * 10;
 ---
 
 <div class="space-y-3">
-  {/* 凡例。選手成分だけは計算根拠のページを持つのでリンクにする */}
+  {/* 凡例。詳細ページを持つ成分（選手 / モーター）だけリンクにする */}
   <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
     {SEGMENTS.map((seg) => {
       const swatch = (
@@ -78,17 +97,18 @@ const axisMax = Math.ceil(rawMax / 10) * 10;
           aria-hidden="true"
         />
       );
-      if (seg.key === "racer" && racerPtHref) {
+      const link = detailLinks[seg.key];
+      if (link) {
         return (
           <a
-            href={racerPtHref}
+            href={link.href}
             class="inline-flex items-center gap-1.5 text-blue-700 hover:underline"
-            title="選手ptの計算根拠（近況5節の着順・適用スコア）を表示"
+            title={link.title}
           >
             {swatch}
             {seg.label}
             <span aria-hidden="true" class="text-[10px]">▸</span>
-            <span class="sr-only">の計算根拠を見る</span>
+            <span class="sr-only">の詳細を見る</span>
           </a>
         );
       }

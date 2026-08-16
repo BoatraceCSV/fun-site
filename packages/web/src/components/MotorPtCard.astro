@@ -1,0 +1,262 @@
+---
+import type { MotorPtRun, MotorPtSessionBreakdown, RaceRacer } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  MOTOR_NEGATIVE_SCORE,
+  MOTOR_PT_GRADE_BUCKET_LABELS,
+  MOTOR_PT_PARAMS,
+  isValidBoatNumber,
+} from "@fun-site/shared";
+
+interface Props {
+  racer: RaceRacer;
+  /** 今節の走りをスコア表で採点した参考値。モーターpt には未算入 */
+  session: MotorPtSessionBreakdown;
+  /** モーターpt（偏差値）。index CSV 由来。古い JSON では undefined */
+  motorPt: number | undefined;
+  /** 寄与pt = 場別重み × モーターpt。index CSV 由来 */
+  contribution: number | undefined;
+  /** 強さpt（この艇の 5 成分の寄与合計） */
+  strengthPt: number;
+}
+
+const { racer, session, motorPt, contribution, strengthPt } = Astro.props;
+
+const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
+
+/** 場別重み w。寄与 = w × モーターpt の関係から逆算する（weights CSV は未取り込み） */
+const weight =
+  motorPt !== undefined && contribution !== undefined && motorPt !== 0
+    ? contribution / motorPt
+    : undefined;
+
+/** 偏差値 → z。「平均から何σ上か」の言い換えに使う */
+const z = motorPt !== undefined ? (motorPt - 50) / 10 : undefined;
+
+/** 強さptに占めるモーターptの寄与割合 */
+const sharePct =
+  contribution !== undefined && strengthPt > 0 ? (contribution / strengthPt) * 100 : undefined;
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+
+/** 未計測（0）は "—" */
+const stat = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : "—");
+
+const stats = racer.motorStats;
+
+/** 今節の走りを日次でグルーピング（1日 = 最大2走） */
+const runsByDay: { day: number; runs: MotorPtRun[] }[] = [];
+for (const run of session.runs) {
+  const last = runsByDay[runsByDay.length - 1];
+  if (last && last.day === run.day) last.runs.push(run);
+  else runsByDay.push({ day: run.day, runs: [run] });
+}
+---
+
+<section
+  class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+  id={`boat-${racer.boatNumber}`}
+  aria-label={`${racer.boatNumber}号艇 モーター${racer.motorNumber} のモーターpt`}
+>
+  {/* ヘッダ: 枠番 / モーター番号 / 乗っている選手 */}
+  <header class="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-wrap">
+    <span
+      class="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0"
+      style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+    >
+      {racer.boatNumber}
+    </span>
+    <h2 class="font-bold text-base">
+      <span class="text-gray-400 text-sm">モーター</span>#{racer.motorNumber}
+    </h2>
+    <span class="text-xs text-gray-500">
+      {racer.racerName}
+      {racer.classGrade && ` (${racer.classGrade})`}
+      {racer.boatBodyNumber > 0 && ` / ボート#${racer.boatBodyNumber}`}
+    </span>
+  </header>
+
+  <div class="p-4 space-y-4">
+    {/* モーターpt サマリー: 結論を先に出す */}
+    <div class="rounded-md bg-orange-50 border border-orange-200 p-3">
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-xs font-bold text-orange-800">モーターpt</span>
+        <span class="text-2xl font-bold font-mono tabular-nums text-orange-900">
+          {num(motorPt, 2)}
+        </span>
+        {z !== undefined && (
+          <span class="text-[11px] text-orange-700">
+            （この場の平均より {z >= 0 ? "+" : ""}{z.toFixed(2)}σ）
+          </span>
+        )}
+      </div>
+
+      {/* 素点 → モーターpt → 寄与 のフロー */}
+      <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-orange-900">
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-orange-700">素点</span>
+          <span
+            class="font-bold text-orange-400"
+            title="素点の再現には当場の過去6節ぶんの出走表と全24場横断のベースラインが要るため、fun-site 側では計算できません"
+          >
+            再現不可
+          </span>
+        </li>
+        <li aria-hidden="true" class="text-orange-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-orange-700">モーターpt</span>
+          <span class="font-mono font-bold tabular-nums">{num(motorPt, 2)}</span>
+        </li>
+        <li aria-hidden="true" class="text-orange-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-orange-700">寄与</span>
+          <span class="font-mono font-bold tabular-nums">{num(contribution, 2)}</span>
+          {sharePct !== undefined && (
+            <span class="text-orange-700">
+              （強さpt {strengthPt.toFixed(2)} の {sharePct.toFixed(1)}%）
+            </span>
+          )}
+        </li>
+      </ol>
+
+      {weight !== undefined && (
+        <p class="mt-1.5 text-[10px] text-orange-700">
+          モーターpt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × モーターpt。
+          重みは直近6ヶ月のデータから場別・月次で学習された値です。
+        </p>
+      )}
+    </div>
+
+    {/* 期成績。モーターptの入力ではないが、モーターの評価として一緒に読む値 */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">モーター成績</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px] border-collapse">
+          <thead>
+            <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+              <th scope="col" class="text-left py-1 px-1 font-medium">区分</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">2連率</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">3連率</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">場内順位</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">優勝/優出</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">平均ラップ</th>
+            </tr>
+          </thead>
+          <tbody class="tabular-nums font-mono text-gray-800">
+            <tr class="border-b border-gray-100">
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600 whitespace-nowrap">
+                出走表
+              </th>
+              <td class="text-right py-1 px-1">{stat(racer.motorTop2Rate, 1)}</td>
+              <td class="text-right py-1 px-1">{stat(racer.motorTop3Rate, 1)}</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+            </tr>
+            <tr>
+              <th scope="row" class="text-left py-1 px-1 font-sans font-medium text-gray-600 whitespace-nowrap">
+                期成績
+              </th>
+              <td class="text-right py-1 px-1 text-gray-300">—</td>
+              <td class="text-right py-1 px-1">{stats ? stat(stats.top3Rate, 1) : "—"}</td>
+              <td class="text-right py-1 px-1">
+                {stats && stats.top3Rank > 0 ? `${stats.top3Rank}位` : "—"}
+              </td>
+              <td class="text-right py-1 px-1">
+                {stats ? `${stats.championCount} / ${stats.finalAppearances}` : "—"}
+              </td>
+              <td class="text-right py-1 px-1">{stats ? num(stats.avgLapSec, 2) : "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-gray-400 mt-1">
+        {stats
+          ? "期成績は motor_stats（モーター期の通算）由来。モーターptの計算には使いません（着順ベースで別に集計します）。"
+          : "この場は motor_stats が未収録のため期成績を表示できません。"}
+      </p>
+    </div>
+
+    {/* 今節の走り（参考値） */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+        今節の走り<span class="ml-1 font-normal text-gray-400">（参考値・モーターptには未算入）</span>
+      </h3>
+
+      {session.runs.length === 0 ? (
+        <p class="text-[11px] text-gray-500">今節はまだ出走していません（初日など）。</p>
+      ) : (
+        <div class="space-y-2">
+          <div class="overflow-x-auto">
+            <span class="flex items-end gap-x-2 gap-y-1 flex-wrap">
+              {runsByDay.map((group) => (
+                <span class="inline-flex items-end gap-0.5 border-l border-gray-200 pl-1.5 first:border-l-0 first:pl-0">
+                  {group.runs.map((run) => (
+                    <span
+                      class="inline-flex flex-col items-center leading-none w-8"
+                      title={`${run.day}日目${run.run}走 / ${run.race}R / ${run.entryCourse > 0 ? `${run.entryCourse}コース` : "進入不明"}`}
+                    >
+                      <span class="text-[9px] text-gray-400 tabular-nums">{run.day}日{run.run}走</span>
+                      <span class="text-[9px] text-gray-500 tabular-nums">
+                        {run.entryCourse > 0 ? `${run.entryCourse}コース` : "—"}
+                      </span>
+                      {run.mark.kind === "scored" ? (
+                        <>
+                          <span class="text-sm font-bold text-gray-800 tabular-nums">
+                            {run.mark.rank}
+                          </span>
+                          <span class="text-[10px] text-orange-700 tabular-nums">
+                            {run.mark.score}
+                          </span>
+                        </>
+                      ) : run.mark.kind === "negative" ? (
+                        <>
+                          <span class="text-sm font-bold text-red-600">{run.mark.token}</span>
+                          <span class="text-[10px] text-red-500 tabular-nums">
+                            {run.mark.score}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span class="text-sm font-bold text-gray-300">{run.mark.token}</span>
+                          <span class="text-[10px] text-gray-300">除外</span>
+                        </>
+                      )}
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </span>
+          </div>
+
+          <div class="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-700">
+            <span class="font-mono tabular-nums">
+              {session.totalScore}点 ÷ {session.countedRuns}打点 ={" "}
+              {num(session.average, 1)}
+            </span>
+            <span class="ml-2 text-gray-500">
+              （{session.racerClass || "級別不明"} ×{" "}
+              {MOTOR_PT_GRADE_BUCKET_LABELS[session.bucket]} の行:{" "}
+              {session.row ? session.row.points.join(" / ") : "—"}）
+            </span>
+          </div>
+
+          <p class="text-[10px] text-gray-400">
+            モーターptの集計は<span class="font-bold">当日を含む節を対象外</span>にするため、
+            この {session.countedRuns} 打点は上のモーターptには入っていません。時間減衰・
+            コース補正・ベイズ収縮もかけていない単純平均です。
+            転・落・沈・エは {MOTOR_NEGATIVE_SCORE} 点、F・L・失・妨・欠・不は集計から外します。
+          </p>
+        </div>
+      )}
+    </div>
+
+    {/* 素点を出せない理由 */}
+    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
+      素点の内訳（直近 {MOTOR_PT_PARAMS.historySessions} 節ぶんの走とその重み）は、当場の過去
+      {MOTOR_PT_PARAMS.historySessions} 節ぶんの出走表と、コース補正のための全24場横断の
+      ベースラインが要ります。fun-site は当日ぶんの CSV しか取得していないため再現できません。
+    </p>
+  </div>
+</section>

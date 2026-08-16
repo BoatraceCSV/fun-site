@@ -49,6 +49,11 @@ interface Props {
    * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
    */
   racerPtHref?: string;
+  /**
+   * AI 評価内訳の「モーター」から張る、モーターpt の詳細ページへの URL。
+   * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
+   */
+  motorPtHref?: string;
 }
 
 const {
@@ -61,6 +66,7 @@ const {
   recipeNote,
   useOneMarkEstimatedST = false,
   racerPtHref,
+  motorPtHref,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -118,7 +124,11 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
     {showChart && chartEval && (
       <div class="border-t border-gray-100 pt-3">
         <h3 class="text-sm font-semibold text-gray-700 mb-2">AI 評価の内訳</h3>
-        <AiEvaluationChart evaluation={chartEval} racerPtHref={racerPtHref} />
+        <AiEvaluationChart
+          evaluation={chartEval}
+          racerPtHref={racerPtHref}
+          motorPtHref={motorPtHref}
+        />
       </div>
     )}
 
