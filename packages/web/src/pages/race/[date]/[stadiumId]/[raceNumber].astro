@@ -118,6 +118,9 @@ const racerPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${pred
 const motorPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/motors/`;
 // 枠番pt の詳細ページ。同じく AI 評価内訳の「枠番」から張る。
 const wakuPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/lanes/`;
+// 展示pt の詳細ページ。AI 評価内訳の「展示」(realtime 評価でのみ出る凡例) と
+// 直前情報セクションの見出し右から張る。
+const exhibitPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/exhibition/`;
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
 // 今節成績表は、いずれかの選手に出走済みスロットがある場合のみ出す
@@ -388,6 +391,7 @@ const predictorPredictions: readonly PredictorPrediction[] =
           racerPtHref={racerPtHref}
           motorPtHref={motorPtHref}
           wakuPtHref={wakuPtHref}
+          exhibitPtHref={exhibitPtHref}
         />
       </section>
     );
@@ -400,7 +404,14 @@ const predictorPredictions: readonly PredictorPrediction[] =
       prediction.preview.weather ||
       prediction.preview.originalExhibition) && (
       <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <h2 class="font-bold text-lg mb-3">直前情報</h2>
+        {/* 展示pt の詳細ページは同じ直前情報を展示ptと並べて出すので、ここからも張る
+             (daily 評価では AI 評価バーに展示セグメントが出ず、凡例からの導線が無い) */}
+        <div class="flex items-baseline justify-between gap-2 mb-3">
+          <h2 class="font-bold text-lg">直前情報</h2>
+          <a href={exhibitPtHref} class="text-xs text-blue-700 hover:underline shrink-0">
+            展示ptの詳細 <span aria-hidden="true">▸</span>
+          </a>
+        </div>
         <RacePreviewSection preview={prediction.preview} />
       </section>
     )}

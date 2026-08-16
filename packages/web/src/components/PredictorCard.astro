@@ -59,6 +59,12 @@ interface Props {
    * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
    */
   wakuPtHref?: string;
+  /**
+   * AI 評価内訳の「展示」から張る、展示pt の詳細ページへの URL。
+   * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない
+   * (展示は preview 由来成分なので daily 評価では凡例自体が出ない)。
+   */
+  exhibitPtHref?: string;
 }
 
 const {
@@ -73,6 +79,7 @@ const {
   racerPtHref,
   motorPtHref,
   wakuPtHref,
+  exhibitPtHref,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -135,6 +142,7 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
           racerPtHref={racerPtHref}
           motorPtHref={motorPtHref}
           wakuPtHref={wakuPtHref}
+          exhibitPtHref={exhibitPtHref}
         />
       </div>
     )}

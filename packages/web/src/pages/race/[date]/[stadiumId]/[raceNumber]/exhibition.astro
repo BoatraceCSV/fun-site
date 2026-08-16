@@ -1,0 +1,426 @@
+---
+import type {
+  ExhibitPtBoatAggregate,
+  RacePrediction,
+  RacePreviewBoat,
+  RaceRacer,
+} from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  EXHIBIT_PT_DAILY_NEUTRAL,
+  computeExhibitPtAggregate,
+  getStadiumById,
+  isValidBoatNumber,
+  parseRaceCode,
+} from "@fun-site/shared";
+import ExhibitPtCard from "../../../../../components/ExhibitPtCard.astro";
+import BaseLayout from "../../../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+  for (const date of dates) {
+    for (const prediction of await loadPredictions(date)) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      paths.push({
+        params: {
+          date: parsed.date,
+          stadiumId: parsed.stadiumId,
+          raceNumber: String(prediction.raceNumber),
+        },
+        props: { prediction },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/`;
+const title = `${stadiumName} ${prediction.raceNumber}R 展示詳細 - 展示ptの読み方`;
+
+/*
+  展示pt は index CSV の **preview 由来**成分。朝バッチ (daily) では展示が行われて
+  いないため中立値 50 / 寄与 0 で、直前情報が反映された realtime 行で初めて実測が入る。
+  `aiEvaluation` は primary predictor の realtime ?? daily を平坦化したもの。
+*/
+const evaluation = prediction.aiEvaluation;
+const isDaily = evaluation.state === "daily";
+const hasExhibitComponent = evaluation.componentKeys.includes("exhibit");
+const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
+
+/** スタート展示の実測ST。stt 未取得 / 展示未計測の艇は null */
+const exhibitionStByBoat = new Map(
+  prediction.startPrediction.entries.map((e) => [e.boatNumber, e.exhibitionStartTiming]),
+);
+
+/** 展示（体重・チルト・展示タイム）。tkz 未取得のレースでは空 */
+const previewByBoat = new Map<number, RacePreviewBoat>(
+  (prediction.preview?.boats ?? []).map((b) => [b.boatNumber, b] as const),
+);
+
+const originalLabels = prediction.preview?.originalExhibition?.labels ?? [];
+const originalByBoat = new Map(
+  (prediction.preview?.originalExhibition?.boats ?? []).map((b) => [b.boatNumber, b.values]),
+);
+
+const racers: readonly RaceRacer[] = [...prediction.racers].sort(
+  (a, b) => a.boatNumber - b.boatNumber,
+);
+
+const aggregate = computeExhibitPtAggregate(
+  racers.map((racer) => ({
+    boatNumber: racer.boatNumber,
+    exhibitionTime: previewByBoat.get(racer.boatNumber)?.exhibitionTime ?? null,
+    exhibitionStartTiming: exhibitionStByBoat.get(racer.boatNumber) ?? null,
+    exhibitPt: entryByBoat.get(racer.boatNumber)?.components?.exhibit,
+  })),
+);
+const aggByBoat = new Map<number, ExhibitPtBoatAggregate>(
+  aggregate.boats.map((b) => [b.boatNumber, b]),
+);
+
+type ExhibitPtView = {
+  readonly racer: RaceRacer;
+  readonly agg: ExhibitPtBoatAggregate;
+  readonly contribution: number | undefined;
+  readonly strengthPt: number;
+};
+
+const views: ExhibitPtView[] = racers.map((racer) => {
+  const entry = entryByBoat.get(racer.boatNumber);
+  return {
+    racer,
+    agg: aggByBoat.get(racer.boatNumber) ?? {
+      boatNumber: racer.boatNumber,
+      exhibitionTime: null,
+      timeRank: null,
+      gapToFastestTime: null,
+      exhibitionStartTiming: null,
+      startTimingRank: null,
+      exhibitPt: undefined,
+      ptRank: null,
+      rankGap: null,
+    },
+    contribution: entry?.contribution.exhibit,
+    strengthPt: entry?.strengthPt ?? 0,
+  };
+});
+
+const maxPt = Math.max(1, ...views.map((v) => v.agg.exhibitPt ?? 0));
+
+/** 展示タイムを 1 艇でも取れているか（未取得なら列ごと落とす） */
+const hasExhibitionTime = aggregate.measuredTimeCount > 0;
+/** スタート展示ST を 1 艇でも取れているか */
+const hasExhibitionSt = aggregate.measuredStartTimingCount > 0;
+
+/** 展示pt と展示タイムの順位相関の読み方（一致度） */
+const agreement = aggregate.ptTimeAgreement;
+const agreementLabel =
+  agreement === null
+    ? null
+    : agreement >= 0.9
+      ? "ほぼ一致"
+      : agreement >= 0.5
+        ? "おおむね一致"
+        : agreement > -0.5
+          ? "あまり一致しない"
+          : "むしろ逆";
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+
+/** ST は符号付きで出す（負値はフライング側） */
+const st = (v: number | null): string =>
+  v === null ? "—" : v < 0 ? `F${Math.abs(v).toFixed(2)}` : v.toFixed(2);
+---
+
+<BaseLayout title={title}>
+  {/* パンくず */}
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
+    <span class="mx-1">/</span>
+    <a href={raceHref} class="hover:text-blue-600">{prediction.raceNumber}R</a>
+    <span class="mx-1">/</span>
+    <span>展示詳細</span>
+  </nav>
+
+  {/* ヘッダ */}
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
+      <span>{stadiumName}</span>
+      <span class="text-blue-600">{prediction.raceNumber}R</span>
+      <span class="text-base text-gray-700 font-normal">展示詳細</span>
+    </h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {prediction.raceDate}
+      {prediction.raceName && ` / ${prediction.raceName}`}
+      {" / AI総合評価の"}
+      <span class="font-bold text-purple-700">展示pt</span>
+      が何を測っている数字なのかを開示するページです。
+    </p>
+  </header>
+
+  {/* 展示前 (daily) の注意。展示ptだけは realtime になるまで中立値なので最初に断る */}
+  {isDaily && (
+    <p
+      class="mb-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900"
+      role="note"
+    >
+      このレースの AI 評価は<span class="font-bold">朝バッチ時点（展示前）</span>のものです。
+      展示ptは全艇が中立値 {EXHIBIT_PT_DAILY_NEUTRAL}、寄与は 0 で、
+      レース詳細ページの評価バーからも展示・気象のセグメントを外しています。
+      実測が入るのは締切5分前の直前情報が反映された評価からです。
+    </p>
+  )}
+
+  {!hasExhibitComponent && (
+    <p
+      class="mb-6 rounded-md border border-gray-200 bg-gray-50 p-3 text-[13px] text-gray-700"
+      role="note"
+    >
+      この評価（{evaluation.componentKeys.length}成分）は展示ptを採用していません。
+      以下の展示ptは表示されず、直前情報の計測値のみを並べています。
+    </p>
+  )}
+
+  {/* 6艇まとめ */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">展示pt 一覧</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[11px] border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+            <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium">選手</th>
+            {/* 7 列あるので pt バー列に固定幅を与えない（iPhone 幅で選手名が
+                 1 文字ずつ折り返されるため）。溢れたら親の overflow-x-auto に任せる */}
+            <th scope="col" class="text-left py-1 px-1 font-medium">展示pt</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
+            {hasExhibitionTime && (
+              <th scope="col" class="text-right py-1 px-1 font-medium">展示タイム</th>
+            )}
+            {hasExhibitionSt && <th scope="col" class="text-right py-1 px-1 font-medium">展示ST</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {views.map((v) => {
+            const color = isValidBoatNumber(v.racer.boatNumber)
+              ? BOAT_COLORS[v.racer.boatNumber]
+              : undefined;
+            const widthPct = v.agg.exhibitPt !== undefined ? (v.agg.exhibitPt / maxPt) * 100 : 0;
+            const fastest = v.agg.timeRank === 1;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="py-1 px-1 align-middle">
+                  <span
+                    class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${v.racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {v.racer.boatNumber}
+                  </span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <a
+                    href={`#boat-${v.racer.boatNumber}`}
+                    class="text-[12px] font-medium text-blue-700 hover:underline whitespace-nowrap"
+                  >
+                    {v.racer.racerName}
+                  </a>
+                  <span class="block text-[10px] text-gray-400">{v.racer.classGrade}</span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <span class="flex items-center gap-1.5">
+                    <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
+                      <span
+                        class="block h-full"
+                        style={`width: ${widthPct}%; background-color: #a855f7;`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="font-mono tabular-nums text-gray-800 w-9 text-right">
+                      {num(v.agg.exhibitPt, 1)}
+                    </span>
+                    {v.agg.ptRank !== null && !isDaily && (
+                      <span
+                        class={`w-5 text-[10px] text-right ${v.agg.ptRank === 1 ? "font-bold text-purple-700" : "text-gray-400"}`}
+                      >
+                        {v.agg.ptRank}位
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                  {num(v.contribution, 2)}
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                  {v.strengthPt.toFixed(2)}
+                </td>
+                {hasExhibitionTime && (
+                  <td
+                    class={`py-1 px-1 text-right align-middle font-mono tabular-nums ${fastest ? "font-bold text-blue-800" : "text-gray-500"}`}
+                  >
+                    {num(v.agg.exhibitionTime, 2)}
+                    {v.agg.timeRank !== null && (
+                      <span class="block text-[10px] text-gray-400">{v.agg.timeRank}位</span>
+                    )}
+                  </td>
+                )}
+                {hasExhibitionSt && (
+                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                    {st(v.agg.exhibitionStartTiming)}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-2">
+      展示ptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × 展示pt で、
+      強さptはこの寄与を含む{evaluation.componentKeys.length}成分の合計です。
+      {hasExhibitionTime &&
+        aggregate.timeSpread !== null &&
+        `展示タイムは最速 ${aggregate.fastestTime?.toFixed(2)} 秒、最遅との開きは ${aggregate.timeSpread.toFixed(2)} 秒。`}
+      {agreement !== null &&
+        `展示ptと展示タイムの順位相関は ${agreement.toFixed(2)}（${agreementLabel}）で、展示ptは展示タイムだけで決まる数字ではありません。`}
+      評価は
+      <span class="font-mono">{isDaily ? "朝バッチ時点" : "直前情報反映後"}</span>
+      のもの（展示ptは直前情報が入って初めて実測になります）。
+    </p>
+  </section>
+
+  {/* 枠ごとの内訳 */}
+  <div class="space-y-4 mb-6">
+    {views.map((v) => (
+      <ExhibitPtCard
+        racer={v.racer}
+        aggregate={v.agg}
+        previewBoat={previewByBoat.get(v.racer.boatNumber)}
+        originalLabels={originalLabels}
+        originalValues={originalByBoat.get(v.racer.boatNumber) ?? []}
+        contribution={v.contribution}
+        strengthPt={v.strengthPt}
+        isDaily={isDaily}
+      />
+    ))}
+  </div>
+
+  {/* 計算ロジックの解説 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <details>
+      <summary class="font-bold text-lg cursor-pointer">展示ptの読み方</summary>
+
+      <div class="mt-3 space-y-4 text-sm text-gray-700">
+        <div>
+          <h3 class="font-bold text-sm mb-1">2段階で決まる</h3>
+          <ol class="list-decimal list-inside space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">展示pt</span> =
+              50 + 10 × z。展示走行の出来をこの場の平均が50、標準偏差が10になるように
+              直した偏差値です
+            </li>
+            <li>
+              <span class="font-bold">寄与</span> = 場別重み w × 展示pt。
+              各成分の寄与を合計したものが強さptになります（重みの合計は 1）
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">他のptと決定的に違うところ: 展示前は値が無い</h3>
+          <p class="text-[13px]">
+            選手pt・モーターpt・枠番ptは朝の時点で確定しますが、展示ptは
+            <span class="font-bold">直前情報（締切5分前の展示スナップショット）由来</span>です。
+            朝バッチの評価（<span class="font-mono">daily</span>）では展示が行われていないため
+            全艇が中立値 {EXHIBIT_PT_DAILY_NEUTRAL}、寄与は 0 に潰されており、
+            レース詳細ページの評価バーからも展示・気象のセグメントを外しています。
+            直前情報が反映された評価（<span class="font-mono">realtime</span>）で初めて
+            実測が入り、当日買い目と直前買い目が変わる主因のひとつになります。
+            気象ptも同じ preview 由来成分です。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">展示タイムとは一致しないことがある</h3>
+          <p class="text-[13px]">
+            このページの一覧・カードに並べた展示タイム・スタート展示ST・体重・チルト・
+            オリジナル展示は、展示ptと<span class="font-bold">同じ直前情報スナップショット</span>
+            の計測値ですが、<span class="font-bold">展示ptの内訳ではありません</span>。
+            どの計測値をどう重み付けして展示ptにしているかは BoatraceCSV 側の実装で、
+            fun-site はその重みを取り込んでいないためです。
+            {agreement !== null
+              ? `このレースでは展示ptと展示タイムの順位相関が ${agreement.toFixed(2)}（${agreementLabel}）でした。`
+              : "このレースは順位相関を出せるだけの実測が揃っていません（展示pt・展示タイムの両方が揃った艇が3艇未満、または全艇が同値）。"}
+            順位のずれは各カードの注記にも出しています。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">計測値の読み方</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">展示タイム</span> —
+              展示航走の周回タイム。小さいほど速く、一般に艇の直線的な伸びを見る値です。
+              このページでは6艇内の順位と最速艇との差も併記しています
+            </li>
+            <li>
+              <span class="font-bold">スタート展示ST</span> —
+              スタート展示でのスタートタイミング（<span class="font-mono">previews/stt</span>）。
+              小さいほど速く、負値（<span class="font-mono">F</span> 表示）はフライング側です
+            </li>
+            <li>
+              <span class="font-bold">チルト・体重</span> —
+              チルトは跳ね上げ角度で、上げるほど直線の伸び寄り。体重は軽いほど有利とされます
+            </li>
+            <li>
+              <span class="font-bold">オリジナル展示</span> —
+              場ごとに計測項目が違う独自計測（一周・まわり足・直線など）。
+              項目名も本数も場により異なります
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <p class="text-[13px]">
+            展示ptは
+            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>
+            や
+            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>
+            と同じく、fun-site 側で再計算できません。計算過程まで開示しているのは
+            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
+            （入力の近況5節を手元に持っているため）だけです。
+          </p>
+        </div>
+
+        <p class="text-[11px] text-gray-500">
+          データと計算式の一次情報は
+          <a
+            href="https://github.com/BoatraceCSV/boatracecsv.github.io"
+            class="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer">BoatraceCSV</a
+          >を参照してください。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <div class="text-center mt-6">
+    <a href={raceHref} class="text-blue-600 hover:text-blue-800 text-sm">
+      ← {stadiumName} {prediction.raceNumber}R に戻る
+    </a>
+  </div>
+</BaseLayout>

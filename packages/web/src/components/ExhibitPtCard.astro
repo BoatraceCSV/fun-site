@@ -1,0 +1,293 @@
+---
+import type {
+  ExhibitPtBoatAggregate,
+  RacePreviewBoat,
+  RaceRacer,
+} from "@fun-site/shared";
+import { BOAT_COLORS, EXHIBIT_PT_DAILY_NEUTRAL, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  racer: RaceRacer;
+  /** 展示pt と展示タイム / スタート展示ST を並べた参考値 */
+  aggregate: ExhibitPtBoatAggregate;
+  /** 体重・チルト（tkz 由来）。preview 未取得のレースでは undefined */
+  previewBoat: RacePreviewBoat | undefined;
+  /** オリジナル展示の計測項目ラベル。未取得なら空配列 */
+  originalLabels: readonly string[];
+  /** `originalLabels` と同順のこの艇の計測値。未取得なら空配列 */
+  originalValues: readonly (number | null)[];
+  /** 寄与pt = 場別重み × 展示pt。index CSV 由来 */
+  contribution: number | undefined;
+  /** 強さpt（この艇の全成分の寄与合計） */
+  strengthPt: number;
+  /** 評価が daily（展示前の中立値）か */
+  isDaily: boolean;
+}
+
+const {
+  racer,
+  aggregate,
+  previewBoat,
+  originalLabels,
+  originalValues,
+  contribution,
+  strengthPt,
+  isDaily,
+} = Astro.props;
+
+const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
+const exhibitPt = aggregate.exhibitPt;
+
+/** 場別重み w。寄与 = w × 展示pt の関係から逆算する（weights CSV は未取り込み） */
+const weight =
+  exhibitPt !== undefined && contribution !== undefined && exhibitPt !== 0
+    ? contribution / exhibitPt
+    : undefined;
+
+/** 偏差値 → z。「この場の平均から何σ上か」の言い換えに使う */
+const z = exhibitPt !== undefined ? (exhibitPt - 50) / 10 : undefined;
+
+/** 強さptに占める展示ptの寄与割合 */
+const sharePct =
+  contribution !== undefined && strengthPt > 0 ? (contribution / strengthPt) * 100 : undefined;
+
+/** 展示pt が中立値のまま（= 展示前 / 欠測）か */
+const isNeutral = exhibitPt !== undefined && exhibitPt === EXHIBIT_PT_DAILY_NEUTRAL;
+
+/**
+ * 展示pt の順位と展示タイムの順位のずれ。展示pt は展示タイムだけで決まる値では
+ * ないので、ずれ自体は異常ではない。読み手が差分に気づけるように出す。
+ */
+const rankGap = aggregate.rankGap;
+
+/** 順位のずれの説明文。JSX で組むと数字と読点の間に空白が入るので文字列で作る */
+const rankNote =
+  rankGap === null || rankGap === 0
+    ? ""
+    : `展示タイムは${aggregate.timeRank}位、展示ptは${aggregate.ptRank}位で、${
+        rankGap > 0
+          ? "展示タイムの速さの割に展示ptは低めに出ています"
+          : "展示タイムの順位よりも展示ptは高めに出ています"
+      }。`;
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+
+/** ST は符号付きで出す（負値はフライング側） */
+const st = (v: number | null): string => (v === null ? "—" : v < 0 ? `F${Math.abs(v).toFixed(2)}` : v.toFixed(2));
+
+const hasOriginal = originalLabels.length > 0;
+---
+
+<section
+  class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+  id={`boat-${racer.boatNumber}`}
+  aria-label={`${racer.boatNumber}号艇の展示pt`}
+>
+  {/* ヘッダ: 枠番 / 選手 / 展示タイム順位 */}
+  <header class="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-wrap">
+    <span
+      class="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0"
+      style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+    >
+      {racer.boatNumber}
+    </span>
+    <h2 class="font-bold text-base">
+      <span class="text-gray-400 text-sm">{racer.boatNumber}枠</span>
+      {" "}{racer.racerName}
+    </h2>
+    <span class="text-xs text-gray-500">
+      {racer.classGrade}
+      {racer.nationalWinRate > 0 && ` / 全国勝率 ${racer.nationalWinRate.toFixed(2)}`}
+    </span>
+    {aggregate.timeRank !== null && (
+      <span class="ml-auto text-[11px] font-bold text-blue-800 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+        展示タイム {aggregate.timeRank}位
+      </span>
+    )}
+  </header>
+
+  <div class="p-4 space-y-4">
+    {/* 展示pt サマリー: 結論を先に出す */}
+    <div class="rounded-md bg-purple-50 border border-purple-200 p-3">
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-xs font-bold text-purple-800">展示pt</span>
+        <span class="text-2xl font-bold font-mono tabular-nums text-purple-900">
+          {num(exhibitPt, 2)}
+        </span>
+        {z !== undefined && (
+          <span class="text-[11px] text-purple-700">
+            （この場の平均より {z >= 0 ? "+" : ""}{z.toFixed(2)}σ）
+          </span>
+        )}
+        {aggregate.ptRank !== null && !isDaily && (
+          <span class="text-[11px] text-purple-700">この6艇では {aggregate.ptRank}位</span>
+        )}
+      </div>
+
+      {/* 展示計測 → 展示pt → 寄与 のフロー */}
+      <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-purple-900">
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-purple-700">展示走行の評価</span>
+          <span
+            class="font-bold text-purple-400"
+            title="展示タイム・スタート展示・周回展示をどう重み付けしているかは BoatraceCSV 側の実装で、fun-site は取り込んでいません"
+          >
+            再現不可
+          </span>
+        </li>
+        <li aria-hidden="true" class="text-purple-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-purple-700">展示pt</span>
+          <span class="font-mono font-bold tabular-nums">{num(exhibitPt, 2)}</span>
+        </li>
+        <li aria-hidden="true" class="text-purple-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-purple-700">寄与</span>
+          <span class="font-mono font-bold tabular-nums">{num(contribution, 2)}</span>
+          {sharePct !== undefined && (
+            <span class="text-purple-700">
+              （強さpt {strengthPt.toFixed(2)} の {sharePct.toFixed(1)}%）
+            </span>
+          )}
+        </li>
+      </ol>
+
+      {weight !== undefined && !isDaily && (
+        <p class="mt-1.5 text-[10px] text-purple-700">
+          展示pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 展示pt。
+          重みは場別・月次で学習された値です。
+        </p>
+      )}
+
+      {isDaily ? (
+        <p class="mt-1.5 text-[10px] text-purple-700">
+          この評価は<span class="font-bold">朝バッチ時点（展示前）</span>のもので、展示ptは
+          中立値 {EXHIBIT_PT_DAILY_NEUTRAL} が入り寄与は 0 に潰されています。
+          実測が入るのは直前情報が反映された評価からです。
+        </p>
+      ) : isNeutral ? (
+        <p class="mt-1.5 text-[10px] text-purple-700">
+          展示ptがちょうど中立値 {EXHIBIT_PT_DAILY_NEUTRAL} です。この艇の展示が
+          欠測だった場合もこの値になります。
+        </p>
+      ) : (
+        rankGap !== null &&
+        rankGap !== 0 && (
+          <p class="mt-1.5 text-[10px] text-purple-700">
+            {rankNote}
+            展示ptは展示タイムだけの数字ではないので、順位が一致しないことはあります。
+          </p>
+        )
+      )}
+    </div>
+
+    {/* 同じ直前情報スナップショットの計測値（参考値） */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+        この艇の直前情報<span class="ml-1 font-normal text-gray-400"
+          >（参考値・展示ptの内訳ではありません）</span
+        >
+      </h3>
+
+      {aggregate.exhibitionTime === null &&
+      aggregate.exhibitionStartTiming === null &&
+      previewBoat === undefined ? (
+        <p class="text-[11px] text-gray-500">
+          このレースは直前情報（展示タイム・スタート展示）を取得できていません。
+        </p>
+      ) : (
+        <div class="space-y-2">
+          <div class="overflow-x-auto">
+            <table class="w-full text-[11px] border-collapse">
+              <thead>
+                <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                  <th scope="col" class="text-right py-1 px-1 font-medium">展示タイム</th>
+                  <th scope="col" class="text-right py-1 px-1 font-medium">トップ差</th>
+                  <th scope="col" class="text-right py-1 px-1 font-medium">展示ST</th>
+                  <th scope="col" class="text-right py-1 px-1 font-medium">体重kg</th>
+                  <th scope="col" class="text-right py-1 px-1 font-medium">チルト</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono tabular-nums text-gray-800">
+                <tr>
+                  <td class="text-right py-1 px-1 font-bold">
+                    {num(aggregate.exhibitionTime, 2)}
+                    {aggregate.timeRank !== null && (
+                      <span class="ml-1 text-[10px] font-normal text-gray-400">
+                        {aggregate.timeRank}位
+                      </span>
+                    )}
+                  </td>
+                  <td class="text-right py-1 px-1 text-gray-500">
+                    {aggregate.gapToFastestTime === null
+                      ? "—"
+                      : aggregate.gapToFastestTime === 0
+                        ? "最速"
+                        : `+${aggregate.gapToFastestTime.toFixed(2)}`}
+                  </td>
+                  <td class="text-right py-1 px-1">
+                    {st(aggregate.exhibitionStartTiming)}
+                    {aggregate.startTimingRank !== null && (
+                      <span class="ml-1 text-[10px] font-normal text-gray-400">
+                        {aggregate.startTimingRank}位
+                      </span>
+                    )}
+                  </td>
+                  <td class="text-right py-1 px-1 text-gray-500">
+                    {previewBoat !== undefined && previewBoat.weightKg > 0
+                      ? previewBoat.weightKg.toFixed(1)
+                      : "—"}
+                  </td>
+                  <td class="text-right py-1 px-1 text-gray-500">
+                    {previewBoat !== undefined ? previewBoat.tilt.toFixed(1) : "—"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {hasOriginal && (
+            <div class="overflow-x-auto">
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    <th scope="col" colspan={originalLabels.length} class="text-left py-1 px-1 font-medium">
+                      オリジナル展示
+                    </th>
+                  </tr>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    {originalLabels.map((label) => (
+                      <th scope="col" class="text-right py-1 px-1 font-medium">{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody class="font-mono tabular-nums text-gray-800">
+                  <tr>
+                    {originalLabels.map((_, i) => (
+                      <td class="text-right py-1 px-1">{num(originalValues[i] ?? null, 2)}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <p class="text-[10px] text-gray-400">
+            展示タイム・展示STは小さいほど速く、展示STの「F」表示はフライング側です。
+            順位はこのレースの6艇内の順位（同値は同順位）。
+            オリジナル展示の計測項目は場により異なります。
+          </p>
+        </div>
+      )}
+    </div>
+
+    {/* 再現できない理由 */}
+    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
+      展示ptそのものの内訳（展示走行のどの計測値をどう重み付けするか）は BoatraceCSV 側の
+      実装で、fun-site は重みを取り込んでいません。展示ptは
+      <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>し、
+      同じ直前情報スナップショットの計測値を横に並べています。
+    </p>
+  </div>
+</section>

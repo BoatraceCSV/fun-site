@@ -84,6 +84,15 @@ export {
   type Waku10TokenCount,
 } from "./waku-pt.js";
 export {
+  EXHIBIT_PREVIEW_SOURCES,
+  EXHIBIT_PT_DAILY_NEUTRAL,
+  EXHIBIT_PT_SCALE,
+  computeExhibitPtAggregate,
+  type ExhibitPtAggregate,
+  type ExhibitPtBoatAggregate,
+  type ExhibitPtInput,
+} from "./exhibit-pt.js";
+export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,
   computeBetPayout,

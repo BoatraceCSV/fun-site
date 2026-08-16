@@ -25,9 +25,15 @@ interface Props {
    * 渡された場合のみ、凡例の「枠番」が詳細へのリンクになる。
    */
   wakuPtHref?: string;
+  /**
+   * 展示pt の詳細ページ (`/race/{date}/{stadiumId}/{raceNumber}/exhibition/`) への URL。
+   * 渡された場合のみ、凡例の「展示」が詳細へのリンクになる。
+   * 展示は preview 由来成分なので、daily 評価では凡例自体が出ない。
+   */
+  exhibitPtHref?: string;
 }
 
-const { evaluation, racerPtHref, motorPtHref, wakuPtHref } = Astro.props;
+const { evaluation, racerPtHref, motorPtHref, wakuPtHref, exhibitPtHref } = Astro.props;
 
 /** 成分キー → 計算根拠ページの URL と凡例リンクの title。 */
 const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>> = {
@@ -44,6 +50,14 @@ const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>
     ? {
         motor: { href: motorPtHref, title: "モーターptの読み方（スコア表・補正・期成績）を表示" },
         motor4: { href: motorPtHref, title: "モーターptの読み方（スコア表・補正・期成績）を表示" },
+      }
+    : {}),
+  ...(exhibitPtHref
+    ? {
+        exhibit: {
+          href: exhibitPtHref,
+          title: "展示ptの読み方（展示タイム・スタート展示との関係）を表示",
+        },
       }
     : {}),
 };
@@ -97,7 +111,7 @@ const axisMax = Math.ceil(rawMax / 10) * 10;
 ---
 
 <div class="space-y-3">
-  {/* 凡例。詳細ページを持つ成分（選手 / モーター）だけリンクにする */}
+  {/* 凡例。詳細ページを持つ成分（選手 / モーター / 枠番 / 展示）だけリンクにする */}
   <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
     {SEGMENTS.map((seg) => {
       const swatch = (
