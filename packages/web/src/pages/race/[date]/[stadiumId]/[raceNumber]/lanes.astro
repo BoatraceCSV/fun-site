@@ -1,0 +1,376 @@
+---
+import type { RaceRacer, RacePrediction, RacerWaku10, Waku10Aggregate } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  WAKU10_MAX_RUNS,
+  WAKU_PT_TABLE_AXES,
+  computeWaku10Aggregate,
+  getStadiumById,
+  isValidBoatNumber,
+  parseRaceCode,
+} from "@fun-site/shared";
+import WakuPtCard from "../../../../../components/WakuPtCard.astro";
+import BaseLayout from "../../../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+  for (const date of dates) {
+    for (const prediction of await loadPredictions(date)) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      paths.push({
+        params: {
+          date: parsed.date,
+          stadiumId: parsed.stadiumId,
+          raceNumber: String(prediction.raceNumber),
+        },
+        props: { prediction },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/`;
+const title = `${stadiumName} ${prediction.raceNumber}R 枠番詳細 - 枠番ptの読み方`;
+
+/*
+  枠番pt は index CSV の成分の 1 つ。preview 由来ではないので daily 行と realtime 行で
+  値は変わらないが、強さpt（寄与の分母）は realtime で更新されるため、評価の状態を
+  明示したうえで realtime を優先して使う。`aiEvaluation` は primary predictor の
+  realtime ?? daily を平坦化したもの。
+*/
+const evaluation = prediction.aiEvaluation;
+const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
+
+/** 予想進入コース。stt 未取得のレースでは枠番と同じ仮値が入っている */
+const courseByBoat = new Map(
+  prediction.startPrediction.entries.map((e) => [e.boatNumber, e.courseNumber]),
+);
+const courseFromExhibition = prediction.startPrediction.fromExhibition;
+
+const waku10ByBoat = new Map(
+  (prediction.waku10?.boats ?? []).map((b) => [b.boatNumber, b] as const),
+);
+
+type WakuPtView = {
+  readonly racer: RaceRacer;
+  readonly waku10: RacerWaku10 | undefined;
+  readonly aggregate: Waku10Aggregate | undefined;
+  readonly wakuPt: number | undefined;
+  readonly contribution: number | undefined;
+  readonly strengthPt: number;
+  readonly entryCourse: number;
+};
+
+const views: WakuPtView[] = [...prediction.racers]
+  .sort((a, b) => a.boatNumber - b.boatNumber)
+  .map((racer) => {
+    const entry = entryByBoat.get(racer.boatNumber);
+    const waku10 = waku10ByBoat.get(racer.boatNumber);
+    return {
+      racer,
+      waku10,
+      aggregate: waku10 ? computeWaku10Aggregate(waku10) : undefined,
+      wakuPt: entry?.components?.waku,
+      contribution: entry?.contribution.waku,
+      strengthPt: entry?.strengthPt ?? 0,
+      entryCourse: courseByBoat.get(racer.boatNumber) ?? racer.boatNumber,
+    };
+  });
+
+/** 枠番pt の場内順位（1 が最上位）。未取得の艇は順位を付けない */
+const ptRank = new Map<number, number>();
+[...views]
+  .filter((v) => v.wakuPt !== undefined)
+  .sort((a, b) => (b.wakuPt ?? 0) - (a.wakuPt ?? 0))
+  .forEach((v, i) => ptRank.set(v.racer.boatNumber, i + 1));
+
+const maxPt = Math.max(1, ...views.map((v) => v.wakuPt ?? 0));
+
+/** 過去10走の集計を 1 艇でも出せるか（waku10 未取得のレースでは列ごと落とす） */
+const hasWaku10 = views.some((v) => (v.aggregate?.totalRuns ?? 0) > 0);
+
+/** 枠なり進入でない艇が 1 艇でもあるか（前付けがあると枠番とコースがずれる） */
+const hasCourseShift = views.some((v) => v.entryCourse !== v.racer.boatNumber);
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+---
+
+<BaseLayout title={title}>
+  {/* パンくず */}
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
+    <span class="mx-1">/</span>
+    <a href={raceHref} class="hover:text-blue-600">{prediction.raceNumber}R</a>
+    <span class="mx-1">/</span>
+    <span>枠番詳細</span>
+  </nav>
+
+  {/* ヘッダ */}
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
+      <span>{stadiumName}</span>
+      <span class="text-blue-600">{prediction.raceNumber}R</span>
+      <span class="text-base text-gray-700 font-normal">枠番詳細</span>
+    </h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {prediction.raceDate}
+      {prediction.raceName && ` / ${prediction.raceName}`}
+      {" / AI総合評価の"}
+      <span class="font-bold text-blue-700">枠番pt</span>
+      が何を測っている数字なのかを開示するページです。
+    </p>
+  </header>
+
+  {/* 6艇まとめ */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">枠番pt 一覧</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[11px] border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+            <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium">選手</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">進入</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium w-1/3">枠番pt</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
+            {hasWaku10 && <th scope="col" class="text-right py-1 px-1 font-medium">枠1着率</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {views.map((v) => {
+            const color = isValidBoatNumber(v.racer.boatNumber)
+              ? BOAT_COLORS[v.racer.boatNumber]
+              : undefined;
+            const rank = ptRank.get(v.racer.boatNumber);
+            const widthPct = v.wakuPt !== undefined ? (v.wakuPt / maxPt) * 100 : 0;
+            const shifted = v.entryCourse !== v.racer.boatNumber;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="py-1 px-1 align-middle">
+                  <span
+                    class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${v.racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {v.racer.boatNumber}
+                  </span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <a
+                    href={`#boat-${v.racer.boatNumber}`}
+                    class="text-[12px] font-medium text-blue-700 hover:underline"
+                  >
+                    {v.racer.racerName}
+                  </a>
+                  <span class="block text-[10px] text-gray-400">{v.racer.classGrade}</span>
+                </td>
+                <td
+                  class={`py-1 px-1 text-right align-middle font-mono tabular-nums ${shifted ? "font-bold text-amber-700" : "text-gray-500"}`}
+                >
+                  {v.entryCourse}
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <span class="flex items-center gap-1.5">
+                    <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
+                      <span
+                        class="block h-full bg-blue-500"
+                        style={`width: ${widthPct}%`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="font-mono tabular-nums text-gray-800 w-9 text-right">
+                      {num(v.wakuPt, 1)}
+                    </span>
+                    {rank !== undefined && (
+                      <span
+                        class={`w-5 text-[10px] text-right ${rank === 1 ? "font-bold text-blue-700" : "text-gray-400"}`}
+                      >
+                        {rank}位
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                  {num(v.contribution, 2)}
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                  {v.strengthPt.toFixed(2)}
+                </td>
+                {hasWaku10 && (
+                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                    {v.aggregate && v.aggregate.firstRate !== null ? (
+                      <>
+                        {v.aggregate.firstRate.toFixed(0)}%
+                        <span class="block text-[10px] text-gray-400">
+                          {v.aggregate.countedRuns}走
+                        </span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-2">
+      枠番ptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × 枠番pt で、
+      強さptはこの寄与を含む5成分の合計です。
+      「進入」は
+      {courseFromExhibition ? "スタート展示の実測進入コース" : "枠なり進入を仮置きした値（スタート展示が未取得）"}。
+      {hasWaku10 &&
+        "「枠1着率」はその選手がこの枠番で走った過去10走の1着率で、枠番ptには含まれない参考値です。"}
+      評価は
+      <span class="font-mono">{evaluation.state === "realtime" ? "直前情報反映後" : "朝バッチ時点"}</span>
+      のもの（枠番pt自体は直前情報では変わりません）。
+    </p>
+  </section>
+
+  {/* 枠ごとの内訳 */}
+  <div class="space-y-4 mb-6">
+    {views.map((v) => (
+      <WakuPtCard
+        racer={v.racer}
+        waku10={v.waku10}
+        aggregate={v.aggregate}
+        wakuPt={v.wakuPt}
+        contribution={v.contribution}
+        strengthPt={v.strengthPt}
+        entryCourse={v.entryCourse}
+        entryCourseFromExhibition={courseFromExhibition}
+      />
+    ))}
+  </div>
+
+  {/* 計算ロジックの解説 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <details>
+      <summary class="font-bold text-lg cursor-pointer">枠番ptの計算ロジック</summary>
+
+      <div class="mt-3 space-y-4 text-sm text-gray-700">
+        <div>
+          <h3 class="font-bold text-sm mb-1">2段階で決まる</h3>
+          <ol class="list-decimal list-inside space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">枠番pt</span> =
+              {" "}{WAKU_PT_TABLE_AXES.join(" × ")}
+              {" "}で学習したコース強度テーブルを、その艇のコースで引いた値。
+              偏差値スケール（50 + 10 × z）に直してある
+            </li>
+            <li>
+              <span class="font-bold">寄与</span> = 場別重み w × 枠番pt。
+              5成分の寄与を合計したものが強さptになります（重みの合計は 1）
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">選手ptやモーターptと違うところ</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">選手個人を見ていない</span> —
+              同じ場・同じ季節・同じコースなら、誰が乗っていても枠番ptは同じ値です。
+              選手の巧拙は選手pt、モーターの出来はモーターptが担当します
+            </li>
+            <li>
+              <span class="font-bold">レース間でほとんど動かない</span> —
+              テーブルの軸に日付やレース番号が入っていないので、同じ場の同じ日なら
+              全レースで同じ枠番ptになります（動くのは季節が替わったときと場が違うとき）
+            </li>
+            <li>
+              <span class="font-bold">場ごとの差が大きい</span> —
+              1コース1着率は大村の約65〜70%から戸田の約43%まで開きます。
+              枠番ptはこの差を場別の偏差値に直したもので、寄与に効く重み w も場別に学習されます
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">枠番と進入コースのずれ</h3>
+          <p class="text-[13px]">
+            枠番ptが引くのは<span class="font-bold">コース</span>の強度です。枠なり進入なら
+            枠番＝コースですが、前付けがあると両者はずれます（1号艇の1コース取得率は全国で約98%）。
+            スタート展示（<span class="font-mono">previews/stt</span>）を取得すると
+            <span class="font-mono">realtime</span> 側は実際の進入コースで引き直され、
+            未取得の <span class="font-mono">daily</span> 側は枠なり進入で仮置きされます。
+            {hasCourseShift
+              ? "このレースは枠番と進入コースが違う艇があるので、一覧の「進入」列を確認してください。"
+              : "このレースは全艇が枠なり進入（枠番＝コース）です。"}
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">「枠番別過去10走」は枠番ptの入力ではない</h3>
+          <p class="text-[13px]">
+            各カードに出している{WAKU10_MAX_RUNS}走（<span class="font-mono">programs/waku10</span>）は、
+            <span class="font-bold">その選手が今回と同じ枠番で走った直近{WAKU10_MAX_RUNS}走</span>で、
+            枠番ptには入っていません。枠番ptが「この場のこのコースは一般にどうか」を測るのに対し、
+            こちらは「この選手はこの枠でどうだったか」を見る値です。
+            1着率・2連対率・3連対率は F・L・失・妨を分母に計上し（着はつかない）、
+            欠・転・落・沈・エ・不は無かった扱いで分母から外して算出しています
+            （選手ptの素点と同じ規則）。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">コースptとの違い（退役予想者）</h3>
+          <p class="text-[13px]">
+            2026-07-22 に投入した <span class="font-mono">v6_course</span>（コース予想）は、
+            枠番ptを<span class="font-bold">場 × レース番号 × コース</span>別の収縮済み1着率
+            （コースpt）に差し替えた実験でした。企画レースの多い場でレース番号ごとの傾向を
+            拾う狙いでしたが、本命予想とのペア比較で回収率が有意に低く、
+            2026-08-09 に <span class="font-mono">v7_aggregate</span> /
+            <span class="font-mono">v8_aionly</span> と併せて退役しています。
+            現行 active の3予想者はいずれも枠番pt（場 × 季節 × コース）を使います。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">このページでテーブル値を出していない理由</h3>
+          <p class="text-[13px]">
+            コース強度テーブルの再現には、その場の過去数年ぶんの着順実績を季節・コース別に
+            集計したものが必要です。fun-site が取得しているのは当日ぶんの CSV だけなので、
+            枠番ptは<span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>しています。
+            計算過程まで開示しているのは
+            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
+            （入力の近況5節を手元に持っているため）だけです。
+            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>
+            も同じ理由で値をそのまま出しています。
+          </p>
+        </div>
+
+        <p class="text-[11px] text-gray-500">
+          データと計算式の一次情報は
+          <a
+            href="https://github.com/BoatraceCSV/boatracecsv.github.io"
+            class="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer">BoatraceCSV</a
+          >を参照してください。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <div class="text-center mt-6">
+    <a href={raceHref} class="text-blue-600 hover:text-blue-800 text-sm">
+      ← {stadiumName} {prediction.raceNumber}R に戻る
+    </a>
+  </div>
+</BaseLayout>

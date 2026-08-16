@@ -116,6 +116,8 @@ const raceByNumber = new Map(stadiumRaces.map((r) => [r.raceNumber, r]));
 const racerPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/racers/`;
 // モーターpt の詳細ページ。同じく AI 評価内訳の「モーター」凡例から張る。
 const motorPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/motors/`;
+// 枠番pt の詳細ページ。同じく AI 評価内訳の「枠番」から張る。
+const wakuPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/lanes/`;
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
 // 今節成績表は、いずれかの選手に出走済みスロットがある場合のみ出す
@@ -385,6 +387,7 @@ const predictorPredictions: readonly PredictorPrediction[] =
           recipeNote={recipeNote}
           racerPtHref={racerPtHref}
           motorPtHref={motorPtHref}
+          wakuPtHref={wakuPtHref}
         />
       </section>
     );
@@ -414,7 +417,13 @@ const predictorPredictions: readonly PredictorPrediction[] =
   {/* 枠番別過去10走。programs/waku10 が未取得のレースでは非表示。 */}
   {prediction.waku10 && prediction.waku10.boats.length > 0 && (
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 class="font-bold text-lg mb-3">枠番別過去10走</h2>
+      {/* 枠番pt の詳細ページは同じ waku10 を枠番ptと並べて出すので、ここからも張る */}
+      <div class="flex items-baseline justify-between gap-2 mb-3">
+        <h2 class="font-bold text-lg">枠番別過去10走</h2>
+        <a href={wakuPtHref} class="text-xs text-blue-700 hover:underline shrink-0">
+          枠番ptの詳細 <span aria-hidden="true">▸</span>
+        </a>
+      </div>
       <Waku10Section waku10={prediction.waku10} />
     </section>
   )}

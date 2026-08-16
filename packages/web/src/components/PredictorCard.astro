@@ -54,6 +54,11 @@ interface Props {
    * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
    */
   motorPtHref?: string;
+  /**
+   * AI 評価内訳の「枠番」から張る、枠番pt の詳細ページへの URL。
+   * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない。
+   */
+  wakuPtHref?: string;
 }
 
 const {
@@ -67,6 +72,7 @@ const {
   useOneMarkEstimatedST = false,
   racerPtHref,
   motorPtHref,
+  wakuPtHref,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -128,6 +134,7 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
           evaluation={chartEval}
           racerPtHref={racerPtHref}
           motorPtHref={motorPtHref}
+          wakuPtHref={wakuPtHref}
         />
       </div>
     )}

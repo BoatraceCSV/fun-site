@@ -20,14 +20,24 @@ interface Props {
    * 渡された場合のみ、凡例の「モーター」が詳細へのリンクになる。
    */
   motorPtHref?: string;
+  /**
+   * 枠番pt の詳細ページ (`/race/{date}/{stadiumId}/{raceNumber}/lanes/`) への URL。
+   * 渡された場合のみ、凡例の「枠番」が詳細へのリンクになる。
+   */
+  wakuPtHref?: string;
 }
 
-const { evaluation, racerPtHref, motorPtHref } = Astro.props;
+const { evaluation, racerPtHref, motorPtHref, wakuPtHref } = Astro.props;
 
 /** 成分キー → 計算根拠ページの URL と凡例リンクの title。 */
 const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>> = {
   ...(racerPtHref
     ? { racer: { href: racerPtHref, title: "選手ptの計算根拠（近況5節の着順・適用スコア）を表示" } }
+    : {}),
+  // course は退役した v6_course 系のコースpt。テーブルの軸 (場×レース番号×コース) が
+  // 枠番pt (場×季節×コース) と違うので、解説ページは共有しない。
+  ...(wakuPtHref
+    ? { waku: { href: wakuPtHref, title: "枠番ptの読み方（コース強度テーブル・枠番別過去10走）を表示" } }
     : {}),
   // motor4 は退役した v4_motor 系のモーターpt。指標は違うが解説ページは共通でよい。
   ...(motorPtHref

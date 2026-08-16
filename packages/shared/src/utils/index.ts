@@ -73,6 +73,17 @@ export {
   type MotorPtSessionBreakdown,
 } from "./motor-pt.js";
 export {
+  WAKU10_COUNTED_TOKENS,
+  WAKU10_EXCLUDED_TOKENS,
+  WAKU10_MAX_RUNS,
+  WAKU_PT_SCALE,
+  WAKU_PT_TABLE_AXES,
+  computeWaku10Aggregate,
+  type Waku10Aggregate,
+  type Waku10RankCounts,
+  type Waku10TokenCount,
+} from "./waku-pt.js";
+export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,
   computeBetPayout,
