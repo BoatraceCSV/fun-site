@@ -1,0 +1,179 @@
+---
+import type { RaceRacer, WeatherPtBoatAggregate } from "@fun-site/shared";
+import { BOAT_COLORS, WEATHER_PT_DAILY_NEUTRAL, isValidBoatNumber } from "@fun-site/shared";
+
+interface Props {
+  racer: RaceRacer;
+  /** 気象pt と進入コース・順位を並べた集計 */
+  aggregate: WeatherPtBoatAggregate;
+  /** 寄与pt = 場別重み × 気象pt。index CSV 由来 */
+  contribution: number | undefined;
+  /** 強さpt（この艇の全成分の寄与合計） */
+  strengthPt: number;
+  /** 評価が daily（直前情報前の中立値）か */
+  isDaily: boolean;
+  /** 進入コースがスタート展示の実測か（false なら枠なりの仮値） */
+  courseFromExhibition: boolean;
+}
+
+const { racer, aggregate, contribution, strengthPt, isDaily, courseFromExhibition } = Astro.props;
+
+const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
+const weatherPt = aggregate.weatherPt;
+
+/** 場別重み w。寄与 = w × 気象pt の関係から逆算する（weights CSV は未取り込み） */
+const weight =
+  weatherPt !== undefined && contribution !== undefined && weatherPt !== 0
+    ? contribution / weatherPt
+    : undefined;
+
+/** 強さptに占める気象ptの寄与割合 */
+const sharePct =
+  contribution !== undefined && strengthPt > 0 ? (contribution / strengthPt) * 100 : undefined;
+
+/** 気象pt が中立値のまま（= 直前情報前 / 欠測）か */
+const isNeutral = weatherPt !== undefined && weatherPt === WEATHER_PT_DAILY_NEUTRAL;
+
+/**
+ * 進入コースのずれの説明文。気象pt は**コース**に付く値なので、前付けで枠番と
+ * コースがずれた艇は「枠番から想像する値」と違う値になる。
+ */
+const courseNote = aggregate.courseShifted
+  ? `${racer.boatNumber}枠ですが進入は${aggregate.courseNumber}コースなので、気象ptも${aggregate.courseNumber}コースの値が入ります。`
+  : "";
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+---
+
+<section
+  class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+  id={`boat-${racer.boatNumber}`}
+  aria-label={`${racer.boatNumber}号艇の気象pt`}
+>
+  {/* ヘッダ: 枠番 / 選手 / 進入コース */}
+  <header class="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-wrap">
+    <span
+      class="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold shrink-0"
+      style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+    >
+      {racer.boatNumber}
+    </span>
+    <h2 class="font-bold text-base">
+      <span class="text-gray-400 text-sm">{racer.boatNumber}枠</span>
+      {" "}{racer.racerName}
+    </h2>
+    <span class="text-xs text-gray-500">
+      {racer.classGrade}
+      {racer.nationalWinRate > 0 && ` / 全国勝率 ${racer.nationalWinRate.toFixed(2)}`}
+    </span>
+    <span
+      class={`ml-auto text-[11px] font-bold rounded px-1.5 py-0.5 border ${
+        aggregate.courseShifted
+          ? "text-amber-800 bg-amber-50 border-amber-200"
+          : "text-cyan-800 bg-cyan-50 border-cyan-200"
+      }`}
+    >
+      {aggregate.courseNumber}コース進入
+    </span>
+  </header>
+
+  <div class="p-4 space-y-4">
+    {/* 気象pt サマリー: 結論を先に出す */}
+    <div class="rounded-md bg-cyan-50 border border-cyan-200 p-3">
+      <div class="flex items-baseline gap-2 flex-wrap">
+        <span class="text-xs font-bold text-cyan-800">気象pt</span>
+        <span class="text-2xl font-bold font-mono tabular-nums text-cyan-900">
+          {num(weatherPt, 2)}
+        </span>
+        {aggregate.z !== null && (
+          <span class="text-[11px] text-cyan-700">
+            （この場の平均より {aggregate.z >= 0 ? "+" : ""}{aggregate.z.toFixed(2)}σ）
+          </span>
+        )}
+        {aggregate.ptRank !== null && !isDaily && (
+          <span class="text-[11px] text-cyan-700">この6艇では {aggregate.ptRank}位</span>
+        )}
+      </div>
+
+      {/* 水面気象 → コース有利pt → 気象pt → 寄与 のフロー */}
+      <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-cyan-900">
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-cyan-700">{aggregate.courseNumber}コースの有利pt変動</span>
+          <span
+            class="font-bold text-cyan-400"
+            title="場別の線形回帰係数 (estimate/stadium/sui_params.csv) は fun-site に取り込んでいません"
+          >
+            再現不可
+          </span>
+        </li>
+        <li aria-hidden="true" class="text-cyan-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-cyan-700">気象pt</span>
+          <span class="font-mono font-bold tabular-nums">{num(weatherPt, 2)}</span>
+        </li>
+        <li aria-hidden="true" class="text-cyan-400">→</li>
+        <li class="inline-flex items-baseline gap-1">
+          <span class="text-cyan-700">寄与</span>
+          <span class="font-mono font-bold tabular-nums">{num(contribution, 2)}</span>
+          {sharePct !== undefined && (
+            <span class="text-cyan-700">
+              （強さpt {strengthPt.toFixed(2)} の {sharePct.toFixed(1)}%）
+            </span>
+          )}
+        </li>
+      </ol>
+
+      {weight !== undefined && !isDaily && (
+        <p class="mt-1.5 text-[10px] text-cyan-700">
+          気象pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 気象pt。
+          重みは場別・月次で学習された値です。
+        </p>
+      )}
+
+      {isDaily ? (
+        <p class="mt-1.5 text-[10px] text-cyan-700">
+          この評価は<span class="font-bold">朝バッチ時点（直前情報前）</span>のもので、気象ptは
+          中立値 {WEATHER_PT_DAILY_NEUTRAL} が入り寄与は 0 に潰されています。
+          実測が入るのは水面気象が反映された評価からです。
+        </p>
+      ) : (
+        isNeutral && (
+          <p class="mt-1.5 text-[10px] text-cyan-700">
+            気象ptがちょうど中立値 {WEATHER_PT_DAILY_NEUTRAL} です。この気象が
+            {aggregate.courseNumber}コースの有利不利をほとんど動かしていないか、
+            水面気象が欠測だった場合もこの値になります。
+          </p>
+        )
+      )}
+    </div>
+
+    {/* コースに付く値であることの補足 */}
+    <div class="text-[11px] text-gray-600 space-y-1">
+      <p>
+        気象ptは選手やモーターではなく<span class="font-bold">進入コース</span>に付く値です。
+        当日の水面気象がこの場の{aggregate.courseNumber}コースの有利不利をどれだけ動かすかで、
+        同じコースに入った艇なら誰でも同じ値になります。
+        {courseNote}
+        {!courseFromExhibition &&
+          "このレースはスタート展示が未取得なので、進入コースは枠なりの仮値です。"}
+      </p>
+      {aggregate.gapToTopPt !== null && aggregate.gapToTopPt !== 0 && (
+        <p>
+          このレースで気象ptが最も高い艇より
+          <span class="font-mono tabular-nums">{Math.abs(aggregate.gapToTopPt).toFixed(2)}</span>
+          pt 低い値です。
+        </p>
+      )}
+    </div>
+
+    {/* 再現できない理由 */}
+    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
+      気象ptそのものの内訳（波・風・気温水温差・天候をどの係数でコース別の有利pt に
+      変換するか）は BoatraceCSV 側の学習済みパラメータで、fun-site は係数ファイルを
+      取り込んでいません。気象ptは
+      <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>し、
+      同じ直前情報スナップショットの水面気象を並べています。
+    </p>
+  </div>
+</section>

@@ -121,6 +121,9 @@ const wakuPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${predi
 // 展示pt の詳細ページ。AI 評価内訳の「展示」(realtime 評価でのみ出る凡例) と
 // 直前情報セクションの見出し右から張る。
 const exhibitPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/exhibition/`;
+// 気象pt の詳細ページ。展示pt と同じく preview 由来成分なので、AI 評価内訳の「気象」
+// (realtime 評価でのみ出る凡例) と直前情報セクションの見出し右から張る。
+const weatherPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/weather/`;
 const headerGradeBadge = getRaceGradeBadge(prediction.grade ?? "");
 
 // 今節成績表は、いずれかの選手に出走済みスロットがある場合のみ出す
@@ -392,6 +395,7 @@ const predictorPredictions: readonly PredictorPrediction[] =
           motorPtHref={motorPtHref}
           wakuPtHref={wakuPtHref}
           exhibitPtHref={exhibitPtHref}
+          weatherPtHref={weatherPtHref}
         />
       </section>
     );
@@ -404,13 +408,19 @@ const predictorPredictions: readonly PredictorPrediction[] =
       prediction.preview.weather ||
       prediction.preview.originalExhibition) && (
       <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        {/* 展示pt の詳細ページは同じ直前情報を展示ptと並べて出すので、ここからも張る
-             (daily 評価では AI 評価バーに展示セグメントが出ず、凡例からの導線が無い) */}
-        <div class="flex items-baseline justify-between gap-2 mb-3">
+        {/* 展示pt / 気象pt の詳細ページは同じ直前情報をそれぞれの pt と並べて出すので、
+             ここからも張る (daily 評価では AI 評価バーに展示・気象セグメントが出ず、
+             凡例からの導線が無い) */}
+        <div class="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
           <h2 class="font-bold text-lg">直前情報</h2>
-          <a href={exhibitPtHref} class="text-xs text-blue-700 hover:underline shrink-0">
-            展示ptの詳細 <span aria-hidden="true">▸</span>
-          </a>
+          <span class="flex items-baseline gap-3 shrink-0">
+            <a href={exhibitPtHref} class="text-xs text-blue-700 hover:underline">
+              展示ptの詳細 <span aria-hidden="true">▸</span>
+            </a>
+            <a href={weatherPtHref} class="text-xs text-blue-700 hover:underline">
+              気象ptの詳細 <span aria-hidden="true">▸</span>
+            </a>
+          </span>
         </div>
         <RacePreviewSection preview={prediction.preview} />
       </section>

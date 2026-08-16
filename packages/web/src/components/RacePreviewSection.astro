@@ -1,6 +1,6 @@
 ---
 import type { RacePreview } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import { BOAT_COLORS, isValidBoatNumber, weatherCodeLabel } from "@fun-site/shared";
 
 interface Props {
   preview: RacePreview;
@@ -10,15 +10,8 @@ const { preview } = Astro.props;
 const boats = [...preview.boats].sort((a, b) => a.boatNumber - b.boatNumber);
 const weather = preview.weather;
 
-/** 天候コード → ラベル（boatrace 標準: 1晴 2曇 3雨 4雪 5霧） */
-const WEATHER_LABEL: Record<string, string> = {
-  "1": "晴",
-  "2": "曇り",
-  "3": "雨",
-  "4": "雪",
-  "5": "霧",
-};
-const weatherLabel = weather ? (WEATHER_LABEL[weather.weather] ?? weather.weather) : "";
+/** 天候コード → ラベル（boatrace 標準: 1晴 2曇 3雨 4雪 5霧）。気象詳細ページと共有 */
+const weatherLabel = weather ? weatherCodeLabel(weather.weather) : "";
 
 /** 気象観測時刻 HHMM → HH:MM */
 const formatObservedAt = (raw: string): string => {

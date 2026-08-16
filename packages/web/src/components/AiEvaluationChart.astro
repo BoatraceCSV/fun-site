@@ -31,9 +31,16 @@ interface Props {
    * 展示は preview 由来成分なので、daily 評価では凡例自体が出ない。
    */
   exhibitPtHref?: string;
+  /**
+   * 気象pt の詳細ページ (`/race/{date}/{stadiumId}/{raceNumber}/weather/`) への URL。
+   * 渡された場合のみ、凡例の「気象」が詳細へのリンクになる。
+   * 展示と同じく preview 由来成分なので、daily 評価では凡例自体が出ない。
+   */
+  weatherPtHref?: string;
 }
 
-const { evaluation, racerPtHref, motorPtHref, wakuPtHref, exhibitPtHref } = Astro.props;
+const { evaluation, racerPtHref, motorPtHref, wakuPtHref, exhibitPtHref, weatherPtHref } =
+  Astro.props;
 
 /** 成分キー → 計算根拠ページの URL と凡例リンクの title。 */
 const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>> = {
@@ -57,6 +64,14 @@ const detailLinks: Partial<Record<ComponentKey, { href: string; title: string }>
         exhibit: {
           href: exhibitPtHref,
           title: "展示ptの読み方（展示タイム・スタート展示との関係）を表示",
+        },
+      }
+    : {}),
+  ...(weatherPtHref
+    ? {
+        weather: {
+          href: weatherPtHref,
+          title: "気象ptの読み方（水面気象とコース別の有利不利）を表示",
         },
       }
     : {}),
@@ -111,7 +126,7 @@ const axisMax = Math.ceil(rawMax / 10) * 10;
 ---
 
 <div class="space-y-3">
-  {/* 凡例。詳細ページを持つ成分（選手 / モーター / 枠番 / 展示）だけリンクにする */}
+  {/* 凡例。詳細ページを持つ成分（選手 / モーター / 枠番 / 展示 / 気象）だけリンクにする */}
   <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-700">
     {SEGMENTS.map((seg) => {
       const swatch = (

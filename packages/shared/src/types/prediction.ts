@@ -231,6 +231,12 @@ export type RaceWeather = {
   readonly weather: string;
   /** 風速 (m/s) */
   readonly windSpeed: number;
+  /**
+   * 風向コード (1..8 の方位コード生値、空欄あり)。気象pt は場のスタンド方位と
+   * 突き合わせて 追い風 / 向かい風 / 横風 に分けるので、気象詳細ページが使う。
+   * この列を載せる前に生成した JSON では未設定。
+   */
+  readonly windDirection?: string;
   /** 波高 (cm) */
   readonly waveHeight: number;
   /** 気温 (℃) */

@@ -65,6 +65,12 @@ interface Props {
    * (展示は preview 由来成分なので daily 評価では凡例自体が出ない)。
    */
   exhibitPtHref?: string;
+  /**
+   * AI 評価内訳の「気象」から張る、気象pt の詳細ページへの URL。
+   * `AiEvaluationChart` へ転送する。未指定なら凡例はリンクにならない
+   * (気象は preview 由来成分なので daily 評価では凡例自体が出ない)。
+   */
+  weatherPtHref?: string;
 }
 
 const {
@@ -80,6 +86,7 @@ const {
   motorPtHref,
   wakuPtHref,
   exhibitPtHref,
+  weatherPtHref,
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -143,6 +150,7 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
           motorPtHref={motorPtHref}
           wakuPtHref={wakuPtHref}
           exhibitPtHref={exhibitPtHref}
+          weatherPtHref={weatherPtHref}
         />
       </div>
     )}

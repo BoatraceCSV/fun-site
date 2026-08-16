@@ -93,6 +93,27 @@ export {
   type ExhibitPtInput,
 } from "./exhibit-pt.js";
 export {
+  STADIUM_FACING_DEG,
+  WEATHER_CODE_LABELS,
+  WEATHER_PT_DAILY_NEUTRAL,
+  WEATHER_PT_FEATURES,
+  WEATHER_PT_SCALE,
+  WEATHER_PT_SOURCES,
+  WIND_CODE_TO_DEG,
+  WIND_RELATION_LABELS,
+  classifyWind,
+  computeWeatherFeatures,
+  computeWeatherPtAggregate,
+  weatherCodeLabel,
+  weatherRegressionCategory,
+  type WeatherFeatureInput,
+  type WeatherFeatures,
+  type WeatherPtAggregate,
+  type WeatherPtBoatAggregate,
+  type WeatherPtInput,
+  type WindRelation,
+} from "./weather-pt.js";
+export {
   BET_UNIT_YEN,
   aggregateDailyBetPayout,
   computeBetPayout,

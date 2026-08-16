@@ -1,0 +1,506 @@
+---
+import type { RacePrediction, RaceRacer, WeatherPtBoatAggregate } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  WEATHER_PT_DAILY_NEUTRAL,
+  WEATHER_PT_FEATURES,
+  WEATHER_PT_SOURCES,
+  WIND_RELATION_LABELS,
+  computeWeatherFeatures,
+  computeWeatherPtAggregate,
+  getStadiumById,
+  isValidBoatNumber,
+  parseRaceCode,
+  weatherCodeLabel,
+} from "@fun-site/shared";
+import WeatherPtCard from "../../../../../components/WeatherPtCard.astro";
+import BaseLayout from "../../../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../../../lib/data";
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+  for (const date of dates) {
+    for (const prediction of await loadPredictions(date)) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      paths.push({
+        params: {
+          date: parsed.date,
+          stadiumId: parsed.stadiumId,
+          raceNumber: String(prediction.raceNumber),
+        },
+        props: { prediction },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/`;
+const title = `${stadiumName} ${prediction.raceNumber}R 気象詳細 - 気象ptの読み方`;
+
+/*
+  気象pt は index CSV の **preview 由来**成分。朝バッチ (daily) では水面気象を取る前
+  なので中立値 50 / 寄与 0 で、直前情報が反映された realtime 行で初めて実測が入る。
+  展示pt と違うのは、気象pt が選手ではなく **進入コース** に付く値であること。
+  `aiEvaluation` は primary predictor の realtime ?? daily を平坦化したもの。
+*/
+const evaluation = prediction.aiEvaluation;
+const isDaily = evaluation.state === "daily";
+const hasWeatherComponent = evaluation.componentKeys.includes("weather");
+const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
+
+/** 予想進入コース。stt 未取得のレースでは枠番と同じ仮値が入っている */
+const courseByBoat = new Map(
+  prediction.startPrediction.entries.map((e) => [e.boatNumber, e.courseNumber]),
+);
+const courseFromExhibition = prediction.startPrediction.fromExhibition;
+
+/** 水面気象（sui 由来）。sui 未取得のレースでは null */
+const weather = prediction.preview?.weather ?? null;
+
+/**
+ * 気象pt の回帰が見る特徴量。係数（`sui_params.csv`）は取り込んでいないので、
+ * ここから先のコース別有利pt は再現できない。
+ */
+const features = weather ? computeWeatherFeatures(weather, prediction.stadiumId) : null;
+
+const racers: readonly RaceRacer[] = [...prediction.racers].sort(
+  (a, b) => a.boatNumber - b.boatNumber,
+);
+
+const aggregate = computeWeatherPtAggregate(
+  racers.map((racer) => ({
+    boatNumber: racer.boatNumber,
+    courseNumber: courseByBoat.get(racer.boatNumber) ?? racer.boatNumber,
+    weatherPt: entryByBoat.get(racer.boatNumber)?.components?.weather,
+  })),
+);
+const aggByBoat = new Map<number, WeatherPtBoatAggregate>(
+  aggregate.boats.map((b) => [b.boatNumber, b]),
+);
+
+type WeatherPtView = {
+  readonly racer: RaceRacer;
+  readonly agg: WeatherPtBoatAggregate;
+  readonly contribution: number | undefined;
+  readonly strengthPt: number;
+};
+
+const views: WeatherPtView[] = racers.map((racer) => {
+  const entry = entryByBoat.get(racer.boatNumber);
+  return {
+    racer,
+    agg: aggByBoat.get(racer.boatNumber) ?? {
+      boatNumber: racer.boatNumber,
+      courseNumber: racer.boatNumber,
+      courseShifted: false,
+      weatherPt: undefined,
+      z: null,
+      ptRank: null,
+      gapToTopPt: null,
+    },
+    contribution: entry?.contribution.weather,
+    strengthPt: entry?.strengthPt ?? 0,
+  };
+});
+
+const maxPt = Math.max(1, ...views.map((v) => v.agg.weatherPt ?? 0));
+
+/** 前付け等で枠番と進入コースがずれた艇が 1 艇でもあるか */
+const hasCourseShift = views.some((v) => v.agg.courseShifted);
+
+/** 内寄り / 外寄りどちらに振れている気象なのかの読み方 */
+const bias = aggregate.innerBias;
+const biasLabel =
+  bias === null
+    ? null
+    : bias >= 0.5
+      ? "内コース有利に振れています"
+      : bias > -0.5
+        ? "内外どちらとも言えません"
+        : "外コース有利に振れています";
+
+/** 気象観測時刻 HHMM → HH:MM */
+const formatObservedAt = (raw: string): string => {
+  const m = raw.match(/^(\d{2})(\d{2})$/);
+  return m ? `${m[1]}:${m[2]}` : raw;
+};
+
+const windRelationLabel =
+  features?.windRelation !== null && features?.windRelation !== undefined
+    ? WIND_RELATION_LABELS[features.windRelation]
+    : null;
+
+/** 特徴量テーブルの値（回帰に渡る形そのまま） */
+const featureValues: Readonly<Record<string, string>> = features
+  ? {
+      waveCm: `${features.waveCm.toFixed(0)} cm`,
+      tempDiffC: `${features.tempDiffC >= 0 ? "+" : ""}${features.tempDiffC.toFixed(1)} ℃`,
+      windTailMs: `${features.windTailMs.toFixed(1)} m/s`,
+      windHeadMs: `${features.windHeadMs.toFixed(1)} m/s`,
+      isCloudy: features.isCloudy ? "1（曇り）" : "0",
+      isRainy: features.isRainy ? "1（雨）" : "0",
+    }
+  : {};
+
+const num = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : v.toFixed(digits);
+---
+
+<BaseLayout title={title}>
+  {/* パンくず */}
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
+    <span class="mx-1">/</span>
+    <a href={raceHref} class="hover:text-blue-600">{prediction.raceNumber}R</a>
+    <span class="mx-1">/</span>
+    <span>気象詳細</span>
+  </nav>
+
+  {/* ヘッダ */}
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
+      <span>{stadiumName}</span>
+      <span class="text-blue-600">{prediction.raceNumber}R</span>
+      <span class="text-base text-gray-700 font-normal">気象詳細</span>
+    </h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {prediction.raceDate}
+      {prediction.raceName && ` / ${prediction.raceName}`}
+      {" / AI総合評価の"}
+      <span class="font-bold text-cyan-700">気象pt</span>
+      が何を測っている数字なのかを開示するページです。
+    </p>
+  </header>
+
+  {/* 直前情報前 (daily) の注意。気象ptは realtime になるまで中立値なので最初に断る */}
+  {isDaily && (
+    <p
+      class="mb-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900"
+      role="note"
+    >
+      このレースの AI 評価は<span class="font-bold">朝バッチ時点（直前情報前）</span>のものです。
+      気象ptは全艇が中立値 {WEATHER_PT_DAILY_NEUTRAL}、寄与は 0 で、
+      レース詳細ページの評価バーからも展示・気象のセグメントを外しています。
+      実測が入るのは締切5分前の水面気象が反映された評価からです。
+    </p>
+  )}
+
+  {!hasWeatherComponent && (
+    <p
+      class="mb-6 rounded-md border border-gray-200 bg-gray-50 p-3 text-[13px] text-gray-700"
+      role="note"
+    >
+      この評価（{evaluation.componentKeys.length}成分）は気象ptを採用していません。
+      以下の気象ptは表示されず、直前情報の水面気象のみを並べています。
+    </p>
+  )}
+
+  {/* このレースの水面気象と、回帰が見る特徴量 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">このレースの水面気象</h2>
+
+    {weather === null ? (
+      <p class="text-[13px] text-gray-600">
+        このレースは水面気象（<span class="font-mono">{WEATHER_PT_SOURCES.preview}</span>）を
+        取得できていません。気象ptは BoatraceCSV 側が取得した気象で計算された値です。
+      </p>
+    ) : (
+      <div class="space-y-3">
+        <dl class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          <div>
+            <dt class="text-[11px] text-gray-400">天候</dt>
+            <dd class="font-medium">{weatherCodeLabel(weather.weather)}</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] text-gray-400">風速</dt>
+            <dd class="font-mono tabular-nums">
+              {weather.windSpeed.toFixed(1)}m
+              {windRelationLabel && (
+                <span class="ml-1 font-sans text-[11px] text-cyan-700">{windRelationLabel}</span>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[11px] text-gray-400">波高</dt>
+            <dd class="font-mono tabular-nums">{weather.waveHeight.toFixed(0)}cm</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] text-gray-400">気温</dt>
+            <dd class="font-mono tabular-nums">{weather.airTemperature.toFixed(1)}℃</dd>
+          </div>
+          <div>
+            <dt class="text-[11px] text-gray-400">水温</dt>
+            <dd class="font-mono tabular-nums">{weather.waterTemperature.toFixed(1)}℃</dd>
+          </div>
+          {weather.observedAt && (
+            <div>
+              <dt class="text-[11px] text-gray-400">観測時刻</dt>
+              <dd class="font-mono tabular-nums">{formatObservedAt(weather.observedAt)}</dd>
+            </div>
+          )}
+        </dl>
+
+        {features && (
+          <div>
+            <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+              気象ptの回帰が見る 6 特徴量<span class="ml-1 font-normal text-gray-400"
+                >（係数を掛ける前の入力）</span
+              >
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    {WEATHER_PT_FEATURES.map((f) => (
+                      <th scope="col" class="text-right py-1 px-1 font-medium">{f.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody class="font-mono tabular-nums text-gray-800">
+                  <tr>
+                    {WEATHER_PT_FEATURES.map((f) => (
+                      <td class="text-right py-1 px-1">{featureValues[f.key] ?? "—"}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-2">
+              風は場のスタンド方位（{stadiumName}は{features.facingDeg ?? "—"}°）を基準に
+              追い風 / 向かい風 / 横風 に分けられ、追い風と向かい風は別の係数を持ちます。
+              横風・風向未取得のレースではどちらの風成分も 0 になります。
+              {features.windRelation === null &&
+                "このレースは風向を判定できないため、風の効果は 0 として表示しています（BoatraceCSV 側の計算とは一致しないことがあります）。"}
+              天候は晴を基準に曇り・雨のシフト、雪と霧は雨に畳まれます。
+            </p>
+          </div>
+        )}
+      </div>
+    )}
+  </section>
+
+  {/* 6艇まとめ */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-3">気象pt 一覧</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[11px] border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+            <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
+            <th scope="col" class="text-left py-1 px-1 font-medium">選手</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">進入</th>
+            {/* pt バー列に固定幅を与えない（iPhone 幅で選手名が 1 文字ずつ
+                 折り返されるため）。溢れたら親の overflow-x-auto に任せる */}
+            <th scope="col" class="text-left py-1 px-1 font-medium">気象pt</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
+          </tr>
+        </thead>
+        <tbody>
+          {views.map((v) => {
+            const color = isValidBoatNumber(v.racer.boatNumber)
+              ? BOAT_COLORS[v.racer.boatNumber]
+              : undefined;
+            const widthPct = v.agg.weatherPt !== undefined ? (v.agg.weatherPt / maxPt) * 100 : 0;
+            return (
+              <tr class="border-b border-gray-100">
+                <td class="py-1 px-1 align-middle">
+                  <span
+                    class="inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold"
+                    style={`background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${v.racer.boatNumber === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                  >
+                    {v.racer.boatNumber}
+                  </span>
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <a
+                    href={`#boat-${v.racer.boatNumber}`}
+                    class="text-[12px] font-medium text-blue-700 hover:underline whitespace-nowrap"
+                  >
+                    {v.racer.racerName}
+                  </a>
+                  <span class="block text-[10px] text-gray-400">{v.racer.classGrade}</span>
+                </td>
+                <td
+                  class={`py-1 px-1 text-right align-middle font-mono tabular-nums ${v.agg.courseShifted ? "font-bold text-amber-700" : "text-gray-500"}`}
+                >
+                  {v.agg.courseNumber}
+                </td>
+                <td class="py-1 px-1 align-middle">
+                  <span class="flex items-center gap-1.5">
+                    <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
+                      <span
+                        class="block h-full"
+                        style={`width: ${widthPct}%; background-color: #06b6d4;`}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span class="font-mono tabular-nums text-gray-800 w-9 text-right">
+                      {num(v.agg.weatherPt, 1)}
+                    </span>
+                    {v.agg.ptRank !== null && !isDaily && (
+                      <span
+                        class={`w-5 text-[10px] text-right ${v.agg.ptRank === 1 ? "font-bold text-cyan-700" : "text-gray-400"}`}
+                      >
+                        {v.agg.ptRank}位
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                  {num(v.contribution, 2)}
+                </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                  {v.strengthPt.toFixed(2)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[11px] text-gray-400 mt-2">
+      気象ptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × 気象pt で、
+      強さptはこの寄与を含む{evaluation.componentKeys.length}成分の合計です。
+      気象ptは選手ではなく<span class="font-bold">進入コース</span>に付く値なので、
+      「進入」列と一緒に読んでください。
+      {hasCourseShift && "進入コースが枠番とずれている艇（琥珀色）はその点に注意。"}
+      {!courseFromExhibition && "このレースはスタート展示が未取得なので、進入は枠なりの仮値です。"}
+      {aggregate.ptSpread !== null &&
+        `6艇の気象ptの開きは ${aggregate.ptSpread.toFixed(2)}pt。`}
+      {bias !== null && `進入コースと気象ptの順位相関は ${bias.toFixed(2)} で、${biasLabel}。`}
+      評価は
+      <span class="font-mono">{isDaily ? "朝バッチ時点" : "直前情報反映後"}</span>
+      のもの（気象ptは直前情報が入って初めて実測になります）。
+    </p>
+  </section>
+
+  {/* 枠ごとの内訳 */}
+  <div class="space-y-4 mb-6">
+    {views.map((v) => (
+      <WeatherPtCard
+        racer={v.racer}
+        aggregate={v.agg}
+        contribution={v.contribution}
+        strengthPt={v.strengthPt}
+        isDaily={isDaily}
+        courseFromExhibition={courseFromExhibition}
+      />
+    ))}
+  </div>
+
+  {/* 計算ロジックの解説 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <details>
+      <summary class="font-bold text-lg cursor-pointer">気象ptの読み方</summary>
+
+      <div class="mt-3 space-y-4 text-sm text-gray-700">
+        <div>
+          <h3 class="font-bold text-sm mb-1">3段階で決まる</h3>
+          <ol class="list-decimal list-inside space-y-1 text-[13px]">
+            <li>
+              当日の水面気象（<span class="font-mono">{WEATHER_PT_SOURCES.preview}</span>）から
+              <span class="font-bold">6 つの特徴量</span>を作る —
+              波高 / 気温−水温 / 追い風 m/s / 向かい風 m/s / 曇り / 雨
+            </li>
+            <li>
+              場ごとに学習した線形回帰の係数
+              （<span class="font-mono">{WEATHER_PT_SOURCES.params}</span>）を
+              <span class="font-bold">コース 1〜6 それぞれ</span>に掛け、基準条件
+              （凪・無風・晴・気温=水温）からの有利pt 変動を出す。場内で標準化すると
+              <span class="font-bold">気象pt</span> = 50 + 10 × z になります
+            </li>
+            <li>
+              <span class="font-bold">寄与</span> = 場別重み w × 気象pt。
+              各成分の寄与を合計したものが強さptになります（重みの合計は 1）
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">選手ではなくコースに付く値</h3>
+          <p class="text-[13px]">
+            気象ptは「この気象なら、この場のこのコースはどれくらい有利になるか」で、
+            誰が乗っているかは見ていません。したがって
+            <span class="font-bold">同じコースに入った艇なら誰でも同じ値</span>になり、
+            前付け等で枠番と進入コースがずれた艇は枠番から想像する値と食い違います。
+            realtime の評価ではスタート展示の<span class="font-bold">実進入コース</span>基準に
+            切り替わるので、
+            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>
+            と同じくコース単位で読む必要があります。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">他のptと決定的に違うところ: 直前情報前は値が無い</h3>
+          <p class="text-[13px]">
+            選手pt・モーターpt・枠番ptは朝の時点で確定しますが、気象ptは
+            <span class="font-bold">直前情報（締切5分前の水面気象スナップショット）由来</span>です。
+            朝バッチの評価（<span class="font-mono">daily</span>）では気象を取る前なので
+            全艇が中立値 {WEATHER_PT_DAILY_NEUTRAL}、寄与は 0 に潰されており、
+            レース詳細ページの評価バーからも展示・気象のセグメントを外しています。
+            直前情報が反映された評価（<span class="font-mono">realtime</span>）で初めて
+            実測が入り、当日買い目と直前買い目が変わる主因のひとつになります。
+            <a href={`${raceHref}exhibition/`} class="text-blue-600 hover:underline">展示pt</a>
+            も同じ preview 由来成分です。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">風向は場のスタンド方位で正規化される</h3>
+          <p class="text-[13px]">
+            風向コード（1〜8 の方位）そのものではなく、場のスタンド方位に対する相対角で
+            <span class="font-bold">追い風 / 向かい風 / 横風</span>に分類され、追い風と
+            向かい風だけが別々の係数で効きます（横風は 0）。同じ北風でも場によって
+            追い風になったり向かい風になったりするのはこのためです。
+            風向を取得できていないレースでは、このページの特徴量表で風の効果を 0 として
+            表示しています。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <p class="text-[13px]">
+            気象ptは
+            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>・
+            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>・
+            <a href={`${raceHref}exhibition/`} class="text-blue-600 hover:underline">展示pt</a>
+            と同じく、fun-site 側で再計算できません。場別の回帰係数
+            （<span class="font-mono">{WEATHER_PT_SOURCES.params}</span>）を取り込んで
+            いないためで、このページが出せるのは係数を掛ける前の特徴量までです。
+            計算過程まで開示しているのは
+            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
+            （入力の近況5節を手元に持っているため）だけです。
+          </p>
+        </div>
+
+        <p class="text-[11px] text-gray-500">
+          データと計算式の一次情報は
+          <a
+            href="https://github.com/BoatraceCSV/boatracecsv.github.io"
+            class="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer">BoatraceCSV</a
+          >を参照してください。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <div class="text-center mt-6">
+    <a href={raceHref} class="text-blue-600 hover:text-blue-800 text-sm">
+      ← {stadiumName} {prediction.raceNumber}R に戻る
+    </a>
+  </div>
+</BaseLayout>

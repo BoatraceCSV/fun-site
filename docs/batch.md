@@ -85,7 +85,7 @@ CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参�
 
 [`packages/batch/src/site-builder/prediction-builder.ts`](../packages/batch/src/site-builder/prediction-builder.ts)
 
-レースコードで CSV を結合し、レース 1 件あたり `RacePrediction` を組み立てる。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。
+レースコードで CSV を結合し、レース 1 件あたり `RacePrediction` を組み立てる。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。直前情報 (`RacePreview`) は tkz / sui / original_exhibition を結合したもので、sui からは天候・風速・**風向コード**・波高・気温・水温を持つ（風向は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う）。
 
 ### 4.5. predictor-stats aggregator
 

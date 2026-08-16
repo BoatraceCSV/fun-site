@@ -215,6 +215,8 @@ const buildRacePreview = (
         observedAt: sui.observedAt,
         weather: sui.weather,
         windSpeed: sui.windSpeed,
+        // 気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う方位コード生値
+        windDirection: sui.windDirection,
         waveHeight: sui.waveHeight,
         airTemperature: sui.airTemperature,
         waterTemperature: sui.waterTemperature,
