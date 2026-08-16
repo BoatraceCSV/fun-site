@@ -13,8 +13,8 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `previews/sui` | `previews/sui/YYYY/MM/DD.csv` | 直前情報（水面気象: 風速・風向・波高・天候・気温・水温） | 直前情報セクション |
 | `previews/original_exhibition` | `previews/original_exhibition/YYYY/MM/DD.csv` | 直前情報（場別オリジナル展示: 一周/まわり足/直線 等の計測値） | 直前情報セクション |
 | `previews/tokuten_hayami` | `previews/tokuten_hayami/YYYY/MM/DD.csv` | 得点率早見（現在の得点率・節内順位・準優ボーダー順位と、当該レースで各着順を取った場合の得点率） | 得点率早見セクション |
-| `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 近況5節セクション |
-| `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 近況5節セクション |
+| `programs/recent_national` | `programs/recent_national/YYYY/MM/DD.csv` | 全国近況5節（節期間・場・グレード・着順時系列） | 選手pt詳細ページの素点内訳 |
+| `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 選手pt詳細ページの素点内訳 |
 | `programs/waku10` | `programs/waku10/YYYY/MM/DD.csv` | 枠番別過去10走（今回と同じ枠番での勝率・平均ST・平均スタート順 + 過去10走の着順/進入/グレード） | 枠番別過去10走セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
 | `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | 全予想者共通のスタート予想図（帯つき）の予測 ST と、`useEstimatedST` な予想者の 1 マーク走行距離の予測 ST（`useEstimatedST` を持つ予想者は現行 active には無く、過去日の退役予想者ぶんでのみ効く） |
@@ -86,7 +86,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `showsAiPanels` / `showsAiPanelsFor` | 予想者カードに AI 評価まわりの 3 パネル (「AI 評価の内訳」チャート / 「スタート予想」図 / 「1マーク予想」図) を出すか。未指定 = true。**表示専用**で買い目・回収率・集計には影響しないため boatracecsv 側 registry.py に対応フィールドは無い。`false` は買い目が CSV 由来 (`bettingStyle` が `"formation"` 以外) の `v9_suji`(スジ予想) / `v10_kimarite`(穴予想) — 1 マーク走行距離を使わないので出したままだと「この図から買い目が出ている」と誤読させ、かつ 3 者は index / 強さpt が同値なので本命予想 (`v1_basic`) のカードと重複する。現行 active では 3 パネルが出るのは本命予想のカードだけ |
 | `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
 | `RacePreview` / `RacePreviewBoat` / `RaceWeather` / `OriginalExhibition` / `OriginalExhibitionView` | 直前情報。`RacePrediction.preview` にぶら下がり、tkz（体重・展示タイム・チルト、`exhibitionTime` は 0→null）・sui（水面気象、天候・風向はコード生値。`windDirection` は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う。この列を載せる前に生成した JSON では未設定）・original_exhibition（場別オリジナル展示、`labels` + 艇別 `values`）を結合。いずれの CSV も未取得のレースでは `preview` 自体が undefined |
-| `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順列の可視化は `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`） |
+| `RaceRecentForm` / `RacerRecentForm` / `RecentFormSessionView` | 近況5節。`RacePrediction.recentForm` にぶら下がり、recent_national / recent_local を艇番で突合し全国・当地を結合。空セッションは除外。どちらの CSV も未取得のレースでは `recentForm` 自体が undefined。着順文字列のパースは `tokenizeRankString`（`packages/shared/src/utils/rank-marks.ts`）で、選手pt の素点再計算（`utils/racer-pt.ts`）と選手pt詳細ページが使う |
 | `RaceWaku10` / `RacerWaku10` / `Waku10RunView` | 枠番別過去10走。`RacePrediction.waku10` にぶら下がる。waku10 を艇番で突合し、着順が空のスロット（出走歴 10 走未満）は除外、進入コースは空欄（枠なり進入）を枠番で補完して `courseIsAsWaku` で補完済みかを示す。CSV 未取得のレースでは `waku10` 自体が undefined |
 | `RaceTokutenHayami` | 得点率早見。`RacePrediction.tokutenHayami` にぶら下がる。上流は公開済み (`status=1`) の行しか書かないので、**行があれば表示できる**。予選最終日を過ぎた節・得点率早見を出さない節では行が来ないため undefined |
 | `MotorStats`（`RaceRacer.motorStats`） | モーター期成績。motor_stats を `(場コード-モーター番号)` で各艇に突合（同一キーは記録日が新しい行を採用）。3連率・3連率順位・優勝/優出回数・平均ラップ秒を保持。当該場が motor_stats 未収録のレースでは undefined |
