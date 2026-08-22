@@ -69,6 +69,10 @@ export type FetchedCsvData = {
   readonly motorStats: readonly MotorStatsRow[];
   /**
    * 穴予想 A案 v9_suji の買い目 (estimate/suji)。レース × 状態 で 1 行。
+   *
+   * **v9_suji は 2026-08-22 に退役したので、以降の日付では常に空配列**
+   * (boatracecsv 側が生成も GCS ミラーもやめた)。取得経路と型は過去日の再ビルド
+   * のために残してある。fetch は失敗しても warn して [] を返すので害はない。
    * fun-site は買い目を計算せず、この CSV の出目をそのまま使う
    * (boatracecsv docs/design/ana_prediction.md §13)。未生成時は空配列
    */

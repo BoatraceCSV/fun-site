@@ -196,9 +196,20 @@ describe("穴予想 (v9_suji / v10_kimarite)", () => {
     // index / 強さpt は v1_basic と同値になる。回収率の差は買い目に由来する。
     for (const id of ["v9_suji", "v10_kimarite"]) {
       const p = predictorById(id);
-      expect(p?.status).toBe("active");
       expect(p?.componentKeys).toEqual(["waku", "racer", "motor", "exhibit", "weather"]);
     }
+  });
+
+  it("A案 v9_suji は 2026-08-22 に退役 (B案とスロットが重複)", () => {
+    // 成績の劣化ではなくスロットの重複が理由。買い目の重なりは平均 2.70 点 / 5 点
+    // あるのに回収率では区別できず (70.7% vs 68.8%)、主判定の 3連単 log-loss に
+    // 載るのは確率モデルを持つ B案だけ。詳細は predictors.ts のコメント。
+    expect(predictorById("v9_suji")?.status).toBe("retired");
+    expect(activePredictors().some((p) => p.id === "v9_suji")).toBe(false);
+    // 起点は当時のまま保持 (過去データ解釈のため)。
+    expect(predictorById("v9_suji")?.startedAt).toBe("2026-08-12");
+    // B案は継続。
+    expect(predictorById("v10_kimarite")?.status).toBe("active");
   });
 
   it("買い目は boatracecsv 側の CSV から読む (fun-site では計算しない)", () => {

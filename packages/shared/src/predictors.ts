@@ -318,7 +318,14 @@ export const PREDICTORS: readonly PredictorSpec[] = [
     icon: "🧩",
     badgeTailwindClass: "bg-violet-100 text-violet-800 border-violet-300",
     slot: 9,
-    status: "active",
+    // 2026-08-22 退役。B案 v10_kimarite と穴予想スロットが重複するため。
+    // **成績の劣化が理由ではない** — 本番 1,511 レース (両案同一レース) で
+    // 買い目の重なりは平均 2.70 点 / 5 点あるのに、回収率は 70.7% (A) vs
+    // 68.8% (B) で区別できない (差の検出に 8.2 ヶ月必要)。A案は確率モデルを
+    // 持たず主判定の 3連単 log-loss に載らないため B案を残した。体験指標では
+    // A案が上 (平均配当 3,949 円 vs 3,035 円 / 万舟per1万円 0.133 vs 0.066)。
+    // エントリと過去データは保持 (ID 再利用なし)。
+    status: "retired",
     // boatracecsv 側 registry.py と同期。
     // 穴予想 (A案)。control (v1_basic) と同一の 5 成分で index / 強さpt は同値。
     // 差分は買い目の作り方だけ:
