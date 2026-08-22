@@ -1,10 +1,10 @@
 ---
-import type { RaceRacer, RacePrediction, RacerWaku10, Waku10Aggregate } from "@fun-site/shared";
+import type { RaceRacer, RacePrediction, WakuSeason } from "@fun-site/shared";
 import {
   BOAT_COLORS,
-  WAKU10_MAX_RUNS,
   WAKU_PT_TABLE_AXES,
-  computeWaku10Aggregate,
+  WAKU_SEASONS,
+  computeWakuPtSteps,
   getStadiumById,
   isValidBoatNumber,
   parseRaceCode,
@@ -51,39 +51,40 @@ const title = `${stadiumName} ${prediction.raceNumber}R 枠番詳細 - 枠番pt�
 const evaluation = prediction.aiEvaluation;
 const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
 
+/**
+ * 枠番pt の根拠（この場のコース強度テーブルと場別 μ/σ/w）。
+ * 上流の静的テーブルを取り込む前にビルドされた JSON では undefined。
+ */
+const basis = prediction.wakuPtBasis;
+
 /** 予想進入コース。stt 未取得のレースでは枠番と同じ仮値が入っている */
 const courseByBoat = new Map(
   prediction.startPrediction.entries.map((e) => [e.boatNumber, e.courseNumber]),
 );
 const courseFromExhibition = prediction.startPrediction.fromExhibition;
 
-const waku10ByBoat = new Map(
-  (prediction.waku10?.boats ?? []).map((b) => [b.boatNumber, b] as const),
-);
-
 type WakuPtView = {
   readonly racer: RaceRacer;
-  readonly waku10: RacerWaku10 | undefined;
-  readonly aggregate: Waku10Aggregate | undefined;
   readonly wakuPt: number | undefined;
   readonly contribution: number | undefined;
   readonly strengthPt: number;
   readonly entryCourse: number;
+  /** テーブルから引いた生値（コース強度）。根拠未取得なら undefined */
+  readonly rawRate: number | undefined;
 };
 
 const views: WakuPtView[] = [...prediction.racers]
   .sort((a, b) => a.boatNumber - b.boatNumber)
   .map((racer) => {
     const entry = entryByBoat.get(racer.boatNumber);
-    const waku10 = waku10ByBoat.get(racer.boatNumber);
+    const entryCourse = courseByBoat.get(racer.boatNumber) ?? racer.boatNumber;
     return {
       racer,
-      waku10,
-      aggregate: waku10 ? computeWaku10Aggregate(waku10) : undefined,
       wakuPt: entry?.components?.waku,
       contribution: entry?.contribution.waku,
       strengthPt: entry?.strengthPt ?? 0,
-      entryCourse: courseByBoat.get(racer.boatNumber) ?? racer.boatNumber,
+      entryCourse,
+      rawRate: basis ? computeWakuPtSteps(basis, entryCourse)?.rawRate : undefined,
     };
   });
 
@@ -96,11 +97,25 @@ const ptRank = new Map<number, number>();
 
 const maxPt = Math.max(1, ...views.map((v) => v.wakuPt ?? 0));
 
-/** 過去10走の集計を 1 艇でも出せるか（waku10 未取得のレースでは列ごと落とす） */
-const hasWaku10 = views.some((v) => (v.aggregate?.totalRuns ?? 0) > 0);
-
 /** 枠なり進入でない艇が 1 艇でもあるか（前付けがあると枠番とコースがずれる） */
 const hasCourseShift = views.some((v) => v.entryCourse !== v.racer.boatNumber);
+
+/** コース番号 → そのコースに入る艇（テーブルのセルに艇番バッジを出すため） */
+const boatsByCourse = new Map<number, number[]>();
+for (const v of views) {
+  boatsByCourse.set(v.entryCourse, [...(boatsByCourse.get(v.entryCourse) ?? []), v.racer.boatNumber]);
+}
+
+/** テーブル内の最大・最小（セルの濃淡に使う） */
+const allRates = basis
+  ? WAKU_SEASONS.flatMap((s: WakuSeason) => [...basis.ratesBySeason[s]])
+  : [];
+const rateMin = allRates.length > 0 ? Math.min(...allRates) : 0;
+const rateMax = allRates.length > 0 ? Math.max(...allRates) : 1;
+
+/** 勝率の高さを 0〜1 に正規化（セル背景の濃さ） */
+const rateShade = (v: number): number =>
+  rateMax > rateMin ? (v - rateMin) / (rateMax - rateMin) : 0;
 
 const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
@@ -134,6 +149,91 @@ const num = (v: number | undefined | null, digits: number): string =>
     </p>
   </header>
 
+  {/* 根拠テーブル: 場 × 季節 × コース */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-1">{stadiumName}のコース強度テーブル</h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      枠番ptの<span class="font-bold">唯一の入力</span>。
+      {WAKU_PT_TABLE_AXES.join(" × ")}別の長期勝率で、選手・モーター・その日の条件は一切入りません。
+    </p>
+
+    {basis === undefined ? (
+      <p class="text-[11px] text-gray-500">
+        このビルドではコース強度テーブル（<span class="font-mono">estimate/stadium/win_rate.csv</span>）を
+        取得できていません。枠番ptは BoatraceCSV が出した値をそのまま表示しています。
+      </p>
+    ) : (
+      <>
+        <div class="overflow-x-auto">
+          <table class="w-full text-[11px] border-collapse">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">季節</th>
+                {[1, 2, 3, 4, 5, 6].map((c) => (
+                  <th scope="col" class="text-right py-1 px-1 font-medium">{c}コース</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {WAKU_SEASONS.map((season: WakuSeason) => {
+                const current = season === basis.season;
+                return (
+                  <tr class={`border-b border-gray-100 ${current ? "bg-blue-50" : ""}`}>
+                    <th
+                      scope="row"
+                      class={`text-left py-1 px-1 font-medium ${current ? "text-blue-800" : "text-gray-500"}`}
+                    >
+                      {season}
+                      {current && (
+                        <span class="ml-1 text-[9px] font-normal text-blue-600">← 今回</span>
+                      )}
+                    </th>
+                    {basis.ratesBySeason[season].map((rate, i) => {
+                      const boats = current ? (boatsByCourse.get(i + 1) ?? []) : [];
+                      return (
+                        <td
+                          class="py-1 px-1 text-right font-mono tabular-nums text-gray-800"
+                          style={`background-color: rgba(37, 99, 235, ${(rateShade(rate) * 0.18).toFixed(3)});`}
+                        >
+                          <span class={current ? "font-bold" : ""}>{rate.toFixed(3)}</span>
+                          {boats.length > 0 && (
+                            <span class="flex justify-end gap-0.5 mt-0.5">
+                              {boats.map((b) => {
+                                const c = isValidBoatNumber(b) ? BOAT_COLORS[b] : undefined;
+                                return (
+                                  <span
+                                    class="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold"
+                                    style={`background-color: ${c?.hex ?? "#999"}; color: ${c?.textHex ?? "#fff"};${b === 1 ? " border: 1px solid #cbd5e1;" : ""}`}
+                                    title={`${b}号艇が${i + 1}コース`}
+                                  >
+                                    {b}
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-[11px] text-gray-400 mt-2">
+          値は<span class="font-bold">勝率（平均得点）</span>です。1着10点〜6着1点の平均で、
+          全コース平均は 5 前後。1着率(%) ではありません。
+          艇番バッジは今回の各艇が入るコース（
+          {courseFromExhibition ? "スタート展示の実測進入" : "枠なり進入の仮置き"}）。
+          このテーブルはその場の過去数年ぶんの着順実績から作られた据え置きの値で、
+          同じ場・同じ季節なら全レース共通です。
+        </p>
+      </>
+    )}
+  </section>
+
   {/* 6艇まとめ */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
     <h2 class="font-bold text-lg mb-3">枠番pt 一覧</h2>
@@ -144,10 +244,12 @@ const num = (v: number | undefined | null, digits: number): string =>
             <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
             <th scope="col" class="text-left py-1 px-1 font-medium">選手</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">進入</th>
+            {basis !== undefined && (
+              <th scope="col" class="text-right py-1 px-1 font-medium">テーブル値</th>
+            )}
             <th scope="col" class="text-left py-1 px-1 font-medium w-1/3">枠番pt</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
-            {hasWaku10 && <th scope="col" class="text-right py-1 px-1 font-medium">枠1着率</th>}
           </tr>
         </thead>
         <tbody>
@@ -182,6 +284,11 @@ const num = (v: number | undefined | null, digits: number): string =>
                 >
                   {v.entryCourse}
                 </td>
+                {basis !== undefined && (
+                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
+                    {num(v.rawRate, 3)}
+                  </td>
+                )}
                 <td class="py-1 px-1 align-middle">
                   <span class="flex items-center gap-1.5">
                     <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
@@ -209,20 +316,6 @@ const num = (v: number | undefined | null, digits: number): string =>
                 <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
                   {v.strengthPt.toFixed(2)}
                 </td>
-                {hasWaku10 && (
-                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-500">
-                    {v.aggregate && v.aggregate.firstRate !== null ? (
-                      <>
-                        {v.aggregate.firstRate.toFixed(0)}%
-                        <span class="block text-[10px] text-gray-400">
-                          {v.aggregate.countedRuns}走
-                        </span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                )}
               </tr>
             );
           })}
@@ -234,11 +327,9 @@ const num = (v: number | undefined | null, digits: number): string =>
       強さptはこの寄与を含む5成分の合計です。
       「進入」は
       {courseFromExhibition ? "スタート展示の実測進入コース" : "枠なり進入を仮置きした値（スタート展示が未取得）"}。
-      {hasWaku10 &&
-        "「枠1着率」はその選手がこの枠番で走った過去10走の1着率で、枠番ptには含まれない参考値です。"}
       評価は
       <span class="font-mono">{evaluation.state === "realtime" ? "直前情報反映後" : "朝バッチ時点"}</span>
-      のもの（枠番pt自体は直前情報では変わりません）。
+      のもの（枠番pt自体は直前情報では変わりません。動くのは進入コースが変わったときだけ）。
     </p>
   </section>
 
@@ -247,16 +338,28 @@ const num = (v: number | undefined | null, digits: number): string =>
     {views.map((v) => (
       <WakuPtCard
         racer={v.racer}
-        waku10={v.waku10}
-        aggregate={v.aggregate}
         wakuPt={v.wakuPt}
         contribution={v.contribution}
         strengthPt={v.strengthPt}
         entryCourse={v.entryCourse}
         entryCourseFromExhibition={courseFromExhibition}
+        basis={basis}
       />
     ))}
   </div>
+
+  {/* 選手個人の成績はここには無い、という導線 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-base mb-1">選手個人の枠番成績を見たいとき</h2>
+    <p class="text-[13px] text-gray-700">
+      このページの数字には<span class="font-bold">選手個人の成績が一切入っていません</span>。
+      「この選手がこの枠でどう走ってきたか」は別の指標なので、レース詳細ページの
+      <a href={`${raceHref}#waku10`} class="text-blue-600 hover:underline">枠番別過去10走</a>
+      を参照してください。選手の巧拙そのものは
+      <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
+      が担当します。
+    </p>
+  </section>
 
   {/* 計算ロジックの解説 */}
   <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
@@ -270,14 +373,37 @@ const num = (v: number | undefined | null, digits: number): string =>
             <li>
               <span class="font-bold">枠番pt</span> =
               {" "}{WAKU_PT_TABLE_AXES.join(" × ")}
-              {" "}で学習したコース強度テーブルを、その艇のコースで引いた値。
-              偏差値スケール（50 + 10 × z）に直してある
+              {" "}別のコース強度テーブルを、その艇のコースで引いた値。
+              場内の平均 μ と標準偏差 σ で偏差値スケール（50 + 10 × z）に直してある
             </li>
             <li>
               <span class="font-bold">寄与</span> = 場別重み w × 枠番pt。
               5成分の寄与を合計したものが強さptになります（重みの合計は 1）
             </li>
           </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">入力の出どころ</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">コース強度テーブル</span> —
+              <span class="font-mono">estimate/stadium/win_rate.csv</span>。
+              24場 × 4季節 × 6コースの長期勝率で、その場の過去数年ぶんの着順実績から作られた
+              据え置きの静的テーブルです
+            </li>
+            <li>
+              <span class="font-bold">μ / σ / 重み w</span> —
+              <span class="font-mono">estimate/stadium/weights/{basis?.predictorId ?? "{予想者}"}/</span>。
+              直近6ヶ月のデータから場別・月次で学習されます
+              {basis && `（このページは ${basis.weightsMonth} 版）`}
+            </li>
+          </ul>
+          <p class="text-[13px] mt-1">
+            この2つを取り込んでいるので、各カードの「計算過程」は
+            <span class="font-bold">表示している枠番ptそのものを再現した値</span>です
+            （丸めの都合で小数第2位まで一致します）。
+          </p>
         </div>
 
         <div>
@@ -291,11 +417,12 @@ const num = (v: number | undefined | null, digits: number): string =>
             <li>
               <span class="font-bold">レース間でほとんど動かない</span> —
               テーブルの軸に日付やレース番号が入っていないので、同じ場の同じ日なら
-              全レースで同じ枠番ptになります（動くのは季節が替わったときと場が違うとき）
+              全レースで同じ枠番ptになります（動くのは進入コースが変わったときと、
+              季節が替わったとき、場が違うとき）
             </li>
             <li>
               <span class="font-bold">場ごとの差が大きい</span> —
-              1コース1着率は大村の約65〜70%から戸田の約43%まで開きます。
+              イン有利な場とそうでない場では1コースの勝率が2点以上開きます。
               枠番ptはこの差を場別の偏差値に直したもので、寄与に効く重み w も場別に学習されます
             </li>
           </ul>
@@ -316,19 +443,6 @@ const num = (v: number | undefined | null, digits: number): string =>
         </div>
 
         <div>
-          <h3 class="font-bold text-sm mb-1">「枠番別過去10走」は枠番ptの入力ではない</h3>
-          <p class="text-[13px]">
-            各カードに出している{WAKU10_MAX_RUNS}走（<span class="font-mono">programs/waku10</span>）は、
-            <span class="font-bold">その選手が今回と同じ枠番で走った直近{WAKU10_MAX_RUNS}走</span>で、
-            枠番ptには入っていません。枠番ptが「この場のこのコースは一般にどうか」を測るのに対し、
-            こちらは「この選手はこの枠でどうだったか」を見る値です。
-            1着率・2連対率・3連対率は F・L・失・妨を分母に計上し（着はつかない）、
-            欠・転・落・沈・エ・不は無かった扱いで分母から外して算出しています
-            （選手ptの素点と同じ規則）。
-          </p>
-        </div>
-
-        <div>
           <h3 class="font-bold text-sm mb-1">コースptとの違い（退役予想者）</h3>
           <p class="text-[13px]">
             2026-07-22 に投入した <span class="font-mono">v6_course</span>（コース予想）は、
@@ -337,21 +451,7 @@ const num = (v: number | undefined | null, digits: number): string =>
             拾う狙いでしたが、本命予想とのペア比較で回収率が有意に低く、
             2026-08-09 に <span class="font-mono">v7_aggregate</span> /
             <span class="font-mono">v8_aionly</span> と併せて退役しています。
-            現行 active の3予想者はいずれも枠番pt（場 × 季節 × コース）を使います。
-          </p>
-        </div>
-
-        <div>
-          <h3 class="font-bold text-sm mb-1">このページでテーブル値を出していない理由</h3>
-          <p class="text-[13px]">
-            コース強度テーブルの再現には、その場の過去数年ぶんの着順実績を季節・コース別に
-            集計したものが必要です。fun-site が取得しているのは当日ぶんの CSV だけなので、
-            枠番ptは<span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>しています。
-            計算過程まで開示しているのは
-            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
-            （入力の近況5節を手元に持っているため）だけです。
-            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>
-            も同じ理由で値をそのまま出しています。
+            現行 active の予想者はいずれも枠番pt（場 × 季節 × コース）を使います。
           </p>
         </div>
 

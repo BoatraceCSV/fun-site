@@ -1,13 +1,9 @@
 ---
-import type { RaceRacer, RacerWaku10, Waku10Aggregate } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber } from "@fun-site/shared";
+import type { RaceRacer, WakuPtBasis } from "@fun-site/shared";
+import { BOAT_COLORS, computeWakuPtSteps, isValidBoatNumber } from "@fun-site/shared";
 
 interface Props {
   racer: RaceRacer;
-  /** 枠番別過去10走。waku10 CSV 未取得のレースでは undefined */
-  waku10: RacerWaku10 | undefined;
-  /** `waku10` を集計した参考値。枠番pt には未算入 */
-  aggregate: Waku10Aggregate | undefined;
   /** 枠番pt（偏差値）。index CSV 由来。古い JSON では undefined */
   wakuPt: number | undefined;
   /** 寄与pt = 場別重み × 枠番pt。index CSV 由来 */
@@ -18,26 +14,37 @@ interface Props {
   entryCourse: number;
   /** `entryCourse` がスタート展示由来（= 仮値ではない）か */
   entryCourseFromExhibition: boolean;
+  /**
+   * 枠番pt の根拠（この場のコース強度テーブル + 場別 μ/σ/w）。
+   * 上流の静的テーブル未取得のビルド / 古い JSON では undefined。
+   */
+  basis: WakuPtBasis | undefined;
 }
 
 const {
   racer,
-  waku10,
-  aggregate,
   wakuPt,
   contribution,
   strengthPt,
   entryCourse,
   entryCourseFromExhibition,
+  basis,
 } = Astro.props;
 
 const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
 
-/** 場別重み w。寄与 = w × 枠番pt の関係から逆算する（weights CSV は未取り込み） */
-const weight =
-  wakuPt !== undefined && contribution !== undefined && wakuPt !== 0
-    ? contribution / wakuPt
-    : undefined;
+/** テーブル引き → z → 偏差値 → 寄与 の再現。根拠テーブルが無ければ undefined */
+const steps = basis ? computeWakuPtSteps(basis, entryCourse) : undefined;
+
+/**
+ * 再現値が index CSV の値と一致するか。
+ *
+ * 過去日を再ビルドすると、当時の index を作ったあとにテーブルや重みが
+ * 更新されていて 0.1pt 程度ずれることがある。ずれたまま「= 枠番pt」と
+ * 書くと嘘になるので、一致したときだけ検算済みとして扱う。
+ */
+const reproduced =
+  steps !== undefined && wakuPt !== undefined && Math.abs(steps.pt - wakuPt) < 0.05;
 
 /** 偏差値 → z。「この場の平均から何σ上か」の言い換えに使う */
 const z = wakuPt !== undefined ? (wakuPt - 50) / 10 : undefined;
@@ -52,20 +59,11 @@ const courseShifted = entryCourse > 0 && entryCourse !== racer.boatNumber;
 const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
 
-/** 未計測（0）は "—" */
-const stat = (v: number | undefined, digits: number): string =>
-  v === undefined || v <= 0 ? "—" : v.toFixed(digits);
+const signed = (v: number, digits: number): string => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
 
-/** 着順は色を付けない。特殊トークンのみ文字色で区別する（Waku10Section と同じ規則） */
-const rankTextClass = (rank: string): string => {
-  if (rank === "F") return "text-red-600";
-  if (rank === "L") return "text-amber-600";
-  if (/^[1-6]$/.test(rank)) return "text-gray-800";
-  return "text-gray-500";
-};
-
-/** 着順分布バーの 1 マス。1-3着は青系、4-6着は灰系で塗る */
-const RANK_BAR_COLORS = ["#1d4ed8", "#3b82f6", "#93c5fd", "#e5e7eb", "#d1d5db", "#9ca3af"];
+/** 式の中に埋める負数は括弧で囲む（「50 + 10 × -1.665」を避ける） */
+const term = (v: number, digits: number): string =>
+  v < 0 ? `(${v.toFixed(digits)})` : v.toFixed(digits);
 ---
 
 <section
@@ -115,12 +113,7 @@ const RANK_BAR_COLORS = ["#1d4ed8", "#3b82f6", "#93c5fd", "#e5e7eb", "#d1d5db", 
       <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-blue-900">
         <li class="inline-flex items-baseline gap-1">
           <span class="text-blue-700">コース強度</span>
-          <span
-            class="font-bold text-blue-400"
-            title="場×季節×コースのテーブルは BoatraceCSV 側で学習された値で、fun-site は取り込んでいません"
-          >
-            テーブル引き
-          </span>
+          <span class="font-mono font-bold tabular-nums">{num(steps?.rawRate, 3)}</span>
         </li>
         <li aria-hidden="true" class="text-blue-400">→</li>
         <li class="inline-flex items-baseline gap-1">
@@ -139,13 +132,6 @@ const RANK_BAR_COLORS = ["#1d4ed8", "#3b82f6", "#93c5fd", "#e5e7eb", "#d1d5db", 
         </li>
       </ol>
 
-      {weight !== undefined && (
-        <p class="mt-1.5 text-[10px] text-blue-700">
-          枠番pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 枠番pt。
-          重みは場別・月次で学習された値です。
-        </p>
-      )}
-
       <p class="mt-1.5 text-[10px] text-blue-700">
         枠番ptは<span class="font-bold">この場・この季節・このコースの平均的な有利不利</span>で、
         {racer.racerName}個人の成績は入っていません{courseShifted
@@ -154,119 +140,94 @@ const RANK_BAR_COLORS = ["#1d4ed8", "#3b82f6", "#93c5fd", "#e5e7eb", "#d1d5db", 
       </p>
     </div>
 
-    {/* 枠番別過去10走（参考値） */}
+    {/* 計算過程: 根拠テーブルから index CSV の値まで */}
     <div>
       <h3 class="text-xs font-bold text-gray-500 mb-1.5">
-        {racer.boatNumber}枠での過去10走<span class="ml-1 font-normal text-gray-400"
-          >（参考値・枠番ptには未算入）</span
-        >
+        枠番ptの計算過程
+        {reproduced && (
+          <span class="ml-1 font-normal text-emerald-600">（表示値と一致）</span>
+        )}
       </h3>
 
-      {waku10 === undefined || aggregate === undefined ? (
+      {basis === undefined || steps === undefined ? (
         <p class="text-[11px] text-gray-500">
-          このレースは枠番別過去10走（waku10）を取得できていません。
-        </p>
-      ) : aggregate.totalRuns === 0 ? (
-        <p class="text-[11px] text-gray-500">
-          {racer.racerName}はこの枠番での出走歴がありません（新人・久々の出走など）。
+          このビルドではコース強度テーブル（<span class="font-mono">estimate/stadium/win_rate.csv</span>）を
+          取得できていないため、計算過程を出せません。枠番ptは BoatraceCSV が出した値をそのまま表示しています。
         </p>
       ) : (
-        <div class="space-y-2">
-          {/* 過去10走のチップ列（左が前走） */}
-          <div class="flex flex-wrap items-end gap-1">
-            {waku10.runs.map((r) => (
-              <span
-                class="inline-flex flex-col items-center leading-none w-7"
-                title={`${r.rank}着 / 進入${r.entryCourse}${r.courseIsAsWaku ? "(枠なり)" : ""}${r.grade ? ` / ${r.grade}` : ""}`}
-              >
-                <span
-                  class={`text-[9px] tabular-nums ${r.entryCourse !== racer.boatNumber ? "font-bold text-amber-700" : "text-gray-400"}`}
-                >
-                  {r.entryCourse > 0 ? `${r.entryCourse}コ` : "—"}
-                </span>
-                <span class={`text-sm font-bold tabular-nums ${rankTextClass(r.rank)}`}>
-                  {r.rank}
-                </span>
+        <div class="overflow-x-auto">
+          <table class="w-full text-[11px] border-collapse">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">手順</th>
+                <th scope="col" class="text-left py-1 px-1 font-medium">計算</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">値</th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-800">
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  1. テーブル引き
+                </th>
+                <td class="py-1 px-1 text-gray-600">
+                  {basis.season}・{steps.course}コース
+                  {courseShifted && (
+                    <span class="text-amber-700">（枠番ではなく進入コース）</span>
+                  )}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                  {steps.rawRate.toFixed(3)}
+                </td>
+              </tr>
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  2. 場内で標準化
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  ({steps.rawRate.toFixed(3)} − {basis.mu.toFixed(3)}) ÷ {basis.sigma.toFixed(3)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                  {signed(steps.z, 3)}
+                </td>
+              </tr>
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  3. 偏差値に直す
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  50 + 10 × {term(steps.z, 3)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-blue-800">
+                  {steps.pt.toFixed(2)}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  4. 重みを掛ける
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  {basis.weight.toFixed(3)} × {steps.pt.toFixed(2)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-blue-800">
+                  {steps.contribution.toFixed(2)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="mt-1.5 text-[10px] text-gray-400">
+            μ = {basis.mu.toFixed(3)} / σ = {basis.sigma.toFixed(3)} / 重み w ={" "}
+            {basis.weight.toFixed(3)} はこの場の値（{basis.weightsMonth} 版の
+            <span class="font-mono">weights/{basis.predictorId}</span>。直近6ヶ月から月次で学習）。
+            {!reproduced && wakuPt !== undefined && (
+              <span class="text-amber-700">
+                {" "}再現値 {steps.pt.toFixed(2)} が表示値 {wakuPt.toFixed(2)} と一致していません。
+                この評価を作ったあとにテーブルまたは重みが更新された過去日のレースです。
               </span>
-            ))}
-          </div>
-
-          {/* 着順分布バー */}
-          <div>
-            <span class="flex h-3 w-full rounded overflow-hidden bg-gray-100">
-              {aggregate.rankCounts.map((count, i) =>
-                count === 0 ? null : (
-                  <span
-                    class="h-full"
-                    style={`width: ${(count / aggregate.totalRuns) * 100}%; background-color: ${RANK_BAR_COLORS[i]};`}
-                    title={`${i + 1}着 ${count}本`}
-                  />
-                ),
-              )}
-            </span>
-            <span class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-gray-500">
-              {aggregate.rankCounts.map((count, i) =>
-                count === 0 ? null : (
-                  <span class="inline-flex items-center gap-1">
-                    <span
-                      class="inline-block w-2 h-2 rounded-sm"
-                      style={`background-color: ${RANK_BAR_COLORS[i]};`}
-                      aria-hidden="true"
-                    />
-                    {i + 1}着 {count}
-                  </span>
-                ),
-              )}
-              {aggregate.tokenCounts.map((t) => (
-                <span class={t.racerResponsible ? "text-red-600" : "text-gray-400"}>
-                  {t.token} {t.count}
-                </span>
-              ))}
-            </span>
-          </div>
-
-          {/* 集計値 */}
-          <div class="overflow-x-auto">
-            <table class="w-full text-[11px] border-collapse">
-              <thead>
-                <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
-                  <th scope="col" class="text-right py-1 px-1 font-medium">1着率</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">2連対率</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">3連対率</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">勝率</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">平均ST</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">ST順</th>
-                </tr>
-              </thead>
-              <tbody class="font-mono tabular-nums text-gray-800">
-                <tr>
-                  <td class="text-right py-1 px-1 font-bold">{num(aggregate.firstRate, 0)}%</td>
-                  <td class="text-right py-1 px-1">{num(aggregate.top2Rate, 0)}%</td>
-                  <td class="text-right py-1 px-1">{num(aggregate.top3Rate, 0)}%</td>
-                  <td class="text-right py-1 px-1">{stat(waku10.winRate, 2)}</td>
-                  <td class="text-right py-1 px-1">{stat(waku10.avgST, 2)}</td>
-                  <td class="text-right py-1 px-1">{stat(waku10.avgStartOrder, 1)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <p class="text-[10px] text-gray-400">
-            1着率・2連対率・3連対率は {aggregate.countedRuns} 走が分母
-            （F・L・失・妨は分母に計上、欠・転・落・沈・エ・不は無かった扱い）。
-            勝率・平均ST・ST順は waku10 CSV の値をそのまま出しています。
-            {aggregate.offCourseRuns > 0 &&
-              `${aggregate.totalRuns} 走のうち ${aggregate.offCourseRuns} 走は ${racer.boatNumber}コース以外からの進入で、枠番ptが引いたコースとは条件が違います。`}
+            )}
           </p>
         </div>
       )}
     </div>
-
-    {/* 再現できない理由 */}
-    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
-      枠番ptそのものの内訳（場×季節×コースのコース強度テーブル）は、その場の過去数年ぶんの
-      着順実績を季節・コースで集計したものです。fun-site は当日ぶんの CSV しか取得していないため、
-      枠番ptは<span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>しています。
-    </p>
   </div>
 </section>

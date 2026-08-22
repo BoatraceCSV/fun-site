@@ -1,30 +1,94 @@
 /**
- * 枠番pt（枠番＝コースの有利不利）の解説用ユーティリティ。
+ * 枠番pt（枠番＝コースの有利不利）の計算・解説用ユーティリティ。
  *
  * 枠番pt は index CSV (`N枠_枠番pt` / `N枠_寄与_枠番pt`) の成分で、
- * BoatraceCSV 側が **場 × 季節 × コース** で学習したコース強度テーブルを
+ * BoatraceCSV 側が **場 × 季節 × コース** で集計したコース強度テーブルを
  * その艇のコースで引いた値である。2 段階で決まる:
  *
  *   1. 枠番pt = 50 + 10 × z（テーブル値の場内偏差値）  ← index CSV (`N枠_枠番pt`)
  *   2. 寄与   = w_場 × 枠番pt                          ← index CSV (`N枠_寄与_枠番pt`)
  *
- * **選手pt (`racer-pt.ts`) と違い、fun-site 側で再計算できない**。入力が
- * 「その場の過去数年ぶんの着順実績を季節 × コースで集計したテーブル」で、
- * fun-site が取得しているのは当日ぶんの CSV だけだからである。
- * モーターpt (`motor-pt.ts`) と同じ立場で、このファイルが持つのは
+ * この 2 段階は **選手pt (`racer-pt.ts`) と同じく fun-site 側で再現できる**。
+ * 入力になる静的テーブル 2 種（`estimate/stadium/win_rate.csv` と
+ * `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv`）を batch が取り込み、
+ * レース JSON の `wakuPtBasis` に焼き込んでいるためである
+ * （2026-08-22 まではこの 2 つを取得しておらず「再計算できない」成分だった）。
  *
+ * このファイルが持つのは
+ *
+ *   - テーブル引き → 偏差値 → 寄与 を再現する {@link computeWakuPtSteps}
  *   - 枠番pt が何を引いた値なのかを説明するための定数
  *   - **枠番別過去10走**（`programs/waku10`）を集計する `computeWaku10Aggregate()`
  *
- * の 2 つ。後者は枠番pt の入力ではなく **参考値** である
+ * の 3 つ。最後のものは枠番pt の入力ではなく **参考値** である
  * （枠番pt は場全体の傾向で、選手個人がその枠でどう走ったかは見ていない）。
  */
 
 import type { RacerWaku10, Waku10RunView } from "../types/prediction.js";
+import type { WakuPtBasis, WakuSeason } from "../types/stadium-table.js";
 import { NOT_RACER_RESPONSIBLE_TOKENS, RACER_RESPONSIBLE_TOKENS } from "./racer-pt.js";
 
 /** 枠番pt が引くテーブルの軸。説明用 */
 export const WAKU_PT_TABLE_AXES: readonly string[] = ["場", "季節", "コース"];
+
+/**
+ * 月 → 季節。上流 `boatrace/index_features.py` の `SEASON_BY_MONTH` と同じ区分
+ * （春 3-5 / 夏 6-8 / 秋 9-11 / 冬 12-2）。
+ */
+const SEASON_BY_MONTH: readonly WakuSeason[] = [
+  "冬", // 1
+  "冬",
+  "春",
+  "春",
+  "春",
+  "夏",
+  "夏",
+  "夏",
+  "秋",
+  "秋",
+  "秋",
+  "冬", // 12
+];
+
+/**
+ * "YYYY-MM-DD" からテーブルを引く季節を決める。
+ * `new Date()` を使わず文字列から月を取り出す（タイムゾーン非依存）。
+ */
+export const seasonForDate = (date: string): WakuSeason => {
+  const month = Number(date.split("-")[1]);
+  return SEASON_BY_MONTH[month - 1] ?? "冬";
+};
+
+/** 枠番pt の計算過程 1 艇ぶん。画面はこの順に「テーブル引き → 偏差値 → 寄与」を出す */
+export type WakuPtSteps = {
+  /** テーブルを引いたコース（realtime は実進入コース、daily は枠番） */
+  readonly course: number;
+  /** テーブル値そのもの（この場・この季節・このコースの勝率 = 平均得点） */
+  readonly rawRate: number;
+  /** 場内 z 値 = (raw − μ) ÷ σ */
+  readonly z: number;
+  /** 枠番pt = 50 + 10 × z */
+  readonly pt: number;
+  /** 寄与 = w × 枠番pt */
+  readonly contribution: number;
+};
+
+/**
+ * `wakuPtBasis` と進入コースから 枠番pt を再計算する。
+ *
+ * 上流 `build_index.py` と同じ式なので、index CSV の `N枠_枠番pt` と
+ * 小数第 2 位まで一致する（上流は出力時に `round(x, 2)`）。σ が 0 の場は
+ * 上流と同じく z=0（= 偏差値 50）に倒す。コースが 1〜6 の外なら undefined。
+ */
+export const computeWakuPtSteps = (basis: WakuPtBasis, course: number): WakuPtSteps | undefined => {
+  if (!Number.isInteger(course) || course < 1 || course > 6) return undefined;
+  const rawRate = basis.ratesBySeason[basis.season][course - 1];
+  if (rawRate === undefined) return undefined;
+
+  const z = basis.sigma > 0 ? (rawRate - basis.mu) / basis.sigma : 0;
+  const pt = 50 + 10 * z;
+  return { course, rawRate, z, pt, contribution: basis.weight * pt };
+};
 
 /**
  * 枠番pt の偏差値スケール。BoatraceCSV 側が全成分共通で使う。
