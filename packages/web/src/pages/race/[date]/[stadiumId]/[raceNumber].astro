@@ -324,7 +324,19 @@ const predictorPredictions: readonly PredictorPrediction[] =
   {/* 出走表（基本情報） */}
   {prediction.racers.length > 0 && (
     <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 class="font-bold text-lg mb-3">出走表</h2>
+      {/* 選手pt / モーターpt の詳細ページは同じ出走表の値をそれぞれの pt と並べて
+           出すので、ここからも張る */}
+      <div class="flex items-baseline justify-between gap-2 mb-3 flex-wrap">
+        <h2 class="font-bold text-lg">出走表</h2>
+        <span class="flex items-baseline gap-3 shrink-0">
+          <a href={racerPtHref} class="text-xs text-blue-700 hover:underline">
+            選手ptの詳細 <span aria-hidden="true">▸</span>
+          </a>
+          <a href={motorPtHref} class="text-xs text-blue-700 hover:underline">
+            モーターptの詳細 <span aria-hidden="true">▸</span>
+          </a>
+        </span>
+      </div>
       <RacerTable racers={prediction.racers} stadiumId={prediction.stadiumId} />
     </section>
   )}
