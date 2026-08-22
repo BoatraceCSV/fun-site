@@ -3,11 +3,11 @@ import { Storage } from "@google-cloud/storage";
 import type { CsvType } from "./fetcher/csv-client.js";
 
 /**
- * CSV 種別 + 予想者別 index の generation トラッキングキー。
- * 予想者別 index は `index:{predictor_id}` の形でキー化する
- * (boatrace.gcs_publisher の csv_type 命名と揃える)。
+ * CSV 種別 + 予想者別 index + 静的テーブルの generation トラッキングキー。
+ * 予想者別 index は `index:{predictor_id}`、コース強度テーブルは `waku_table`
+ * の形でキー化する (boatrace.gcs_publisher の csv_type 命名と揃える)。
  */
-export type CsvGenerationKey = CsvType | `index:${string}`;
+export type CsvGenerationKey = CsvType | `index:${string}` | "waku_table";
 
 /**
  * 直近のビルドメタデータ。
@@ -93,14 +93,33 @@ const buildCsvObjectName = (relativePath: string, date: string): string => {
 };
 
 /**
+ * 日付パーティションを持たない静的テーブル。月 1 回しか変わらないが、
+ * 変わったときは全レースの 枠番pt 解説が変わるので早期 return の判定に含める。
+ *
+ * 場別重み CSV (`weights/{predictor_id}/YYYY-MM.csv`) は月ごとにパスが変わり、
+ * 「対象月以下で最新」を stat だけで解決できないため対象外。実運用では
+ * win_rate.csv と同じ monthly-weights の成果物なので、weights だけが変わって
+ * win_rate.csv が据え置きというケースは起きうるが、その場合も翌サイクルの
+ * 日次 CSV 更新でビルドが走る。
+ */
+const STATIC_TABLE_OBJECTS: { key: CsvGenerationKey; objectName: string }[] = [
+  {
+    key: "waku_table",
+    objectName: `${CSV_GCS_PATH_ROOT}/estimate/stadium/win_rate.csv`,
+  },
+];
+
+/**
  * 監視対象のキーリスト (固定 CSV + active 予想者ごとの index)。
  * boatrace.gcs_publisher と同じ csv_type 命名 (`index:{predictor_id}`) を採用。
  */
-const buildTrackedKeys = (): {
+const buildTrackedKeys = (
+  date: string,
+): {
   key: CsvGenerationKey;
-  relativePath: string;
+  objectName: string;
 }[] => {
-  const keys: { key: CsvGenerationKey; relativePath: string }[] = (
+  const keys: { key: CsvGenerationKey; objectName: string }[] = (
     [
       "title",
       "race_cards",
@@ -120,13 +139,17 @@ const buildTrackedKeys = (): {
       "results",
       "payouts",
     ] as const
-  ).map((type) => ({ key: type, relativePath: CSV_PATH_PREFIX[type] }));
+  ).map((type) => ({
+    key: type,
+    objectName: buildCsvObjectName(CSV_PATH_PREFIX[type], date),
+  }));
   for (const p of activePredictors()) {
     keys.push({
       key: `index:${p.id}` as const,
-      relativePath: `estimate/${p.id}`,
+      objectName: buildCsvObjectName(`estimate/${p.id}`, date),
     });
   }
+  keys.push(...STATIC_TABLE_OBJECTS);
   return keys;
 };
 
@@ -134,12 +157,12 @@ const buildTrackedKeys = (): {
 export const fetchCurrentCsvGenerations = async (
   date: string,
 ): Promise<Partial<Record<CsvGenerationKey, string>>> => {
-  const tracked = buildTrackedKeys();
+  const tracked = buildTrackedKeys(date);
   const bucket = getStorage().bucket(CSV_GCS_BUCKET);
 
   const entries = await Promise.all(
-    tracked.map(async ({ key, relativePath }): Promise<[CsvGenerationKey, string | undefined]> => {
-      const file = bucket.file(buildCsvObjectName(relativePath, date));
+    tracked.map(async ({ key, objectName }): Promise<[CsvGenerationKey, string | undefined]> => {
+      const file = bucket.file(objectName);
       try {
         const [metadata] = await file.getMetadata();
         return [key, String(metadata.generation ?? "")];
@@ -172,7 +195,7 @@ export const isUpToDate = (
 ): boolean => {
   if (!previous) return false;
   if (previous.raceDate !== date) return false;
-  for (const { key } of buildTrackedKeys()) {
+  for (const { key } of buildTrackedKeys(date)) {
     const cur = current[key];
     const prev = previous.csvGenerations[key];
     // どちらも未存在ならスキップせず（初回ビルド余地を残す）

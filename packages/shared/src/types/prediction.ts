@@ -5,6 +5,7 @@ import type { BettingPicks } from "../utils/one-mark-distance.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
+import type { WakuPtBasis } from "./stadium-table.js";
 import type { TokutenHayamiRacer } from "./tokuten-hayami.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
@@ -455,5 +456,15 @@ export type RacePrediction = {
   readonly predictions?: readonly PredictorPrediction[];
   /** 荒れ度メーター (レース単位)。CSV 未生成なら undefined。 */
   readonly upsetMeter?: UpsetMeter;
+  /**
+   * 枠番pt の根拠（この場のコース強度テーブル + 場別 μ/σ/w）。
+   * 枠番詳細ページが 枠番pt の内訳を再現するのに使う。
+   *
+   * 上流の静的テーブル (`estimate/stadium/win_rate.csv` /
+   * `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv`) 由来で、
+   * 取得できなかったビルドと **2026-08-22 以前の JSON では undefined**
+   * (UI 側は undefined フォールバックすること)。
+   */
+  readonly wakuPtBasis?: WakuPtBasis;
   readonly generatedAt: string;
 };

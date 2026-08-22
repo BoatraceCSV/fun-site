@@ -88,25 +88,30 @@ const getStorage = (): Storage => {
   return storage;
 };
 
-const buildHttpUrl = (relativePath: string, date: string): string => {
+/**
+ * `data/` 直下からの相対パス（末尾 `.csv` まで）。
+ *
+ * 日付パーティションを持つ CSV は `{prefix}/YYYY/MM/DD.csv`、静的テーブル
+ * (`estimate/stadium/...`) は日付を含まない固定パスになる。HTTP / GCS の
+ * どちらの経路もこの文字列に base を付けるだけで URL / object name になる。
+ */
+type CsvObjectPath = string;
+
+/** 日付パーティション付きのパスを組み立てる */
+const datedPath = (relativePath: string, date: string): CsvObjectPath => {
   // date は "YYYY-MM-DD" 形式なので、直接文字列操作でスラッシュ区切りに変換
   // new Date(date) を使うとタイムゾーン依存のバグが発生する
   const dateSlash = date.replaceAll("-", "/");
-  return `${HTTP_BASE_URL}/${relativePath}/${dateSlash}.csv`;
-};
-
-const buildGcsObjectName = (relativePath: string, date: string): string => {
-  const dateSlash = date.replaceAll("-", "/");
-  return `${GCS_PATH_ROOT}/${relativePath}/${dateSlash}.csv`;
+  return `${relativePath}/${dateSlash}.csv`;
 };
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-const fetchHttp = async (relativePath: string, date: string): Promise<string> => {
-  const url = buildHttpUrl(relativePath, date);
+const fetchHttp = async (path: CsvObjectPath, maxRetries: number): Promise<string> => {
+  const url = `${HTTP_BASE_URL}/${path}`;
   let lastError: Error | undefined;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -115,24 +120,24 @@ const fetchHttp = async (relativePath: string, date: string): Promise<string> =>
       return await response.text();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      if (attempt < MAX_RETRIES - 1) {
+      if (attempt < maxRetries - 1) {
         const backoffMs = INITIAL_DELAY_MS * 2 ** attempt;
-        console.warn(`Retry ${attempt + 1}/${MAX_RETRIES} for ${url}: ${lastError.message}`);
+        console.warn(`Retry ${attempt + 1}/${maxRetries} for ${url}: ${lastError.message}`);
         await delay(backoffMs);
       }
     }
   }
 
-  throw new Error(`Failed to fetch ${url} after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+  throw new Error(`Failed to fetch ${url} after ${maxRetries} attempts: ${lastError?.message}`);
 };
 
-const fetchGcs = async (relativePath: string, date: string): Promise<string> => {
-  const objectName = buildGcsObjectName(relativePath, date);
+const fetchGcs = async (path: CsvObjectPath, maxRetries: number): Promise<string> => {
+  const objectName = `${GCS_PATH_ROOT}/${path}`;
   const bucket = getStorage().bucket(GCS_BUCKET);
   const file = bucket.file(objectName);
 
   let lastError: Error | undefined;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const [buffer] = await file.download();
       return buffer.toString("utf-8");
@@ -143,10 +148,10 @@ const fetchGcs = async (relativePath: string, date: string): Promise<string> => 
       if (status === 404) {
         throw new Error(`GCS object not found: gs://${GCS_BUCKET}/${objectName} (status 404)`);
       }
-      if (attempt < MAX_RETRIES - 1) {
+      if (attempt < maxRetries - 1) {
         const backoffMs = INITIAL_DELAY_MS * 2 ** attempt;
         console.warn(
-          `Retry ${attempt + 1}/${MAX_RETRIES} for gs://${GCS_BUCKET}/${objectName}: ${lastError.message}`,
+          `Retry ${attempt + 1}/${maxRetries} for gs://${GCS_BUCKET}/${objectName}: ${lastError.message}`,
         );
         await delay(backoffMs);
       }
@@ -154,13 +159,13 @@ const fetchGcs = async (relativePath: string, date: string): Promise<string> => 
   }
 
   throw new Error(
-    `Failed to fetch gs://${GCS_BUCKET}/${objectName} after ${MAX_RETRIES} attempts: ${lastError?.message}`,
+    `Failed to fetch gs://${GCS_BUCKET}/${objectName} after ${maxRetries} attempts: ${lastError?.message}`,
   );
 };
 
-const fetchAt = async (relativePath: string, date: string): Promise<string> => {
+const fetchAt = async (path: CsvObjectPath, maxRetries = MAX_RETRIES): Promise<string> => {
   const source = getCsvSource();
-  return source === "gcs" ? fetchGcs(relativePath, date) : fetchHttp(relativePath, date);
+  return source === "gcs" ? fetchGcs(path, maxRetries) : fetchHttp(path, maxRetries);
 };
 
 /**
@@ -171,7 +176,7 @@ const fetchAt = async (relativePath: string, date: string): Promise<string> => {
  * - `http` (default) → GitHub Pages `https://boatracecsv.github.io/data/...`
  */
 export const fetchCsvText = async (type: CsvType, date: string): Promise<string> =>
-  fetchAt(CSV_PATH_PREFIX[type], date);
+  fetchAt(datedPath(CSV_PATH_PREFIX[type], date));
 
 /**
  * 予想者 `predictor` の index CSV テキストを取得する。パスは
@@ -179,4 +184,72 @@ export const fetchCsvText = async (type: CsvType, date: string): Promise<string>
  * 動作は `fetchCsvText` と同じ。
  */
 export const fetchIndexCsvText = async (predictor: PredictorSpec, date: string): Promise<string> =>
-  fetchAt(predictorIndexRelativePath(predictor), date);
+  fetchAt(datedPath(predictorIndexRelativePath(predictor), date));
+
+/**
+ * 場 × 季節 × コース勝率テーブル (`data/estimate/stadium/win_rate.csv`)。
+ * 枠番pt の生値ソースで、日付パーティションを持たない静的テーブル。
+ */
+export const WAKU_TABLE_CSV_PATH = "estimate/stadium/win_rate.csv";
+
+export const fetchWakuTableCsvText = async (): Promise<string> => fetchAt(WAKU_TABLE_CSV_PATH);
+
+/** 月をまたいで遡る上限。これを超えて古い weights しか無い状態は異常とみなす */
+const WEIGHTS_LOOKBACK_MONTHS = 12;
+
+/** "YYYY-MM-DD" → "YYYY-MM" を `n` ヶ月戻したもの */
+const monthTagBefore = (date: string, n: number): string => {
+  const [y, m] = date.split("-").map(Number);
+  // Date を使わず素の算術で戻す（タイムゾーン非依存にするため）
+  const total = (y ?? 0) * 12 + ((m ?? 1) - 1) - n;
+  const year = Math.floor(total / 12);
+  const month = (total % 12) + 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
+};
+
+/** 場別重み CSV の取得結果。どの月のファイルを引けたかを添える */
+export type WeightsCsvFetch = {
+  /** "YYYY-MM"。上流の monthly-weights が生成した月 */
+  readonly month: string;
+  readonly text: string;
+};
+
+/**
+ * 予想者 `predictorId` の場別重み CSV
+ * (`data/estimate/stadium/weights/{predictorId}/YYYY-MM.csv`) を取得する。
+ *
+ * 上流 `build_index.py` は **対象日の月以下で最新** のファイルを使うので、
+ * こちらも対象月から 1 ヶ月ずつ遡って最初に見つかったものを採用する
+ * (monthly-weights が当月ぶんをまだ生成していない月初のため)。
+ *
+ * 遡りの各試行はリトライ無し (存在しない月の 404 を待つのは無駄)。全ての月が
+ * 空振りしたときだけ、通信エラーと取り違えていないかを対象月へのリトライ付き
+ * 再取得で確かめる。
+ */
+export const fetchWeightsCsv = async (
+  predictorId: string,
+  date: string,
+): Promise<WeightsCsvFetch | undefined> => {
+  const pathFor = (month: string) => `estimate/stadium/weights/${predictorId}/${month}.csv`;
+
+  for (let back = 0; back < WEIGHTS_LOOKBACK_MONTHS; back++) {
+    const month = monthTagBefore(date, back);
+    try {
+      return { month, text: await fetchAt(pathFor(month), 1) };
+    } catch {
+      // 次の月へ
+    }
+  }
+
+  const month = monthTagBefore(date, 0);
+  try {
+    return { month, text: await fetchAt(pathFor(month)) };
+  } catch (error) {
+    console.warn(
+      `Failed to fetch weights CSV for ${predictorId} (${date}): ${
+        error instanceof Error ? error.message : error
+      }`,
+    );
+    return undefined;
+  }
+};

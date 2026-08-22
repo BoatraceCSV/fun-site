@@ -22,6 +22,26 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `results/realtime` | `results/realtime/YYYY/MM/DD.csv` | 当日確定直後のレース結果 | レース結果セクション・的中判定 |
 | `results/payouts` | `results/payouts/YYYY/MM/DD.csv` | 当日確定直後の払戻金（単勝/複勝/2連単/2連複/拡連複/3連単/3連複） | 3連単 戦略の回収率計算 |
 
+### 静的テーブル（日付パーティションなし）
+
+日付を持たない場別テーブル。上流の monthly-weights が月 1 回だけ更新し、
+preview-realtime / daily-sync の GCS ミラーに相乗りして配信される。
+
+| 種別 | パス（プレフィックス省略） | 内容 | 利用箇所 |
+|---|---|---|---|
+| `waku_table` | `estimate/stadium/win_rate.csv` | 24場 × 4季節 × 6コースの長期勝率（= 平均得点。1着率(%) ではない）。枠番pt の生値ソース | 枠番詳細ページのコース強度テーブルと計算過程 |
+| `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` 成分ぶんだけ | 同上（raw → 偏差値pt → 寄与 の変換） |
+
+取得は [`fetchWakuTableCsvText()`](../packages/batch/src/fetcher/csv-client.ts) と
+`fetchWeightsCsv(predictorId, date)`。weights は上流 `build_index.py` と同じく
+**対象月以下で最新**のファイルを使うため、対象月から 1 ヶ月ずつ最大 12 ヶ月遡って
+最初に見つかったものを採用する（遡り中の試行はリトライ無し）。
+
+パースは [`stadium-table-schemas.ts`](../packages/batch/src/fetcher/stadium-table-schemas.ts)、
+レース単位への切り出しは [`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts)。
+どちらか一方でも欠けると 枠番pt を再現できないので、その場合は `wakuPtBasis` を付けず
+UI 側が「テーブル未取得」の表示に倒れる。
+
 廃止済み:
 
 - 旧 `programs/YYYY/MM/DD.csv`（サブディレクトリなし）: 上流で生成停止
@@ -51,6 +71,8 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 
 - HTTP / GCS のいずれも exponential backoff で最大 3 回リトライ
 - GCS object の `generation`（更新時刻ベースの整数）を取得し、`_meta/last-build.json` に記録
+  （`waku_table` も対象。月次でテーブルが差し替わったら全レースの解説が変わるため。
+  weights は月ごとにパスが変わり stat だけで解決できないので対象外）
 - 次回起動時に全 CSV の generation が一致していれば早期 return（`FORCE_REBUILD=1` で無効化）
 
 ## 主要な型
@@ -74,6 +96,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST, 推定ST_p25, 推定ST_p75)`。欠場枠は null。帯 2 列は導入前の CSV でも null（列が無くても読める）。未生成日は空配列（全国平均 ST フォールバック） |
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
 | `RaceResultRow` / `RaceResultFinish` / `RaceResultCourse` / `RaceResultWeather` | `results/realtime` | 着順、決まり手、ST、天候 |
+| `WakuTableRow` / `StadiumWakuWeightsRow` | `estimate/stadium/win_rate.csv`, `estimate/stadium/weights/...` | 場コード × 季節 × 6コース勝率 / 場名 × (μ, σ, w)。レース単位に切り出したものが `RacePrediction.wakuPtBasis`（`WakuPtBasis`） |
 | `RacePayoutRow` / `SinglePayout` / `CombinationPayout` | `results/payouts` | 単勝・複勝・2連単・2連複・拡連複（3スロット固定）・3連単・3連複の組番／払戻金／人気 |
 
 ### 統合した予想型

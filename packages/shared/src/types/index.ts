@@ -40,6 +40,14 @@ export type {
   RecentFormSession,
 } from "./recent-form.js";
 export type { Waku10Boat, Waku10Row, Waku10Run } from "./waku10.js";
+export { WAKU_SEASONS } from "./stadium-table.js";
+export type {
+  CourseRates,
+  StadiumWakuWeightsRow,
+  WakuPtBasis,
+  WakuSeason,
+  WakuTableRow,
+} from "./stadium-table.js";
 export type {
   TokutenHayamiIfRank,
   TokutenHayamiRacer,

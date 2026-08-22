@@ -38,6 +38,7 @@ import type {
   TokutenHayamiRow,
   UpsetMeter,
   Waku10Row,
+  WakuPtBasis,
 } from "@fun-site/shared";
 import {
   activePredictors,
@@ -542,6 +543,8 @@ export const buildRacePrediction = (
   anaPicks?: AnaPicksByStyle,
   /** 荒れ度メーター (estimate/kimarite)。daily / realtime それぞれ。 */
   kimariteRows?: { readonly daily?: KimariteRow; readonly realtime?: KimariteRow },
+  /** この場の 枠番pt 根拠 (コース強度テーブル + 場別 μ/σ/w)。未取得なら undefined。 */
+  wakuPtBasis?: WakuPtBasis,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -610,6 +613,7 @@ export const buildRacePrediction = (
       const rt = kimariteRows?.realtime?.upsetRate;
       return d === undefined && rt === undefined ? undefined : { daily: d, realtime: rt };
     })(),
+    ...(wakuPtBasis !== undefined ? { wakuPtBasis } : {}),
     generatedAt,
   };
 };
@@ -642,6 +646,8 @@ export const buildAllRacePredictions = (
   results: readonly RaceResultRow[],
   payouts: readonly RacePayoutRow[],
   generatedAt: string,
+  /** 場コード → 枠番pt の根拠。`buildWakuPtBasisByStadium` の出力。 */
+  wakuPtBasisByStadium?: ReadonlyMap<string, WakuPtBasis>,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const racerStByCode = new Map(racerSt.map((r) => [r.raceCode, r]));
@@ -716,6 +722,7 @@ export const buildAllRacePredictions = (
       generatedAt,
       anaByCode.get(cards.raceCode),
       kimariteByCode.get(cards.raceCode),
+      wakuPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
     ),
   );
 };

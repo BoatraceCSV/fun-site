@@ -368,8 +368,8 @@ const predictorPredictions: readonly PredictorPrediction[] =
 
   {/* 枠番別過去10走。programs/waku10 が未取得のレースでは非表示。 */}
   {prediction.waku10 && prediction.waku10.boats.length > 0 && (
-    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      {/* 枠番pt の詳細ページは同じ waku10 を枠番ptと並べて出すので、ここからも張る */}
+    <section id="waku10" class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      {/* 枠番pt の詳細ページから「個人成績はこちら」の導線を張るのでアンカーを持つ */}
       <div class="flex items-baseline justify-between gap-2 mb-3">
         <h2 class="font-bold text-lg">枠番別過去10走</h2>
         <a href={wakuPtHref} class="text-xs text-blue-700 hover:underline shrink-0">

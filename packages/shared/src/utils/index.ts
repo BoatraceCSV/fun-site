@@ -79,9 +79,12 @@ export {
   WAKU_PT_SCALE,
   WAKU_PT_TABLE_AXES,
   computeWaku10Aggregate,
+  computeWakuPtSteps,
+  seasonForDate,
   type Waku10Aggregate,
   type Waku10RankCounts,
   type Waku10TokenCount,
+  type WakuPtSteps,
 } from "./waku-pt.js";
 export {
   EXHIBIT_PREVIEW_SOURCES,

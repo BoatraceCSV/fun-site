@@ -10,16 +10,23 @@ import type {
   RaceResultRow,
   RacerStRow,
   RecentFormRow,
+  StadiumWakuWeightsRow,
   SttRow,
   SuiRow,
   TitleRow,
   TkzRow,
   TokutenHayamiRow,
   Waku10Row,
+  WakuTableRow,
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { parseAnaPicks } from "./ana-picks-schemas.js";
-import { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
+import {
+  fetchCsvText,
+  fetchIndexCsvText,
+  fetchWakuTableCsvText,
+  fetchWeightsCsv,
+} from "./csv-client.js";
 import { parseKimarite } from "./kimarite-schemas.js";
 import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
@@ -29,6 +36,7 @@ import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
+import { parseStadiumWakuWeights, parseWakuTable } from "./stadium-table-schemas.js";
 import { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
 import { parseWaku10 } from "./waku10-schemas.js";
 
@@ -105,6 +113,24 @@ export type FetchedCsvData = {
    * 以内に揃う。CSV 自体が当日まだ生成されていない場合は空配列。
    */
   readonly payouts: readonly RacePayoutRow[];
+  /**
+   * 場 × 季節 × コース勝率テーブル (estimate/stadium/win_rate.csv)。
+   * 日付に依らない静的テーブル。取得失敗時は空配列。
+   */
+  readonly wakuTable: readonly WakuTableRow[];
+  /**
+   * primary predictor の場別 μ / σ / w (estimate/stadium/weights/...)。
+   * `wakuTable` と 2 つ揃って初めて 枠番pt を再現できる。取得失敗時は undefined。
+   */
+  readonly wakuWeights?: WakuWeightsFetch;
+};
+
+/** 場別重み CSV の取得結果 (どの予想者のどの月のファイルを引けたか付き) */
+export type WakuWeightsFetch = {
+  readonly predictorId: string;
+  /** "YYYY-MM" */
+  readonly month: string;
+  readonly rows: readonly StadiumWakuWeightsRow[];
 };
 
 const fetchAndParse = async <T>(
@@ -121,6 +147,41 @@ const fetchAndParse = async <T>(
     );
     return [];
   }
+};
+
+/**
+ * 枠番pt の根拠テーブル 2 種を取得する。
+ *
+ * どちらも日付パーティションを持たない静的テーブルで、monthly-weights が
+ * 月 1 回だけ更新する。μ / σ / w は予想者ごとに違いうるので、枠番詳細ページが
+ * 解説する **primary predictor (slot 最小)** のぶんだけを取る。
+ * 失敗しても他のセクションには影響しないので、warn して欠損扱いにする。
+ */
+const fetchWakuPtTables = async (
+  primary: PredictorSpec | undefined,
+  date: string,
+): Promise<{ wakuTable: WakuTableRow[]; wakuWeights?: WakuWeightsFetch }> => {
+  const [tableText, weights] = await Promise.all([
+    fetchWakuTableCsvText().catch((error: unknown) => {
+      console.warn(
+        `Failed to fetch waku strength table: ${error instanceof Error ? error.message : error}`,
+      );
+      return undefined;
+    }),
+    primary ? fetchWeightsCsv(primary.id, date) : Promise.resolve(undefined),
+  ]);
+
+  const wakuTable = tableText ? parseWakuTable(tableText) : [];
+  if (!primary || !weights) return { wakuTable };
+
+  return {
+    wakuTable,
+    wakuWeights: {
+      predictorId: primary.id,
+      month: weights.month,
+      rows: parseStadiumWakuWeights(weights.text),
+    },
+  };
 };
 
 const fetchAndParseIndex = async (
@@ -203,6 +264,10 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("payouts", date, parsePayouts),
   ]);
 
+  // 枠番pt の根拠テーブル。primary predictor は slot 昇順の先頭
+  // (activePredictors() が slot 順に返す)。
+  const { wakuTable, wakuWeights } = await fetchWakuPtTables(predictors[0], date);
+
   return {
     titles,
     raceCards,
@@ -222,10 +287,17 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     indexesByPredictor,
     results,
     payouts,
+    wakuTable,
+    ...(wakuWeights ? { wakuWeights } : {}),
   };
 };
 
-export { fetchCsvText, fetchIndexCsvText } from "./csv-client.js";
+export {
+  fetchCsvText,
+  fetchIndexCsvText,
+  fetchWakuTableCsvText,
+  fetchWeightsCsv,
+} from "./csv-client.js";
 export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
@@ -234,6 +306,7 @@ export { parseKimarite } from "./kimarite-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";
+export { parseStadiumWakuWeights, parseWakuTable } from "./stadium-table-schemas.js";
 export { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
 export { parseWaku10 } from "./waku10-schemas.js";
 export { parseResults } from "./result-schemas.js";
