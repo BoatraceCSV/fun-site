@@ -1,33 +1,42 @@
 /**
- * 気象pt（水面気象がコース有利をどう動かすか）の解説用ユーティリティ。
+ * 気象pt（水面気象がコース有利をどう動かすか）の計算・解説用ユーティリティ。
  *
  * 気象pt は index CSV (`N枠_気象pt` / `N枠_寄与_気象pt`) の成分で、**preview 由来**である。
  * 朝バッチ (`state=daily`) では直前情報が無いため中立値 50 が入り寄与は 0 に潰されている。
  * 締切5分前の直前情報（`previews/sui`）が反映された `state=realtime` の行で初めて実測が入る。
  *
- * BoatraceCSV 側の作り方（`scripts/build_sui_params.py` /
- * `data/estimate/stadium/sui_params.csv`、docs/data/estimate.md）は
+ * 値は 3 段階で決まる（BoatraceCSV `scripts/build_sui_params.py` /
+ * `boatrace/index_features.py` / `build_index.py`、docs/data/estimate.md）:
  *
  *   1. 当日の水面気象から 6 つの特徴量を作る
  *      （波高 / 気温−水温 / 追い風 m/s / 向かい風 m/s / 曇り / 雨）
- *   2. 場ごとに学習した線形回帰の係数を **コース 1〜6 それぞれ** に掛け、
- *      基準条件（凪・無風・晴・気温=水温）からの有利pt 変動を出す（切片は使わない）
- *   3. 場内で標準化して偏差値スケール（平均 50 / 標準偏差 10）に直す
+ *   2. 場ごとに学習した線形回帰の係数を **その艇の進入コース** の列で掛けて足すと、
+ *      基準条件（凪・無風・晴・気温=水温）からの有利pt 変動 = 気象pt の生値になる。
+ *      場内で標準化して偏差値スケールに直したものが 気象pt = 50 + 10 × z
+ *   3. 寄与 = 場別重み w × 気象pt
  *
- * で、**その艇の進入コース** で引いた値が気象pt になる。realtime ではスタート展示の
- * 実進入コース基準に切り替わるので、前付けがあった艇は枠番と違うコースの値が入る。
+ * この 3 段階は **fun-site 側で再現できる**。入力になる静的テーブル 2 種
+ * （`estimate/stadium/sui_params.csv` と
+ * `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv`）を batch が取り込み、
+ * レース JSON の `weatherPtBasis` に焼き込んでいるためである
+ * （2026-08-22 まではこの 2 つを取得しておらず「再計算できない」成分だった）。
  *
- * **選手pt (`racer-pt.ts`) と違い、fun-site 側で再計算できない。** 係数ファイル
- * (`sui_params.csv`) を取り込んでいないためである。モーターpt (`motor-pt.ts`)・
- * 枠番pt (`waku-pt.ts`)・展示pt (`exhibit-pt.ts`) と同じ立場で、このファイルが持つのは
+ * 係数の切片 `base_c{course}` は上流と同じく **使わない**。切片はコース固定の
+ * 有利不利で 枠番pt (`waku-pt.ts`) とほぼ完全に重複し、重み学習時の多重共線性を
+ * 避けるために気象pt の生値から外されている。
  *
- *   - 気象pt が何を入力にした値なのかを説明するための定数と、
- *     当日の水面気象から**回帰が実際に見ている特徴量**を組み立てる `computeWeatherFeatures()`
- *   - 6 艇の気象pt を順位・進入コースと並べる `computeWeatherPtAggregate()`
+ * このファイルが持つのは
  *
- * の 2 つ。前者は係数を掛ける前の入力までで、pt そのものの再現ではない。
+ *   - 当日の水面気象から回帰が見る特徴量を組み立てる {@link computeWeatherFeatures}
+ *   - 係数を掛けて 生値 → 偏差値 → 寄与 を再現する {@link computeWeatherPtSteps}
+ *   - 6 艇の気象pt を順位・進入コースと並べる {@link computeWeatherPtAggregate}
+ *
+ * の 3 つ。気象pt は選手ではなく **進入コース** に付く値なので、同じコースに
+ * 入った艇なら誰でも同じ値になる。
  */
 
+import type { WeatherFeatureKey, WeatherPtBasis } from "../types/stadium-table.js";
+import { WEATHER_FEATURE_KEYS } from "../types/stadium-table.js";
 import { competitionRanks, spearman } from "./ranking.js";
 
 /**
@@ -46,13 +55,15 @@ export const WEATHER_PT_DAILY_NEUTRAL = 50;
 export const WEATHER_PT_SOURCES = {
   /** 当日の水面気象スナップショット（風速・風向・波高・天候・気温・水温） */
   preview: "previews/sui",
-  /** 場別の線形回帰係数。fun-site は取り込んでいない */
+  /** 場別の線形回帰係数 */
   params: "estimate/stadium/sui_params.csv",
+  /** 場別の μ / σ / w。偏差値変換と寄与に使う */
+  weights: "estimate/stadium/weights/{predictor_id}/YYYY-MM.csv",
 } as const;
 
 /** 回帰が見る特徴量の一覧。表示用のラベルと説明 */
 export const WEATHER_PT_FEATURES: readonly {
-  readonly key: "waveCm" | "tempDiffC" | "windTailMs" | "windHeadMs" | "isCloudy" | "isRainy";
+  readonly key: WeatherFeatureKey;
   readonly label: string;
   readonly description: string;
 }[] = [
@@ -212,10 +223,13 @@ export type WeatherFeatureInput = {
 };
 
 /**
- * 当日の水面気象から、気象pt の回帰が実際に見ている特徴量を組み立てる。
+ * 当日の水面気象から、気象pt の回帰が見ている特徴量を組み立てる。
+ * ここに `weatherPtBasis` の係数を掛けたものが 気象pt の生値
+ * （{@link computeWeatherPtSteps}）。
  *
- * **係数（`sui_params.csv`）は fun-site に取り込んでいないので、ここから先の
- * 有利pt 変動は再現できない。** 何を入力にした値なのかを開示するためのもの。
+ * 風向を取得できていない場合、上流は風向コードを 1（北）で埋めるのに対し
+ * ここでは追い風 / 向かい風とも 0 に倒す（`windRelation` が null になる）。
+ * その場合だけ再現値が index CSV と食い違いうる。
  */
 export const computeWeatherFeatures = (
   weather: WeatherFeatureInput,
@@ -235,6 +249,97 @@ export const computeWeatherFeatures = (
     facingDeg: STADIUM_FACING_DEG[stadiumId] ?? null,
   };
 };
+
+/** 特徴量を回帰に渡る数値（bool は 0/1）に均した並び。係数と同じキー順 */
+export const weatherFeatureValues = (
+  features: WeatherFeatures,
+): Readonly<Record<WeatherFeatureKey, number>> => ({
+  waveCm: features.waveCm,
+  tempDiffC: features.tempDiffC,
+  windTailMs: features.windTailMs,
+  windHeadMs: features.windHeadMs,
+  isCloudy: features.isCloudy ? 1 : 0,
+  isRainy: features.isRainy ? 1 : 0,
+});
+
+/** 生値 = Σ(特徴量 × 係数) の 1 項ぶん。画面はこの表で内訳を出す */
+export type WeatherPtTerm = {
+  readonly key: WeatherFeatureKey;
+  /** 回帰に渡る特徴量の値（bool は 0/1） */
+  readonly value: number;
+  /** その場・そのコースの係数 */
+  readonly coef: number;
+  /** 値 × 係数。これを 6 項足すと生値になる */
+  readonly term: number;
+};
+
+/** 気象pt の計算過程 1 艇ぶん。画面はこの順に「係数掛け → 偏差値 → 寄与」を出す */
+export type WeatherPtSteps = {
+  /** 係数を引いたコース（realtime は実進入コース、daily は枠番） */
+  readonly course: number;
+  /** 特徴量 × 係数 の 6 項 */
+  readonly terms: readonly WeatherPtTerm[];
+  /**
+   * 生値 = 気象条件によるこのコースの有利pt 変動（Σ term を小数第 4 位に丸めたもの）。
+   * 上流 `compute_features_for_day` が特徴量列に入れる時点で `round(v, 4)` する
+   * ので、ここでも丸めてから偏差値に載せる（丸めないと 気象pt が最大 0.01 ずれる）。
+   */
+  readonly rawAdvantage: number;
+  /** 場内 z 値 = (raw − μ) ÷ σ */
+  readonly z: number;
+  /** 気象pt = 50 + 10 × z */
+  readonly pt: number;
+  /** 寄与 = w × 気象pt */
+  readonly contribution: number;
+};
+
+/**
+ * `weatherPtBasis` と当日の特徴量・進入コースから 気象pt を再計算する。
+ *
+ * 上流 `weather_advantage()` + `build_index.py` と同じ式なので、index CSV の
+ * `N枠_気象pt` と小数第 2 位まで一致する（上流は出力時に `round(x, 2)`）。
+ * σ が 0 の場は上流と同じく z=0（= 偏差値 50）に倒す。コースが 1〜6 の外なら
+ * undefined。
+ *
+ * ここで再現できるのは **`state=realtime` の行だけ**。daily の行は水面気象を
+ * 取る前なので、上流が成分を中立値 50 に固定している（計算式の外）。
+ */
+export const computeWeatherPtSteps = (
+  basis: WeatherPtBasis,
+  features: WeatherFeatures,
+  course: number,
+): WeatherPtSteps | undefined => {
+  if (!Number.isInteger(course) || course < 1 || course > 6) return undefined;
+
+  const values = weatherFeatureValues(features);
+  const terms: WeatherPtTerm[] = [];
+  for (const key of WEATHER_FEATURE_KEYS) {
+    const coef = basis.coefs[key][course - 1];
+    if (coef === undefined) return undefined;
+    const value = values[key];
+    terms.push({ key, value, coef, term: value * coef });
+  }
+
+  // 上流は特徴量列に載せる時点で小数第 4 位に丸める (index_features.py の `kpt`)。
+  // `x * 1e4` を挟むと浮動小数点誤差で境界がずれるので toFixed で丸める
+  // （Python の round と同じく、二進表現そのものを最近接の 4 桁に丸める）。
+  const rawAdvantage = Number(terms.reduce((sum, t) => sum + t.term, 0).toFixed(4));
+  const z = basis.sigma > 0 ? (rawAdvantage - basis.mu) / basis.sigma : 0;
+  const pt = WEATHER_PT_SCALE.mean + WEATHER_PT_SCALE.sd * z;
+  return { course, terms, rawAdvantage, z, pt, contribution: basis.weight * pt };
+};
+
+/**
+ * 再現値が index CSV の表示値と一致しているか（小数第 2 位まで）。
+ *
+ * 係数も重みも月次で動くので、過去日の再ビルドではずれうる。画面は一致した
+ * ときだけ「表示値と一致」と出し、ずれたときは黙って両方を出す。
+ */
+export const weatherPtMatchesIndex = (
+  computed: number | undefined,
+  indexPt: number | undefined,
+): boolean =>
+  computed !== undefined && indexPt !== undefined && Math.abs(computed - indexPt) < 0.005;
 
 /** 気象pt を並べる 1 艇ぶんの入力 */
 export type WeatherPtInput = {

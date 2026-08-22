@@ -5,7 +5,7 @@ import type { BettingPicks } from "../utils/one-mark-distance.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
-import type { WakuPtBasis } from "./stadium-table.js";
+import type { WakuPtBasis, WeatherPtBasis } from "./stadium-table.js";
 import type { TokutenHayamiRacer } from "./tokuten-hayami.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
@@ -466,5 +466,16 @@ export type RacePrediction = {
    * (UI 側は undefined フォールバックすること)。
    */
   readonly wakuPtBasis?: WakuPtBasis;
+  /**
+   * 気象pt の根拠（この場の気象回帰係数 + 場別 μ/σ/w）。
+   * 気象詳細ページが 気象pt の内訳を再現するのに使う。特徴量そのものは
+   * `preview.weather` から組み立てるのでここには入っていない。
+   *
+   * 上流の静的テーブル (`estimate/stadium/sui_params.csv` /
+   * `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv`) 由来で、
+   * 取得できなかったビルドと **2026-08-22 以前の JSON では undefined**
+   * (UI 側は undefined フォールバックすること)。
+   */
+  readonly weatherPtBasis?: WeatherPtBasis;
   readonly generatedAt: string;
 };

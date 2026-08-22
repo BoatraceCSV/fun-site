@@ -1,5 +1,10 @@
 ---
-import type { RacePrediction, RaceRacer, WeatherPtBoatAggregate } from "@fun-site/shared";
+import type {
+  RacePrediction,
+  RaceRacer,
+  WeatherPtBoatAggregate,
+  WeatherPtSteps,
+} from "@fun-site/shared";
 import {
   BOAT_COLORS,
   WEATHER_PT_DAILY_NEUTRAL,
@@ -8,10 +13,12 @@ import {
   WIND_RELATION_LABELS,
   computeWeatherFeatures,
   computeWeatherPtAggregate,
+  computeWeatherPtSteps,
   getStadiumById,
   isValidBoatNumber,
   parseRaceCode,
   weatherCodeLabel,
+  weatherPtMatchesIndex,
 } from "@fun-site/shared";
 import WeatherPtCard from "../../../../../components/WeatherPtCard.astro";
 import BaseLayout from "../../../../../layouts/BaseLayout.astro";
@@ -66,11 +73,26 @@ const courseFromExhibition = prediction.startPrediction.fromExhibition;
 /** 水面気象（sui 由来）。sui 未取得のレースでは null */
 const weather = prediction.preview?.weather ?? null;
 
-/**
- * 気象pt の回帰が見る特徴量。係数（`sui_params.csv`）は取り込んでいないので、
- * ここから先のコース別有利pt は再現できない。
- */
+/** 気象pt の回帰が見る特徴量（係数を掛ける前の入力） */
 const features = weather ? computeWeatherFeatures(weather, prediction.stadiumId) : null;
+
+/**
+ * 気象pt の根拠（この場の気象回帰係数 + 場別 μ/σ/w）。ビルド時に上流の静的
+ * テーブルを取得できなかった場合と 2026-08-22 以前の JSON では undefined。
+ */
+const basis = prediction.weatherPtBasis;
+
+/**
+ * 6 コースぶんの計算過程。気象pt は**コース**に付く値なので、コース単位で
+ * 一度だけ計算すれば 6 艇ぶんが埋まる（同じコースに入った艇は同じ値）。
+ */
+const stepsByCourse = new Map<number, WeatherPtSteps>();
+if (basis && features) {
+  for (const course of [1, 2, 3, 4, 5, 6]) {
+    const steps = computeWeatherPtSteps(basis, features, course);
+    if (steps) stepsByCourse.set(course, steps);
+  }
+}
 
 const racers: readonly RaceRacer[] = [...prediction.racers].sort(
   (a, b) => a.boatNumber - b.boatNumber,
@@ -92,6 +114,8 @@ type WeatherPtView = {
   readonly agg: WeatherPtBoatAggregate;
   readonly contribution: number | undefined;
   readonly strengthPt: number;
+  /** その艇の進入コースの計算過程。根拠テーブル / 水面気象が無ければ undefined */
+  readonly steps: WeatherPtSteps | undefined;
 };
 
 const views: WeatherPtView[] = racers.map((racer) => {
@@ -109,8 +133,19 @@ const views: WeatherPtView[] = racers.map((racer) => {
     },
     contribution: entry?.contribution.weather,
     strengthPt: entry?.strengthPt ?? 0,
+    steps: stepsByCourse.get(courseByBoat.get(racer.boatNumber) ?? racer.boatNumber),
   };
 });
+
+/**
+ * 再現値が index CSV の表示値と全艇一致したか。過去日の再ビルドで係数や重みが
+ * 更新されているとずれるので、一致したときだけ「検算できた」と出す
+ * （daily の行は計算式の外で 50 に固定されるので対象外）。
+ */
+const reproduced =
+  !isDaily &&
+  views.length > 0 &&
+  views.every((v) => weatherPtMatchesIndex(v.steps?.pt, v.agg.weatherPt));
 
 const maxPt = Math.max(1, ...views.map((v) => v.agg.weatherPt ?? 0));
 
@@ -153,6 +188,16 @@ const featureValues: Readonly<Record<string, string>> = features
 
 const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
+
+const signed = (v: number, digits: number): string => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
+
+/** 進入コース → その艇の枠番。係数テーブルの列見出しに艇を並べる（通常 1 コース 1 艇） */
+const boatsByCourse = new Map<number, number[]>();
+for (const v of views) {
+  const boats = boatsByCourse.get(v.agg.courseNumber) ?? [];
+  boats.push(v.racer.boatNumber);
+  boatsByCourse.set(v.agg.courseNumber, boats);
+}
 ---
 
 <BaseLayout title={title}>
@@ -252,40 +297,141 @@ const num = (v: number | undefined | null, digits: number): string =>
         </dl>
 
         {features && (
-          <div>
-            <h3 class="text-xs font-bold text-gray-500 mb-1.5">
-              気象ptの回帰が見る 6 特徴量<span class="ml-1 font-normal text-gray-400"
-                >（係数を掛ける前の入力）</span
-              >
-            </h3>
-            <div class="overflow-x-auto">
-              <table class="w-full text-[11px] border-collapse">
-                <thead>
-                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
-                    {WEATHER_PT_FEATURES.map((f) => (
-                      <th scope="col" class="text-right py-1 px-1 font-medium">{f.label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody class="font-mono tabular-nums text-gray-800">
-                  <tr>
-                    {WEATHER_PT_FEATURES.map((f) => (
-                      <td class="text-right py-1 px-1">{featureValues[f.key] ?? "—"}</td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="text-[11px] text-gray-400 mt-2">
-              風は場のスタンド方位（{stadiumName}は{features.facingDeg ?? "—"}°）を基準に
-              追い風 / 向かい風 / 横風 に分けられ、追い風と向かい風は別の係数を持ちます。
-              横風・風向未取得のレースではどちらの風成分も 0 になります。
-              {features.windRelation === null &&
-                "このレースは風向を判定できないため、風の効果は 0 として表示しています（BoatraceCSV 側の計算とは一致しないことがあります）。"}
-              天候は晴を基準に曇り・雨のシフト、雪と霧は雨に畳まれます。
-            </p>
-          </div>
+          <p class="text-[11px] text-gray-400">
+            風は場のスタンド方位（{stadiumName}は{features.facingDeg ?? "—"}°）を基準に
+            追い風 / 向かい風 / 横風 に分けられ、追い風と向かい風は別の係数を持ちます。
+            横風・風向未取得のレースではどちらの風成分も 0 になります。
+            {features.windRelation === null &&
+              "このレースは風向を判定できないため、風の効果は 0 として計算しています（BoatraceCSV 側は風向未取得時に北として扱うので、値が一致しないことがあります）。"}
+            天候は晴を基準に曇り・雨のシフト、雪と霧は雨に畳まれます。
+          </p>
         )}
+      </div>
+    )}
+  </section>
+
+  {/* この場の気象係数テーブルと、6 コースぶんの計算過程 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-1">
+      {stadiumName}の気象係数と、この気象での有利pt変動
+      {reproduced && <span class="ml-1 text-xs font-normal text-emerald-600">（表示値と一致）</span>}
+    </h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      気象ptの根拠テーブルそのものです。行が回帰の見る 6 特徴量、列が進入コース。
+      セルは<span class="font-bold">当日の値 × 係数</span>で、縦に足したものがそのコースの
+      有利pt変動（= 気象ptの生値）になります。
+    </p>
+
+    {basis === undefined || features === null || stepsByCourse.size === 0 ? (
+      <p class="text-[13px] text-gray-600">
+        {basis === undefined
+          ? `このビルドでは気象回帰の係数（${WEATHER_PT_SOURCES.params}）を取得できていないため、根拠テーブルを出せません。`
+          : `このレースは水面気象（${WEATHER_PT_SOURCES.preview}）を取得できていないため、係数を掛ける対象がありません。`}
+        気象ptは BoatraceCSV が出した値をそのまま表示しています。
+      </p>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px] border-collapse">
+          <thead>
+            <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+              <th scope="col" class="text-left py-1 px-1 font-medium">特徴量</th>
+              <th scope="col" class="text-right py-1 px-1 font-medium">当日の値</th>
+              {[1, 2, 3, 4, 5, 6].map((course) => (
+                <th scope="col" class="text-right py-1 px-1 font-medium">
+                  <span class="text-cyan-700">{course}コース</span>
+                  <span class="block font-normal text-[9px] text-gray-400">
+                    {(boatsByCourse.get(course) ?? []).map((b) => `${b}号艇`).join(" ") || "—"}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="text-gray-800">
+            {WEATHER_PT_FEATURES.map((f) => (
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium whitespace-nowrap">
+                  {f.label}
+                </th>
+                <td class="py-1 px-1 text-right font-mono tabular-nums text-gray-600">
+                  {featureValues[f.key] ?? "—"}
+                </td>
+                {[1, 2, 3, 4, 5, 6].map((course) => {
+                  const t = stepsByCourse.get(course)?.terms.find((x) => x.key === f.key);
+                  return (
+                    <td
+                      class={`py-1 px-1 text-right font-mono tabular-nums ${
+                        t === undefined || t.term === 0 ? "text-gray-300" : "text-gray-800"
+                      }`}
+                    >
+                      {t === undefined ? "—" : signed(t.term, 4)}
+                      <span class="block text-[9px] text-gray-400">
+                        {t === undefined ? "" : `係数 ${signed(t.coef, 4)}`}
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th scope="row" colspan="2" class="text-left py-1 px-1 font-medium text-gray-600">
+                有利pt変動（合計）
+              </th>
+              {[1, 2, 3, 4, 5, 6].map((course) => (
+                <td
+                  class="py-1 px-1 text-right font-mono tabular-nums font-bold"
+                >
+                  {(() => {
+                    const st = stepsByCourse.get(course);
+                    return st === undefined ? "—" : signed(st.rawAdvantage, 4);
+                  })()}
+                </td>
+              ))}
+            </tr>
+            <tr class="border-b border-gray-100">
+              <th scope="row" colspan="2" class="text-left py-1 px-1 font-medium text-gray-500">
+                気象pt（50 + 10 × z）
+              </th>
+              {[1, 2, 3, 4, 5, 6].map((course) => (
+                <td
+                  class="py-1 px-1 text-right font-mono tabular-nums font-bold text-cyan-800"
+                >
+                  {(() => {
+                    const st = stepsByCourse.get(course);
+                    return st === undefined ? "—" : st.pt.toFixed(2);
+                  })()}
+                </td>
+              ))}
+            </tr>
+            <tr>
+              <th scope="row" colspan="2" class="text-left py-1 px-1 font-medium text-gray-500">
+                寄与（w × 気象pt）
+              </th>
+              {[1, 2, 3, 4, 5, 6].map((course) => (
+                <td
+                  class="py-1 px-1 text-right font-mono tabular-nums"
+                >
+                  {(() => {
+                    const st = stepsByCourse.get(course);
+                    return st === undefined ? "—" : st.contribution.toFixed(2);
+                  })()}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="text-[11px] text-gray-400 mt-2">
+          係数は<span class="font-mono">{WEATHER_PT_SOURCES.params}</span>（場ごとに学習した
+          線形回帰）、μ = {basis.mu.toFixed(4)} / σ = {basis.sigma.toFixed(4)} / 重み w ={" "}
+          {basis.weight.toFixed(3)} は{basis.weightsMonth} 版の
+          <span class="font-mono">weights/{basis.predictorId}</span> の値です。
+          コース固定の有利不利を表す切片（<span class="font-mono">base_c*</span>）は
+          <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>
+          とほぼ完全に重複するため、上流と同じく使いません。
+          列見出しの下は、そのコースに入る艇です（前付けがあると枠番とずれます）。
+          {isDaily &&
+            "この評価は朝バッチ時点なので、下の一覧・カードの気象ptは中立値50で、この表は「この水面気象なら本来こうなる」という参考値です。"}
+        </p>
       </div>
     )}
   </section>
@@ -300,6 +446,7 @@ const num = (v: number | undefined | null, digits: number): string =>
             <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
             <th scope="col" class="text-left py-1 px-1 font-medium">選手</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">進入</th>
+            <th scope="col" class="text-right py-1 px-1 font-medium">有利pt変動</th>
             {/* pt バー列に固定幅を与えない（iPhone 幅で選手名が 1 文字ずつ
                  折り返されるため）。溢れたら親の overflow-x-auto に任せる */}
             <th scope="col" class="text-left py-1 px-1 font-medium">気象pt</th>
@@ -337,6 +484,9 @@ const num = (v: number | undefined | null, digits: number): string =>
                 >
                   {v.agg.courseNumber}
                 </td>
+                <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-600">
+                  {v.steps === undefined ? "—" : signed(v.steps.rawAdvantage, 4)}
+                </td>
                 <td class="py-1 px-1 align-middle">
                   <span class="flex items-center gap-1.5">
                     <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
@@ -371,7 +521,8 @@ const num = (v: number | undefined | null, digits: number): string =>
       </table>
     </div>
     <p class="text-[11px] text-gray-400 mt-2">
-      気象ptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × 気象pt で、
+      「有利pt変動」は上の係数テーブルから引いた生値で、これを場内で標準化したものが気象pt
+      （偏差値スケール、この場の平均が50・標準偏差が10）。寄与 = 場別重み × 気象pt で、
       強さptはこの寄与を含む{evaluation.componentKeys.length}成分の合計です。
       気象ptは選手ではなく<span class="font-bold">進入コース</span>に付く値なので、
       「進入」列と一緒に読んでください。
@@ -396,6 +547,8 @@ const num = (v: number | undefined | null, digits: number): string =>
         strengthPt={v.strengthPt}
         isDaily={isDaily}
         courseFromExhibition={courseFromExhibition}
+        basis={basis}
+        features={features ?? undefined}
       />
     ))}
   </div>
@@ -417,9 +570,10 @@ const num = (v: number | undefined | null, digits: number): string =>
             <li>
               場ごとに学習した線形回帰の係数
               （<span class="font-mono">{WEATHER_PT_SOURCES.params}</span>）を
-              <span class="font-bold">コース 1〜6 それぞれ</span>に掛け、基準条件
-              （凪・無風・晴・気温=水温）からの有利pt 変動を出す。場内で標準化すると
+              <span class="font-bold">コース 1〜6 それぞれ</span>に掛けて足し、基準条件
+              （凪・無風・晴・気温=水温）からの有利pt 変動を出す。これを場内で標準化すると
               <span class="font-bold">気象pt</span> = 50 + 10 × z になります
+              （z = (有利pt変動 − μ) ÷ σ）
             </li>
             <li>
               <span class="font-bold">寄与</span> = 場別重み w × 気象pt。
@@ -464,24 +618,28 @@ const num = (v: number | undefined | null, digits: number): string =>
             <span class="font-bold">追い風 / 向かい風 / 横風</span>に分類され、追い風と
             向かい風だけが別々の係数で効きます（横風は 0）。同じ北風でも場によって
             追い風になったり向かい風になったりするのはこのためです。
-            風向を取得できていないレースでは、このページの特徴量表で風の効果を 0 として
-            表示しています。
+            風向を取得できていないレースでは、このページは風の効果を 0 として計算します
+            （BoatraceCSV 側は風向未取得時に北として扱うので、そのレースだけ再現値が
+            表示値とずれることがあります）。
           </p>
         </div>
 
         <div>
-          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <h3 class="font-bold text-sm mb-1">このページは表示値を検算している</h3>
           <p class="text-[13px]">
-            気象ptは
-            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>・
-            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>・
+            気象ptの根拠は 2 つの静的テーブル
+            （場別の回帰係数 <span class="font-mono">{WEATHER_PT_SOURCES.params}</span> と
+            場別の μ / σ / w <span class="font-mono">{WEATHER_PT_SOURCES.weights}</span>）だけで、
+            どちらもビルド時に取り込んでレース JSON に焼き込んでいます。そのため
+            <span class="font-bold">当日の水面気象 → 有利pt変動 → 気象pt → 寄与</span>を
+            このページ側で計算し直せます。表示値と一致したときだけ「表示値と一致」と出し、
+            過去日の再ビルドで係数や重みが更新されてずれた場合は両方の値を並べます。
+            同じように内訳まで開示しているのは
+            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>と
+            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>です
+            （<a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>・
             <a href={`${raceHref}exhibition/`} class="text-blue-600 hover:underline">展示pt</a>
-            と同じく、fun-site 側で再計算できません。場別の回帰係数
-            （<span class="font-mono">{WEATHER_PT_SOURCES.params}</span>）を取り込んで
-            いないためで、このページが出せるのは係数を掛ける前の特徴量までです。
-            計算過程まで開示しているのは
-            <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
-            （入力の近況5節を手元に持っているため）だけです。
+            は入力を取り込んでいないため表示値のみ）。
           </p>
         </div>
 

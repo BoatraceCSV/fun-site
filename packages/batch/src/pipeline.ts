@@ -11,6 +11,7 @@ import { parseTriggerEvent } from "./event-parser.js";
 import { fetchAllCsvData } from "./fetcher/index.js";
 import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js";
 import { buildWakuPtBasisByStadium } from "./site-builder/waku-pt-basis.js";
+import { buildWeatherPtBasisByStadium } from "./site-builder/weather-pt-basis.js";
 
 /**
  * パイプライン全体のオーケストレーション。
@@ -105,6 +106,7 @@ export const runPipeline = async (): Promise<void> => {
     csvData.payouts,
     generatedAt,
     buildWakuPtBasisByStadium(csvData.wakuTable, csvData.wakuWeights, raceDate),
+    buildWeatherPtBasisByStadium(csvData.suiParams, csvData.weatherWeights),
   );
   console.info(`Built ${predictions.length} predictions`);
 

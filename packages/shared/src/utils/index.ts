@@ -107,13 +107,18 @@ export {
   classifyWind,
   computeWeatherFeatures,
   computeWeatherPtAggregate,
+  computeWeatherPtSteps,
   weatherCodeLabel,
+  weatherFeatureValues,
+  weatherPtMatchesIndex,
   weatherRegressionCategory,
   type WeatherFeatureInput,
   type WeatherFeatures,
   type WeatherPtAggregate,
   type WeatherPtBoatAggregate,
   type WeatherPtInput,
+  type WeatherPtSteps,
+  type WeatherPtTerm,
   type WindRelation,
 } from "./weather-pt.js";
 export {

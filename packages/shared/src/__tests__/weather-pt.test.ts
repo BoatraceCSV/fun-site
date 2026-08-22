@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { WeatherPtBasis } from "../types/stadium-table.js";
 import {
   STADIUM_FACING_DEG,
   WEATHER_PT_DAILY_NEUTRAL,
@@ -8,13 +9,14 @@ import {
   classifyWind,
   computeWeatherFeatures,
   computeWeatherPtAggregate,
+  computeWeatherPtSteps,
   weatherRegressionCategory,
 } from "../utils/weather-pt.js";
 
 /**
- * 気象pt は fun-site 側で再計算できない（係数ファイル `sui_params.csv` を取り込んで
- * いない）。ここでテストするのは、係数を掛ける前の特徴量の組み立てと、6 艇の
- * 気象pt を順位・進入コースと並べる参考値の集計。
+ * テストするのは (1) 水面気象 → 特徴量、(2) 特徴量 × 係数 → 生値 → 偏差値 → 寄与 の
+ * 再現（上流 index CSV と一致する式であること）、(3) 6 艇の気象pt を順位・進入コースと
+ * 並べる参考値の集計。
  */
 const input = (boatNumber: number, overrides: Partial<WeatherPtInput> = {}): WeatherPtInput => ({
   boatNumber,
@@ -200,5 +202,76 @@ describe("computeWeatherPtAggregate", () => {
     ]);
 
     expect(agg.boats.map((b) => b.courseShifted)).toEqual([true, true, false]);
+  });
+});
+
+/** 係数は「コース番号 × 特徴量の位置」が分かる値にして、列の取り違えを検出する */
+const basis = (overrides: Partial<WeatherPtBasis> = {}): WeatherPtBasis => ({
+  predictorId: "v1_basic",
+  coefs: {
+    waveCm: [0.11, 0.12, 0.13, 0.14, 0.15, 0.16],
+    tempDiffC: [0.21, 0.22, 0.23, 0.24, 0.25, 0.26],
+    windTailMs: [0.31, 0.32, 0.33, 0.34, 0.35, 0.36],
+    windHeadMs: [0.41, 0.42, 0.43, 0.44, 0.45, 0.46],
+    isCloudy: [0.51, 0.52, 0.53, 0.54, 0.55, 0.56],
+    isRainy: [0.61, 0.62, 0.63, 0.64, 0.65, 0.66],
+  },
+  mu: 0,
+  sigma: 0.2,
+  weight: 0.08,
+  weightsMonth: "2026-08",
+  ...overrides,
+});
+
+describe("computeWeatherPtSteps", () => {
+  it("その艇の進入コースの列だけを引き、生値 → 偏差値 → 寄与 まで出す", () => {
+    // 戸田 (facing 0°) で風向 5 = 180° → 向かい風 2m/s、波 3cm、気温−水温 = +1、曇り
+    const features = computeWeatherFeatures(
+      weather({
+        weather: "2",
+        windSpeed: 2,
+        windDirection: "5",
+        waveHeight: 3,
+        airTemperature: 21,
+        waterTemperature: 20,
+      }),
+      "02",
+    );
+
+    const steps = computeWeatherPtSteps(basis(), features, 3);
+    if (!steps) throw new Error("steps should be defined");
+
+    // 3コースの係数だけを使う: 3×0.13 + 1×0.23 + 0×0.33 + 2×0.43 + 1×0.53 + 0×0.63
+    expect(steps.terms.map((t) => t.coef)).toEqual([0.13, 0.23, 0.33, 0.43, 0.53, 0.63]);
+    expect(steps.rawAdvantage).toBeCloseTo(2.01, 10);
+    expect(steps.z).toBeCloseTo(10.05, 10);
+    expect(steps.pt).toBeCloseTo(150.5, 10);
+    expect(steps.contribution).toBeCloseTo(0.08 * 150.5, 10);
+  });
+
+  it("生値は小数第 4 位に丸める（上流 index_features.py の round(v, 4) と揃える）", () => {
+    const features = computeWeatherFeatures(weather({ waveHeight: 1 }), "02");
+    // 波 1cm × 0.11 のみ。丸めが効くよう 5 桁目を持つ係数にする
+    const steps = computeWeatherPtSteps(
+      basis({ coefs: { ...basis().coefs, waveCm: [0.12345, 0, 0, 0, 0, 0] } }),
+      features,
+      1,
+    );
+
+    expect(steps?.rawAdvantage).toBe(0.1235);
+  });
+
+  it("σ が 0 の場は上流と同じく z = 0（偏差値 50）に倒す", () => {
+    const features = computeWeatherFeatures(weather({ waveHeight: 5 }), "02");
+    const steps = computeWeatherPtSteps(basis({ sigma: 0 }), features, 1);
+
+    expect(steps?.z).toBe(0);
+    expect(steps?.pt).toBe(WEATHER_PT_SCALE.mean);
+  });
+
+  it("コースが 1〜6 の外なら undefined", () => {
+    const features = computeWeatherFeatures(weather(), "02");
+    expect(computeWeatherPtSteps(basis(), features, 0)).toBeUndefined();
+    expect(computeWeatherPtSteps(basis(), features, 7)).toBeUndefined();
   });
 });

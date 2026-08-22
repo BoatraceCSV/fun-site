@@ -1,6 +1,18 @@
 ---
-import type { RaceRacer, WeatherPtBoatAggregate } from "@fun-site/shared";
-import { BOAT_COLORS, WEATHER_PT_DAILY_NEUTRAL, isValidBoatNumber } from "@fun-site/shared";
+import type {
+  RaceRacer,
+  WeatherFeatures,
+  WeatherPtBasis,
+  WeatherPtBoatAggregate,
+} from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  WEATHER_PT_DAILY_NEUTRAL,
+  WEATHER_PT_FEATURES,
+  computeWeatherPtSteps,
+  isValidBoatNumber,
+  weatherPtMatchesIndex,
+} from "@fun-site/shared";
 
 interface Props {
   racer: RaceRacer;
@@ -14,18 +26,41 @@ interface Props {
   isDaily: boolean;
   /** 進入コースがスタート展示の実測か（false なら枠なりの仮値） */
   courseFromExhibition: boolean;
+  /**
+   * 気象pt の根拠（この場の気象回帰係数 + 場別 μ/σ/w）。
+   * 上流の静的テーブル未取得のビルド / 古い JSON では undefined。
+   */
+  basis: WeatherPtBasis | undefined;
+  /** このレースの水面気象から作った特徴量。sui 未取得なら undefined */
+  features: WeatherFeatures | undefined;
 }
 
-const { racer, aggregate, contribution, strengthPt, isDaily, courseFromExhibition } = Astro.props;
+const {
+  racer,
+  aggregate,
+  contribution,
+  strengthPt,
+  isDaily,
+  courseFromExhibition,
+  basis,
+  features,
+} = Astro.props;
 
 const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
 const weatherPt = aggregate.weatherPt;
 
-/** 場別重み w。寄与 = w × 気象pt の関係から逆算する（weights CSV は未取り込み） */
-const weight =
-  weatherPt !== undefined && contribution !== undefined && weatherPt !== 0
-    ? contribution / weatherPt
-    : undefined;
+/** 係数掛け → 生値 → 偏差値 → 寄与 の再現。根拠テーブル / 水面気象が無ければ undefined */
+const steps =
+  basis && features ? computeWeatherPtSteps(basis, features, aggregate.courseNumber) : undefined;
+
+/**
+ * 再現値が index CSV の値と一致するか。
+ *
+ * 過去日を再ビルドすると、当時の index を作ったあとに係数や重みが更新されて
+ * いてずれることがある。ずれたまま「= 気象pt」と書くと嘘になるので、一致した
+ * ときだけ検算済みとして扱う（daily の行は計算式の外で 50 に固定されるので対象外）。
+ */
+const reproduced = !isDaily && weatherPtMatchesIndex(steps?.pt, weatherPt);
 
 /** 強さptに占める気象ptの寄与割合 */
 const sharePct =
@@ -42,8 +77,20 @@ const courseNote = aggregate.courseShifted
   ? `${racer.boatNumber}枠ですが進入は${aggregate.courseNumber}コースなので、気象ptも${aggregate.courseNumber}コースの値が入ります。`
   : "";
 
+const featureLabel = new Map(WEATHER_PT_FEATURES.map((f) => [f.key, f.label]));
+
+/** 曇り / 雨 は 0-1 のフラグなので小数を出さない。他は 1 桁（波高 cm・℃・m/s） */
+const featureValue = (key: string, value: number): string =>
+  key === "isCloudy" || key === "isRainy" ? String(value) : value.toFixed(1);
+
 const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
+
+const signed = (v: number, digits: number): string => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
+
+/** 式の中に埋める負数は括弧で囲む（「50 + 10 × -1.665」を避ける） */
+const term = (v: number, digits: number): string =>
+  v < 0 ? `(${v.toFixed(digits)})` : v.toFixed(digits);
 ---
 
 <section
@@ -96,15 +143,12 @@ const num = (v: number | undefined | null, digits: number): string =>
         )}
       </div>
 
-      {/* 水面気象 → コース有利pt → 気象pt → 寄与 のフロー */}
+      {/* 有利pt変動 → 気象pt → 寄与 のフロー */}
       <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-cyan-900">
         <li class="inline-flex items-baseline gap-1">
           <span class="text-cyan-700">{aggregate.courseNumber}コースの有利pt変動</span>
-          <span
-            class="font-bold text-cyan-400"
-            title="場別の線形回帰係数 (estimate/stadium/sui_params.csv) は fun-site に取り込んでいません"
-          >
-            再現不可
+          <span class="font-mono font-bold tabular-nums">
+            {steps === undefined ? "—" : signed(steps.rawAdvantage, 4)}
           </span>
         </li>
         <li aria-hidden="true" class="text-cyan-400">→</li>
@@ -124,13 +168,6 @@ const num = (v: number | undefined | null, digits: number): string =>
         </li>
       </ol>
 
-      {weight !== undefined && !isDaily && (
-        <p class="mt-1.5 text-[10px] text-cyan-700">
-          気象pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 気象pt。
-          重みは場別・月次で学習された値です。
-        </p>
-      )}
-
       {isDaily ? (
         <p class="mt-1.5 text-[10px] text-cyan-700">
           この評価は<span class="font-bold">朝バッチ時点（直前情報前）</span>のもので、気象ptは
@@ -145,6 +182,133 @@ const num = (v: number | undefined | null, digits: number): string =>
             水面気象が欠測だった場合もこの値になります。
           </p>
         )
+      )}
+    </div>
+
+    {/* 計算過程: 係数テーブルから index CSV の値まで */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+        気象ptの計算過程
+        {reproduced && <span class="ml-1 font-normal text-emerald-600">（表示値と一致）</span>}
+        {isDaily && steps !== undefined && (
+          <span class="ml-1 font-normal text-amber-600">（参考: この水面気象なら）</span>
+        )}
+      </h3>
+
+      {basis === undefined || features === undefined || steps === undefined ? (
+        <p class="text-[11px] text-gray-500">
+          このビルドでは
+          {basis === undefined
+            ? "気象回帰の係数（estimate/stadium/sui_params.csv）"
+            : "このレースの水面気象（previews/sui）"}
+          を取得できていないため、計算過程を出せません。気象ptは BoatraceCSV が出した値を
+          そのまま表示しています。
+        </p>
+      ) : (
+        <div class="overflow-x-auto">
+          {/* 1. 特徴量 × 係数 の 6 項 */}
+          <table class="w-full text-[11px] border-collapse mb-2">
+            <caption class="text-left text-[10px] text-gray-500 pb-1">
+              1. {steps.course}コースの係数を当日の水面気象に掛ける
+            </caption>
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">特徴量</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">当日の値</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">
+                  係数（{steps.course}コース）
+                </th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-800">
+              {steps.terms.map((t) => (
+                <tr class={`border-b border-gray-100 ${t.value === 0 ? "text-gray-400" : ""}`}>
+                  <th scope="row" class="text-left py-1 px-1 font-medium">
+                    {featureLabel.get(t.key) ?? t.key}
+                  </th>
+                  <td class="py-1 px-1 text-right font-mono tabular-nums">
+                    {featureValue(t.key, t.value)}
+                  </td>
+                  <td class="py-1 px-1 text-right font-mono tabular-nums">{signed(t.coef, 4)}</td>
+                  <td
+                    class={`py-1 px-1 text-right font-mono tabular-nums ${t.term !== 0 ? "font-bold" : ""}`}
+                  >
+                    {signed(t.term, 4)}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <th scope="row" colspan="3" class="text-right py-1 px-1 font-medium text-gray-500">
+                  有利pt変動（合計）
+                </th>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                  {signed(steps.rawAdvantage, 4)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* 2〜4. 偏差値化と重み付け */}
+          <table class="w-full text-[11px] border-collapse">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">手順</th>
+                <th scope="col" class="text-left py-1 px-1 font-medium">計算</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">値</th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-800">
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  2. 場内で標準化
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  ({term(steps.rawAdvantage, 4)} − {term(basis.mu, 4)}) ÷ {basis.sigma.toFixed(4)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                  {signed(steps.z, 3)}
+                </td>
+              </tr>
+              <tr class="border-b border-gray-100">
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  3. 偏差値に直す
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  50 + 10 × {term(steps.z, 3)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-cyan-800">
+                  {steps.pt.toFixed(2)}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                  4. 重みを掛ける
+                </th>
+                <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                  {basis.weight.toFixed(3)} × {steps.pt.toFixed(2)}
+                </td>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-cyan-800">
+                  {steps.contribution.toFixed(2)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="mt-1.5 text-[10px] text-gray-400">
+            μ = {basis.mu.toFixed(4)} / σ = {basis.sigma.toFixed(4)} / 重み w ={" "}
+            {basis.weight.toFixed(3)} はこの場の値（{basis.weightsMonth} 版の
+            <span class="font-mono">weights/{basis.predictorId}</span>。直近6ヶ月から月次で学習）。
+            係数は場ごとに学習された線形回帰の傾きで、コース固定の有利不利を表す切片は
+            枠番ptと重複するため使いません。
+            {!isDaily && !reproduced && weatherPt !== undefined && (
+              <span class="text-amber-700">
+                {" "}再現値 {steps.pt.toFixed(2)} が表示値 {weatherPt.toFixed(2)} と一致していません。
+                この評価を作ったあとに係数または重みが更新された過去日のレースです。
+              </span>
+            )}
+          </p>
+        </div>
       )}
     </div>
 
@@ -166,14 +330,5 @@ const num = (v: number | undefined | null, digits: number): string =>
         </p>
       )}
     </div>
-
-    {/* 再現できない理由 */}
-    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
-      気象ptそのものの内訳（波・風・気温水温差・天候をどの係数でコース別の有利pt に
-      変換するか）は BoatraceCSV 側の学習済みパラメータで、fun-site は係数ファイルを
-      取り込んでいません。気象ptは
-      <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>し、
-      同じ直前情報スナップショットの水面気象を並べています。
-    </p>
   </div>
 </section>
