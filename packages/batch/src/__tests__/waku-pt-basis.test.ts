@@ -1,7 +1,7 @@
 import type { WakuTableRow } from "@fun-site/shared";
 import { computeWakuPtSteps } from "@fun-site/shared";
 import { describe, expect, it } from "vitest";
-import type { WakuWeightsFetch } from "../fetcher/index.js";
+import type { StadiumWeightsFetch } from "../fetcher/index.js";
 import { buildWakuPtBasisByStadium } from "../site-builder/waku-pt-basis.js";
 
 /** 戸田 (02) の 4 季節ぶん。値は 2026-08 時点の win_rate.csv 実データ */
@@ -12,7 +12,7 @@ const TODA_TABLE: WakuTableRow[] = [
   { stadiumId: "02", season: "冬", rates: [7.276, 5.452, 5.502, 4.946, 4.29, 2.82] },
 ];
 
-const TODA_WEIGHTS: WakuWeightsFetch = {
+const TODA_WEIGHTS: StadiumWeightsFetch = {
   predictorId: "v1_basic",
   month: "2026-08",
   rows: [{ stadiumName: "戸田", mu: 5.036928, sigma: 1.224463, weight: 0.280848 }],
@@ -57,7 +57,7 @@ describe("buildWakuPtBasisByStadium", () => {
   });
 
   it("場マスタに無い場名の weights 行は無視する", () => {
-    const weights: WakuWeightsFetch = {
+    const weights: StadiumWeightsFetch = {
       ...TODA_WEIGHTS,
       rows: [{ stadiumName: "存在しない場", mu: 5, sigma: 1, weight: 0.3 }],
     };

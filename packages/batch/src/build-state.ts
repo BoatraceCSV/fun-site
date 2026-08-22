@@ -4,10 +4,11 @@ import type { CsvType } from "./fetcher/csv-client.js";
 
 /**
  * CSV 種別 + 予想者別 index + 静的テーブルの generation トラッキングキー。
- * 予想者別 index は `index:{predictor_id}`、コース強度テーブルは `waku_table`
- * の形でキー化する (boatrace.gcs_publisher の csv_type 命名と揃える)。
+ * 予想者別 index は `index:{predictor_id}`、コース強度テーブルは `waku_table`、
+ * 気象回帰係数は `sui_params` の形でキー化する
+ * (boatrace.gcs_publisher の csv_type 命名と揃える)。
  */
-export type CsvGenerationKey = CsvType | `index:${string}` | "waku_table";
+export type CsvGenerationKey = CsvType | `index:${string}` | "waku_table" | "sui_params";
 
 /**
  * 直近のビルドメタデータ。
@@ -94,7 +95,7 @@ const buildCsvObjectName = (relativePath: string, date: string): string => {
 
 /**
  * 日付パーティションを持たない静的テーブル。月 1 回しか変わらないが、
- * 変わったときは全レースの 枠番pt 解説が変わるので早期 return の判定に含める。
+ * 変わったときは全レースの 枠番pt / 気象pt 解説が変わるので早期 return の判定に含める。
  *
  * 場別重み CSV (`weights/{predictor_id}/YYYY-MM.csv`) は月ごとにパスが変わり、
  * 「対象月以下で最新」を stat だけで解決できないため対象外。実運用では
@@ -106,6 +107,10 @@ const STATIC_TABLE_OBJECTS: { key: CsvGenerationKey; objectName: string }[] = [
   {
     key: "waku_table",
     objectName: `${CSV_GCS_PATH_ROOT}/estimate/stadium/win_rate.csv`,
+  },
+  {
+    key: "sui_params",
+    objectName: `${CSV_GCS_PATH_ROOT}/estimate/stadium/sui_params.csv`,
   },
 ];
 

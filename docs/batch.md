@@ -57,7 +57,7 @@ type UpdatedRace = {
 
 [`packages/batch/src/build-state.ts`](../packages/batch/src/build-state.ts)
 
-GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を読み出し、今回フェッチ対象の CSV generation と全種類比較する（日付 CSV + 各 active 予想者の index + 静的テーブル `waku_table`）。すべて一致していれば `Skipping build: CSV generations unchanged` をログに出して即終了する。
+GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を読み出し、今回フェッチ対象の CSV generation と全種類比較する（日付 CSV + 各 active 予想者の index + 静的テーブル `waku_table` / `sui_params`）。すべて一致していれば `Skipping build: CSV generations unchanged` をログに出して即終了する。
 
 `FORCE_REBUILD=1` で無効化できる。
 
@@ -77,13 +77,14 @@ GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を�
 | `motor-stats-schemas.ts` | `programs/motor_stats`（モーター期成績）のパーサ。`parseMotorStats`。1 モーター 1 行 |
 | `result-schemas.ts` | `results/realtime` のパーサ |
 | `payout-schemas.ts` | `results/payouts` のパーサ |
-| `stadium-table-schemas.ts` | 静的テーブルのパーサ。`parseWakuTable`（`estimate/stadium/win_rate.csv` = 場×季節×コース勝率）/ `parseStadiumWakuWeights`（`estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` の `waku` 成分ぶんの μ / σ / w）。どちらも日付を持たない |
+| `stadium-table-schemas.ts` | 静的テーブルのパーサ。`parseWakuTable`（`estimate/stadium/win_rate.csv` = 場×季節×コース勝率）/ `parseSuiParams`（`estimate/stadium/sui_params.csv` = 場×特徴量×コースの気象回帰係数。切片 `base_c*` は読まない）/ `parseStadiumComponentWeights`（`estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` から指定成分の μ / σ / w）。いずれも日付を持たない |
 | `index.ts` | `fetchAllCsvData()` で固定 CSV（title / race_cards / stt / tkz / sui / original_exhibition / tokuten_hayami / recent_national / recent_local / waku10 / motor_stats / results / payouts）+ 各 active 予想者の index を並列取得して `FetchedCsvData` に統合 (`indexesByPredictor: PredictorIndexFetch[]` で予想者単位に分離)。tkz / sui / original_exhibition は `RacePrediction.preview`、recent_national / recent_local は `RacePrediction.recentForm`、waku10 は `RacePrediction.waku10`、tokuten_hayami は `RacePrediction.tokutenHayami`、motor_stats は `(場コード-モーター番号)` 突合で各 `RaceRacer.motorStats` に結合される |
 
-日付 CSV に加えて、枠番pt の根拠になる**静的テーブル 2 種**（`wakuTable` /
-`wakuWeights`）も取得する。weights は μ / σ / w が予想者ごとに違いうるため、
-枠番詳細ページが解説する **primary predictor (slot 最小)** のぶんだけを取る。
-どちらも取得失敗は非致命（`wakuPtBasis` が付かず、UI が「テーブル未取得」表示に倒れる）。
+日付 CSV に加えて、枠番pt / 気象pt の根拠になる**静的テーブル**（`wakuTable` /
+`suiParams` と、そこに掛ける `wakuWeights` / `weatherWeights`）も取得する。
+weights は μ / σ / w が予想者ごとに違いうるため、両詳細ページが解説する
+**primary predictor (slot 最小)** のぶんだけを 1 回取得して 2 成分に切り分ける。
+取得失敗は非致命（`wakuPtBasis` / `weatherPtBasis` が付かず、UI が「テーブル未取得」表示に倒れる）。
 
 CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参照。
 
@@ -92,9 +93,10 @@ CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参�
 [`packages/batch/src/site-builder/prediction-builder.ts`](../packages/batch/src/site-builder/prediction-builder.ts)
 
 レースコードで CSV を結合し、レース 1 件あたり `RacePrediction` を組み立てる。
-[`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) が静的テーブル 2 種を
-場コード単位の `WakuPtBasis` に畳み込み、各レースの `wakuPtBasis` として**ビルド時点の値を
-JSON に焼き込む**（テーブルも重みも月次で動くので、後日ビルドし直しても当時の値で検算できるように）。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。直前情報 (`RacePreview`) は tkz / sui / original_exhibition を結合したもので、sui からは天候・風速・**風向コード**・波高・気温・水温を持つ（風向は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う）。
+[`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) と
+[`weather-pt-basis.ts`](../packages/batch/src/site-builder/weather-pt-basis.ts) が静的テーブルを
+場コード単位の `WakuPtBasis` / `WeatherPtBasis` に畳み込み、各レースの `wakuPtBasis` /
+`weatherPtBasis` として**ビルド時点の値を JSON に焼き込む**（テーブルも重みも月次で動くので、後日ビルドし直しても当時の値で検算できるように）。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。直前情報 (`RacePreview`) は tkz / sui / original_exhibition を結合したもので、sui からは天候・風速・**風向コード**・波高・気温・水温を持つ（風向は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う）。
 
 ### 4.5. predictor-stats aggregator
 

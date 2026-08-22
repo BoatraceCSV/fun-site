@@ -194,6 +194,15 @@ export const WAKU_TABLE_CSV_PATH = "estimate/stadium/win_rate.csv";
 
 export const fetchWakuTableCsvText = async (): Promise<string> => fetchAt(WAKU_TABLE_CSV_PATH);
 
+/**
+ * 場別の気象線形回帰係数 (`data/estimate/stadium/sui_params.csv`)。
+ * 気象pt の生値ソースで、win_rate.csv と同じく日付パーティションを持たない
+ * 静的テーブル (24 場 = 24 行, 約 12KB)。
+ */
+export const SUI_PARAMS_CSV_PATH = "estimate/stadium/sui_params.csv";
+
+export const fetchSuiParamsCsvText = async (): Promise<string> => fetchAt(SUI_PARAMS_CSV_PATH);
+
 /** 月をまたいで遡る上限。これを超えて古い weights しか無い状態は異常とみなす */
 const WEIGHTS_LOOKBACK_MONTHS = 12;
 

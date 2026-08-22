@@ -10,8 +10,9 @@ import type {
   RaceResultRow,
   RacerStRow,
   RecentFormRow,
-  StadiumWakuWeightsRow,
+  StadiumComponentWeightsRow,
   SttRow,
+  SuiParamsRow,
   SuiRow,
   TitleRow,
   TkzRow,
@@ -24,6 +25,7 @@ import { parseAnaPicks } from "./ana-picks-schemas.js";
 import {
   fetchCsvText,
   fetchIndexCsvText,
+  fetchSuiParamsCsvText,
   fetchWakuTableCsvText,
   fetchWeightsCsv,
 } from "./csv-client.js";
@@ -36,7 +38,11 @@ import { parseRacerSt } from "./racer-st-schemas.js";
 import { parseRecentForm } from "./recent-form-schemas.js";
 import { parseResults } from "./result-schemas.js";
 import { parseTitles } from "./schemas.js";
-import { parseStadiumWakuWeights, parseWakuTable } from "./stadium-table-schemas.js";
+import {
+  parseStadiumComponentWeights,
+  parseSuiParams,
+  parseWakuTable,
+} from "./stadium-table-schemas.js";
 import { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
 import { parseWaku10 } from "./waku10-schemas.js";
 
@@ -119,18 +125,28 @@ export type FetchedCsvData = {
    */
   readonly wakuTable: readonly WakuTableRow[];
   /**
-   * primary predictor の場別 μ / σ / w (estimate/stadium/weights/...)。
+   * 場別の気象回帰係数テーブル (estimate/stadium/sui_params.csv)。
+   * 日付に依らない静的テーブル。取得失敗時は空配列。
+   */
+  readonly suiParams: readonly SuiParamsRow[];
+  /**
+   * primary predictor の場別 μ / σ / w のうち 枠番pt 成分 (estimate/stadium/weights/...)。
    * `wakuTable` と 2 つ揃って初めて 枠番pt を再現できる。取得失敗時は undefined。
    */
-  readonly wakuWeights?: WakuWeightsFetch;
+  readonly wakuWeights?: StadiumWeightsFetch;
+  /**
+   * 同じ weights CSV の 気象pt 成分。`suiParams` と 2 つ揃って初めて
+   * 気象pt を再現できる。取得失敗時は undefined。
+   */
+  readonly weatherWeights?: StadiumWeightsFetch;
 };
 
-/** 場別重み CSV の取得結果 (どの予想者のどの月のファイルを引けたか付き) */
-export type WakuWeightsFetch = {
+/** 場別重み CSV の 1 成分ぶんの取得結果 (どの予想者のどの月のファイルを引けたか付き) */
+export type StadiumWeightsFetch = {
   readonly predictorId: string;
   /** "YYYY-MM" */
   readonly month: string;
-  readonly rows: readonly StadiumWakuWeightsRow[];
+  readonly rows: readonly StadiumComponentWeightsRow[];
 };
 
 const fetchAndParse = async <T>(
@@ -149,38 +165,54 @@ const fetchAndParse = async <T>(
   }
 };
 
+type StadiumTablesFetch = {
+  wakuTable: WakuTableRow[];
+  suiParams: SuiParamsRow[];
+  wakuWeights?: StadiumWeightsFetch;
+  weatherWeights?: StadiumWeightsFetch;
+};
+
 /**
- * 枠番pt の根拠テーブル 2 種を取得する。
+ * 枠番pt / 気象pt の根拠テーブルを取得する。
  *
+ * コース強度テーブル (`win_rate.csv`) と気象回帰係数 (`sui_params.csv`) は
  * どちらも日付パーティションを持たない静的テーブルで、monthly-weights が
- * 月 1 回だけ更新する。μ / σ / w は予想者ごとに違いうるので、枠番詳細ページが
- * 解説する **primary predictor (slot 最小)** のぶんだけを取る。
+ * 月 1 回だけ更新する。μ / σ / w は予想者ごとに違いうるので、両詳細ページが
+ * 解説する **primary predictor (slot 最小)** のぶんだけを取る (weights CSV は
+ * 1 回だけ取得して 枠番 / 気象 の 2 成分に切り分ける)。
  * 失敗しても他のセクションには影響しないので、warn して欠損扱いにする。
  */
-const fetchWakuPtTables = async (
+const fetchStadiumTables = async (
   primary: PredictorSpec | undefined,
   date: string,
-): Promise<{ wakuTable: WakuTableRow[]; wakuWeights?: WakuWeightsFetch }> => {
-  const [tableText, weights] = await Promise.all([
-    fetchWakuTableCsvText().catch((error: unknown) => {
-      console.warn(
-        `Failed to fetch waku strength table: ${error instanceof Error ? error.message : error}`,
-      );
-      return undefined;
-    }),
+): Promise<StadiumTablesFetch> => {
+  const warnAndSkip = (label: string) => (error: unknown) => {
+    console.warn(`Failed to fetch ${label}: ${error instanceof Error ? error.message : error}`);
+    return undefined;
+  };
+
+  const [tableText, suiParamsText, weights] = await Promise.all([
+    fetchWakuTableCsvText().catch(warnAndSkip("waku strength table")),
+    fetchSuiParamsCsvText().catch(warnAndSkip("weather regression params")),
     primary ? fetchWeightsCsv(primary.id, date) : Promise.resolve(undefined),
   ]);
 
-  const wakuTable = tableText ? parseWakuTable(tableText) : [];
-  if (!primary || !weights) return { wakuTable };
+  const tables = {
+    wakuTable: tableText ? parseWakuTable(tableText) : [],
+    suiParams: suiParamsText ? parseSuiParams(suiParamsText) : [],
+  };
+  if (!primary || !weights) return tables;
+
+  const forComponent = (component: "waku" | "weather"): StadiumWeightsFetch => ({
+    predictorId: primary.id,
+    month: weights.month,
+    rows: parseStadiumComponentWeights(weights.text, component),
+  });
 
   return {
-    wakuTable,
-    wakuWeights: {
-      predictorId: primary.id,
-      month: weights.month,
-      rows: parseStadiumWakuWeights(weights.text),
-    },
+    ...tables,
+    wakuWeights: forComponent("waku"),
+    weatherWeights: forComponent("weather"),
   };
 };
 
@@ -264,9 +296,12 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("payouts", date, parsePayouts),
   ]);
 
-  // 枠番pt の根拠テーブル。primary predictor は slot 昇順の先頭
+  // 枠番pt / 気象pt の根拠テーブル。primary predictor は slot 昇順の先頭
   // (activePredictors() が slot 順に返す)。
-  const { wakuTable, wakuWeights } = await fetchWakuPtTables(predictors[0], date);
+  const { wakuTable, suiParams, wakuWeights, weatherWeights } = await fetchStadiumTables(
+    predictors[0],
+    date,
+  );
 
   return {
     titles,
@@ -288,13 +323,16 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     results,
     payouts,
     wakuTable,
+    suiParams,
     ...(wakuWeights ? { wakuWeights } : {}),
+    ...(weatherWeights ? { weatherWeights } : {}),
   };
 };
 
 export {
   fetchCsvText,
   fetchIndexCsvText,
+  fetchSuiParamsCsvText,
   fetchWakuTableCsvText,
   fetchWeightsCsv,
 } from "./csv-client.js";
@@ -306,7 +344,11 @@ export { parseKimarite } from "./kimarite-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";
-export { parseStadiumWakuWeights, parseWakuTable } from "./stadium-table-schemas.js";
+export {
+  parseStadiumComponentWeights,
+  parseSuiParams,
+  parseWakuTable,
+} from "./stadium-table-schemas.js";
 export { parseTokutenHayami } from "./tokuten-hayami-schemas.js";
 export { parseWaku10 } from "./waku10-schemas.js";
 export { parseResults } from "./result-schemas.js";

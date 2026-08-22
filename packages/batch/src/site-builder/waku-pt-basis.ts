@@ -1,6 +1,6 @@
 import type { CourseRates, WakuPtBasis, WakuSeason, WakuTableRow } from "@fun-site/shared";
 import { WAKU_SEASONS, getStadiumByName, seasonForDate } from "@fun-site/shared";
-import type { WakuWeightsFetch } from "../fetcher/index.js";
+import type { StadiumWeightsFetch } from "../fetcher/index.js";
 
 /**
  * 枠番pt の根拠を場ごとに組み立てる。
@@ -17,7 +17,7 @@ import type { WakuWeightsFetch } from "../fetcher/index.js";
  */
 export const buildWakuPtBasisByStadium = (
   wakuTable: readonly WakuTableRow[],
-  weights: WakuWeightsFetch | undefined,
+  weights: StadiumWeightsFetch | undefined,
   raceDate: string,
 ): Map<string, WakuPtBasis> => {
   const out = new Map<string, WakuPtBasis>();
