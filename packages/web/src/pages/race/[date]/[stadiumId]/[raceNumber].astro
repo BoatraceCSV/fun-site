@@ -376,6 +376,15 @@ const predictorPredictions: readonly PredictorPrediction[] =
     </section>
   )}
 
+  {/* 得点率早見。previews/tokuten_hayami に行が無い（予選最終日を過ぎた /
+       その節は得点率早見を出さない / 未公開）レースでは非表示。 */}
+  {prediction.tokutenHayami && prediction.tokutenHayami.racers.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <h2 class="font-bold text-lg mb-3">得点率早見</h2>
+      <TokutenHayamiSection tokutenHayami={prediction.tokutenHayami} />
+    </section>
+  )}
+
   {/* 荒れ度メーター (レース単位。予想者に紐づかないので予想者カードの外に 1 回だけ) */}
   {prediction.upsetMeter && (
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
@@ -446,15 +455,6 @@ const predictorPredictions: readonly PredictorPrediction[] =
       </section>
     );
   })}
-
-  {/* 得点率早見。previews/tokuten_hayami に行が無い（予選最終日を過ぎた /
-       その節は得点率早見を出さない / 未公開）レースでは非表示。 */}
-  {prediction.tokutenHayami && prediction.tokutenHayami.racers.length > 0 && (
-    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
-      <h2 class="font-bold text-lg mb-3">得点率早見</h2>
-      <TokutenHayamiSection tokutenHayami={prediction.tokutenHayami} />
-    </section>
-  )}
 
   <div class="text-center mt-6">
     <a href="/" class="text-blue-600 hover:text-blue-800 text-sm">← トップページに戻る</a>
