@@ -1,17 +1,27 @@
 ---
 import type { RacePreview } from "@fun-site/shared";
-import { BOAT_COLORS, isValidBoatNumber, weatherCodeLabel } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  formatWindDirection,
+  isValidBoatNumber,
+  weatherCodeLabel,
+} from "@fun-site/shared";
 
 interface Props {
   preview: RacePreview;
+  /** 場コード。風向をスタンド方位に対する 追い風 / 向かい風 / 横風 に読み替えるのに使う */
+  stadiumId: string;
 }
 
-const { preview } = Astro.props;
+const { preview, stadiumId } = Astro.props;
 const boats = [...preview.boats].sort((a, b) => a.boatNumber - b.boatNumber);
 const weather = preview.weather;
 
 /** 天候コード → ラベル（boatrace 標準: 1晴 2曇 3雨 4雪 5霧）。気象詳細ページと共有 */
 const weatherLabel = weather ? weatherCodeLabel(weather.weather) : "";
+
+/** 風向コード生値 → 「南（向かい風）」。判定できない場合は生値 / null */
+const windDirectionLabel = weather ? formatWindDirection(weather.windDirection, stadiumId) : null;
 
 /** 気象観測時刻 HHMM → HH:MM */
 const formatObservedAt = (raw: string): string => {
@@ -90,6 +100,12 @@ const previewNote = ((): string => {
         <span>
           <span class="text-gray-400">天候</span>
           <span class="ml-1 font-medium">{weatherLabel}</span>
+        </span>
+      )}
+      {windDirectionLabel && (
+        <span>
+          <span class="text-gray-400">風向</span>
+          <span class="ml-1 font-medium">{windDirectionLabel}</span>
         </span>
       )}
       {weather.windSpeed > 0 && (

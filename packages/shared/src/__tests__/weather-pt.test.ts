@@ -10,6 +10,7 @@ import {
   computeWeatherFeatures,
   computeWeatherPtAggregate,
   computeWeatherPtSteps,
+  formatWindDirection,
   weatherRegressionCategory,
 } from "../utils/weather-pt.js";
 
@@ -273,5 +274,30 @@ describe("computeWeatherPtSteps", () => {
     const features = computeWeatherFeatures(weather(), "02");
     expect(computeWeatherPtSteps(basis(), features, 0)).toBeUndefined();
     expect(computeWeatherPtSteps(basis(), features, 7)).toBeUndefined();
+  });
+});
+
+describe("formatWindDirection", () => {
+  it("風向コードを方位名とスタンド方位に対する向きの言葉にする", () => {
+    // 戸田 (02) の facing は 0°
+    expect(formatWindDirection("1", "02")).toBe("北（追い風）");
+    expect(formatWindDirection("5", "02")).toBe("南（向かい風）");
+    expect(formatWindDirection("3", "02")).toBe("東（横風）");
+  });
+
+  it("場が違えば同じコードでも向きの言葉が変わる", () => {
+    // 桐生 (01) の facing は 90° なので、コード 3 (=90°) が追い風になる
+    expect(formatWindDirection("3", "01")).toBe("東（追い風）");
+  });
+
+  it("スタンド方位が分からない場は方位名だけ返す", () => {
+    expect(formatWindDirection("3", "99")).toBe("東");
+  });
+
+  it("空欄は null、コード以外の文字列は生値のまま返す", () => {
+    expect(formatWindDirection("", "02")).toBeNull();
+    expect(formatWindDirection(undefined, "02")).toBeNull();
+    expect(formatWindDirection("東(向い風)", "02")).toBe("東(向い風)");
+    expect(formatWindDirection("9", "02")).toBe("9");
   });
 });

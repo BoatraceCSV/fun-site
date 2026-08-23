@@ -151,6 +151,20 @@ export const STADIUM_FACING_DEG: Readonly<Record<string, number>> = {
   "24": 0, // 大村
 };
 
+/**
+ * 風向コード (1..8) → 方位名。{@link WIND_CODE_TO_DEG} と同じ並び（1=北、時計回り）。
+ */
+export const WIND_CODE_TO_LABEL: Readonly<Record<number, string>> = {
+  1: "北",
+  2: "北東",
+  3: "東",
+  4: "南東",
+  5: "南",
+  6: "南西",
+  7: "西",
+  8: "北西",
+};
+
 /** スタンド方位に対する風の向き */
 export type WindRelation = "tail" | "head" | "cross";
 
@@ -187,6 +201,28 @@ export const classifyWind = (
         ? "head"
         : "cross";
   return { relation, windDeg, relativeDeg };
+};
+
+/**
+ * 風向コード生値を「南（向かい風）」のような言葉に整形する。
+ * レース結果 / 直前情報の風向表示で使う。
+ *
+ * - 空欄なら `null`（呼び出し側で行ごと出さない）
+ * - 1..8 のコードなら方位名 + スタンド方位に対する向き（判定できなければ方位名だけ）
+ * - コード以外の文字列（結果 CSV の "東(向い風)" 等）は生値のまま返す
+ */
+export const formatWindDirection = (
+  windDirection: string | undefined,
+  stadiumId: string,
+): string | null => {
+  const raw = (windDirection ?? "").trim();
+  if (!raw) return null;
+
+  const label = WIND_CODE_TO_LABEL[Number(raw)];
+  if (label === undefined) return raw;
+
+  const relation = classifyWind(raw, stadiumId)?.relation;
+  return relation ? `${label}（${WIND_RELATION_LABELS[relation]}）` : label;
 };
 
 /** 気象pt の回帰が見る特徴量の値（係数を掛ける前の入力） */
