@@ -1,6 +1,8 @@
 ---
 import type {
   ExhibitPtBoatAggregate,
+  ExhibitPtRaw,
+  ExhibitPtSteps,
   RacePrediction,
   RacePreviewBoat,
   RaceRacer,
@@ -8,7 +10,10 @@ import type {
 import {
   BOAT_COLORS,
   EXHIBIT_PT_DAILY_NEUTRAL,
+  buildExhibitPtSeries,
   computeExhibitPtAggregate,
+  computeExhibitPtRawByBoat,
+  computeExhibitPtStepsByBoat,
   getStadiumById,
   isValidBoatNumber,
   parseRaceCode,
@@ -66,11 +71,6 @@ const previewByBoat = new Map<number, RacePreviewBoat>(
   (prediction.preview?.boats ?? []).map((b) => [b.boatNumber, b] as const),
 );
 
-const originalLabels = prediction.preview?.originalExhibition?.labels ?? [];
-const originalByBoat = new Map(
-  (prediction.preview?.originalExhibition?.boats ?? []).map((b) => [b.boatNumber, b.values]),
-);
-
 const racers: readonly RaceRacer[] = [...prediction.racers].sort(
   (a, b) => a.boatNumber - b.boatNumber,
 );
@@ -87,11 +87,36 @@ const aggByBoat = new Map<number, ExhibitPtBoatAggregate>(
   aggregate.boats.map((b) => [b.boatNumber, b]),
 );
 
+/*
+  展示pt の再現。生値は「展示タイム + オリジナル展示 1〜3 をレース内で偏差値化して
+  等重み平均した値」で、そのレースの直前情報だけで閉じている。上流と同じく
+  **6 枠固定**で系列を組む（欠場等で racers が 6 未満でも偏差値の母集団は変えない）。
+*/
+const BOAT_NUMBERS = [1, 2, 3, 4, 5, 6];
+const exhibitSeries = buildExhibitPtSeries(
+  BOAT_NUMBERS,
+  new Map(BOAT_NUMBERS.map((n) => [n, previewByBoat.get(n)?.exhibitionTime ?? null])),
+  prediction.preview?.originalExhibition ?? null,
+);
+/** 場別 μ/σ/w。取得できなかったビルド / 古い JSON では undefined */
+const exhibitBasis = prediction.exhibitPtBasis;
+/** 生値まで（μ/σ/w が無くても出せる） */
+const rawByBoat = computeExhibitPtRawByBoat(BOAT_NUMBERS, exhibitSeries);
+/** 偏差値・寄与まで（μ/σ/w が要る） */
+const stepsByBoat = exhibitBasis
+  ? computeExhibitPtStepsByBoat(exhibitBasis, BOAT_NUMBERS, exhibitSeries)
+  : undefined;
+
+/** オリジナル展示を取れているか（無い場では展示タイム 1 系列だけで決まる） */
+const hasOriginalSeries = exhibitSeries.length > 1;
+
 type ExhibitPtView = {
   readonly racer: RaceRacer;
   readonly agg: ExhibitPtBoatAggregate;
   readonly contribution: number | undefined;
   readonly strengthPt: number;
+  readonly raw: ExhibitPtRaw | undefined;
+  readonly steps: ExhibitPtSteps | undefined;
 };
 
 const views: ExhibitPtView[] = racers.map((racer) => {
@@ -111,6 +136,8 @@ const views: ExhibitPtView[] = racers.map((racer) => {
     },
     contribution: entry?.contribution.exhibit,
     strengthPt: entry?.strengthPt ?? 0,
+    raw: rawByBoat.get(racer.boatNumber),
+    steps: stepsByBoat?.get(racer.boatNumber),
   };
 });
 
@@ -294,7 +321,7 @@ const st = (v: number | null): string =>
         aggregate.timeSpread !== null &&
         `展示タイムは最速 ${aggregate.fastestTime?.toFixed(2)} 秒、最遅との開きは ${aggregate.timeSpread.toFixed(2)} 秒。`}
       {agreement !== null &&
-        `展示ptと展示タイムの順位相関は ${agreement.toFixed(2)}（${agreementLabel}）で、展示ptは展示タイムだけで決まる数字ではありません。`}
+        `展示ptと展示タイムの順位相関は ${agreement.toFixed(2)}（${agreementLabel}）。展示ptは展示タイムとオリジナル展示を等重みで平均した数字なので、展示タイムだけの順位とは一致しません。`}
       評価は
       <span class="font-mono">{isDaily ? "朝バッチ時点" : "直前情報反映後"}</span>
       のもの（展示ptは直前情報が入って初めて実測になります）。
@@ -308,11 +335,12 @@ const st = (v: number | null): string =>
         racer={v.racer}
         aggregate={v.agg}
         previewBoat={previewByBoat.get(v.racer.boatNumber)}
-        originalLabels={originalLabels}
-        originalValues={originalByBoat.get(v.racer.boatNumber) ?? []}
         contribution={v.contribution}
         strengthPt={v.strengthPt}
         isDaily={isDaily}
+        basis={exhibitBasis}
+        raw={v.raw}
+        steps={v.steps}
       />
     ))}
   </div>
@@ -324,11 +352,16 @@ const st = (v: number | null): string =>
 
       <div class="mt-3 space-y-4 text-sm text-gray-700">
         <div>
-          <h3 class="font-bold text-sm mb-1">2段階で決まる</h3>
+          <h3 class="font-bold text-sm mb-1">3段階で決まる</h3>
           <ol class="list-decimal list-inside space-y-1 text-[13px]">
             <li>
+              <span class="font-bold">展示走行の評価</span> =
+              展示タイムとオリジナル展示の各項目を<span class="font-bold">この6艇の中で偏差値化</span>し、
+              その<span class="font-bold">単純平均</span>を取った値。速いほど高くなります
+            </li>
+            <li>
               <span class="font-bold">展示pt</span> =
-              50 + 10 × z。展示走行の出来をこの場の平均が50、標準偏差が10になるように
+              50 + 10 × z。1 の評価をこの場の平均が50、標準偏差が10になるように
               直した偏差値です
             </li>
             <li>
@@ -336,6 +369,14 @@ const st = (v: number | null): string =>
               各成分の寄与を合計したものが強さptになります（重みの合計は 1）
             </li>
           </ol>
+          <p class="mt-1 text-[13px]">
+            <span class="font-bold">計測項目ごとの重みはありません</span>。
+            {hasOriginalSeries
+              ? `このレースは 展示タイム + オリジナル展示 ${exhibitSeries.length - 1} 項目 の計 ${exhibitSeries.length} 項目を等重みで平均しています。`
+              : "この場はオリジナル展示の配信が無いため、展示タイム 1 項目だけで決まります。"}
+            各カードの「展示ptの計算過程」に、この艇の項目ごとの値・6艇内順位・
+            レース内偏差値まで出しています。
+          </p>
         </div>
 
         <div>
@@ -355,15 +396,15 @@ const st = (v: number | null): string =>
         <div>
           <h3 class="font-bold text-sm mb-1">展示タイムとは一致しないことがある</h3>
           <p class="text-[13px]">
-            このページの一覧・カードに並べた展示タイム・スタート展示ST・体重・チルト・
-            オリジナル展示は、展示ptと<span class="font-bold">同じ直前情報スナップショット</span>
-            の計測値ですが、<span class="font-bold">展示ptの内訳ではありません</span>。
-            どの計測値をどう重み付けして展示ptにしているかは BoatraceCSV 側の実装で、
-            fun-site はその重みを取り込んでいないためです。
+            展示タイムは<span class="font-bold">入力のひとつでしかありません</span>。
+            オリジナル展示（一周・まわり足・直線など）と等重みで平均するので、
+            展示タイムが最速でもまわり足が悪ければ展示ptは下がります。
             {agreement !== null
               ? `このレースでは展示ptと展示タイムの順位相関が ${agreement.toFixed(2)}（${agreementLabel}）でした。`
               : "このレースは順位相関を出せるだけの実測が揃っていません（展示pt・展示タイムの両方が揃った艇が3艇未満、または全艇が同値）。"}
             順位のずれは各カードの注記にも出しています。
+            一方、<span class="font-bold">スタート展示ST・体重・チルトは展示ptの入力ではありません</span>
+            （同じ直前情報スナップショットの計測値ですが、上流のどの成分にも入っていません）。
           </p>
         </div>
 
@@ -393,15 +434,29 @@ const st = (v: number | null): string =>
         </div>
 
         <div>
-          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <h3 class="font-bold text-sm mb-1">計測項目は場によって違う</h3>
+          <p class="text-[13px]">
+            オリジナル展示は場ごとの独自計測で、項目名も本数も違います。多くの場は
+            「一周 / まわり足 / 直線」の3項目ですが、住之江・尼崎・徳山は2項目、
+            桐生は1項目目が「半周ラップ」、<span class="font-bold">江戸川は配信そのものがありません</span>。
+            等重み平均なので、<span class="font-bold">項目が少ない場ほど展示タイム1本の影響が大きくなります</span>
+            （江戸川は展示タイムだけで決まります）。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">このページは計算過程を再現しています</h3>
           <p class="text-[13px]">
             展示ptは
-            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>
-            や
-            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>
-            と同じく、fun-site 側で再計算できません。計算過程まで開示しているのは
+            <a href={`${raceHref}lanes/`} class="text-blue-600 hover:underline">枠番pt</a>・
+            <a href={`${raceHref}weather/`} class="text-blue-600 hover:underline">気象pt</a>・
             <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
-            （入力の近況5節を手元に持っているため）だけです。
+            と同じく、fun-site 側で BoatraceCSV の値を小数第2位まで再現できます
+            （入力の直前情報と、場別の μ / σ / 重みを取り込んでいるため）。
+            再現値が表示値と一致したカードには「表示値と一致」と出します。
+            まだ再現できていないのは
+            <a href={`${raceHref}motors/`} class="text-blue-600 hover:underline">モーターpt</a>
+            だけで、こちらは6節ぶんの走行履歴の集計が必要です。
           </p>
         </div>
 

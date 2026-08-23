@@ -9,8 +9,8 @@ const WAKU_TABLE_HEADER =
   "場コード,季節,1コース勝率,2コース勝率,3コース勝率,4コース勝率,5コース勝率,6コース勝率";
 
 const WEIGHTS_HEADER =
-  "stadium,n_samples,mu_waku,sigma_waku,mu_racer,sigma_racer,mu_weather,sigma_weather," +
-  "w_waku,w_racer,w_weather,r2,fallback";
+  "stadium,n_samples,mu_waku,sigma_waku,mu_racer,sigma_racer,mu_exhibit,sigma_exhibit," +
+  "mu_weather,sigma_weather,w_waku,w_racer,w_exhibit,w_weather,r2,fallback";
 
 /** sui_params.csv の列順（base 6 列 + 特徴量 6 種 × 6 コース） */
 const SUI_PARAMS_HEADER = [
@@ -104,7 +104,8 @@ describe("parseStadiumComponentWeights", () => {
   it("指定した成分の μ / σ / w だけを取り出す", () => {
     const csv = [
       WEIGHTS_HEADER,
-      "戸田,5273,5.036928,1.224463,53.623517,5.035514,-0.000078,0.17484,0.280848,0.26655,0.082971,0.22,0",
+      "戸田,5273,5.036928,1.224463,53.623517,5.035514,50.002617,6.187831," +
+        "-0.000078,0.17484,0.280848,0.26655,0.229596,0.082971,0.22,0",
     ].join("\n");
 
     expect(parseStadiumComponentWeights(csv, "waku")).toEqual([
@@ -112,6 +113,9 @@ describe("parseStadiumComponentWeights", () => {
     ]);
     expect(parseStadiumComponentWeights(csv, "weather")).toEqual([
       { stadiumName: "戸田", mu: -0.000078, sigma: 0.17484, weight: 0.082971 },
+    ]);
+    expect(parseStadiumComponentWeights(csv, "exhibit")).toEqual([
+      { stadiumName: "戸田", mu: 50.002617, sigma: 6.187831, weight: 0.229596 },
     ]);
   });
 

@@ -11,6 +11,7 @@ import type {
   RacerStRow,
   RecentFormRow,
   StadiumComponentWeightsRow,
+  StadiumWeightsComponent,
   SttRow,
   SuiParamsRow,
   SuiRow,
@@ -139,6 +140,12 @@ export type FetchedCsvData = {
    * 気象pt を再現できる。取得失敗時は undefined。
    */
   readonly weatherWeights?: StadiumWeightsFetch;
+  /**
+   * 同じ weights CSV の 展示pt 成分。展示pt は静的テーブルを引かないので、
+   * **これ 1 つだけで**（生値はレース JSON の `preview` から組める）再現できる。
+   * 取得失敗時は undefined。
+   */
+  readonly exhibitWeights?: StadiumWeightsFetch;
 };
 
 /** 場別重み CSV の 1 成分ぶんの取得結果 (どの予想者のどの月のファイルを引けたか付き) */
@@ -170,6 +177,7 @@ type StadiumTablesFetch = {
   suiParams: SuiParamsRow[];
   wakuWeights?: StadiumWeightsFetch;
   weatherWeights?: StadiumWeightsFetch;
+  exhibitWeights?: StadiumWeightsFetch;
 };
 
 /**
@@ -179,7 +187,8 @@ type StadiumTablesFetch = {
  * どちらも日付パーティションを持たない静的テーブルで、monthly-weights が
  * 月 1 回だけ更新する。μ / σ / w は予想者ごとに違いうるので、両詳細ページが
  * 解説する **primary predictor (slot 最小)** のぶんだけを取る (weights CSV は
- * 1 回だけ取得して 枠番 / 気象 の 2 成分に切り分ける)。
+ * 1 回だけ取得して 枠番 / 気象 / 展示 の 3 成分に切り分ける)。展示pt に対応する
+ * 静的テーブルは無い (生値がレース内で閉じている) ので weights だけで足りる。
  * 失敗しても他のセクションには影響しないので、warn して欠損扱いにする。
  */
 const fetchStadiumTables = async (
@@ -203,7 +212,7 @@ const fetchStadiumTables = async (
   };
   if (!primary || !weights) return tables;
 
-  const forComponent = (component: "waku" | "weather"): StadiumWeightsFetch => ({
+  const forComponent = (component: StadiumWeightsComponent): StadiumWeightsFetch => ({
     predictorId: primary.id,
     month: weights.month,
     rows: parseStadiumComponentWeights(weights.text, component),
@@ -213,6 +222,7 @@ const fetchStadiumTables = async (
     ...tables,
     wakuWeights: forComponent("waku"),
     weatherWeights: forComponent("weather"),
+    exhibitWeights: forComponent("exhibit"),
   };
 };
 
