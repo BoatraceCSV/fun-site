@@ -37,7 +37,10 @@ export type RaceResultCourse = {
 export type RaceResultWeather = {
   /** 天候コード（1-7、bc_rs1_2 由来の数値文字列をそのまま保持） */
   readonly weather: string;
-  /** 風向（"東(向い風)" など、波・風向ラベル付きの生文字列） */
+  /**
+   * 風向の生値。通常は方位コード (1..8) だが、"東(向い風)" のようなラベル文字列が
+   * 来ることもある。表示するときは `formatWindDirection()` で言葉に読み替える
+   */
   readonly windDirection: string;
   /** 風速 (m/s) */
   readonly windSpeed: number;

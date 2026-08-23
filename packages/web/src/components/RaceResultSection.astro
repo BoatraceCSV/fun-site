@@ -1,6 +1,11 @@
 ---
 import type { PredictorPrediction, RaceResultRow } from "@fun-site/shared";
-import { BOAT_COLORS, getPredictorBadge, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  formatWindDirection,
+  getPredictorBadge,
+  isValidBoatNumber,
+} from "@fun-site/shared";
 import StartResultDiagram from "./StartResultDiagram.astro";
 
 interface Props {
@@ -30,6 +35,9 @@ const formatRecordedAt = (raw: string): string => {
 };
 
 const recordedAtLabel = formatRecordedAt(result.recordedAt);
+
+/** 風向コード生値 → 「南（向かい風）」。判定できない場合は生値 / null */
+const windDirectionLabel = formatWindDirection(result.weather.windDirection, result.stadiumId);
 ---
 
 <div>
@@ -102,10 +110,10 @@ const recordedAtLabel = formatRecordedAt(result.recordedAt);
   )}
 
   <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-gray-600">
-    {result.weather.windDirection && (
+    {windDirectionLabel && (
       <div>
         <span class="text-gray-400">風向</span>
-        <span class="ml-1">{result.weather.windDirection}</span>
+        <span class="ml-1">{windDirectionLabel}</span>
       </div>
     )}
     {result.weather.windSpeed > 0 && (
