@@ -80,6 +80,9 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   recent_local: "programs/recent_local",
   waku10: "programs/waku10",
   motor_stats: "programs/motor_stats",
+  motor_pt_runs: "estimate/motor_pt/runs",
+  motor_pt_motors: "estimate/motor_pt/motors",
+  motor_pt_baseline: "estimate/motor_pt/baseline",
   racer_st: "estimate/racer_st",
   suji: "estimate/suji",
   kimarite: "estimate/kimarite",
@@ -137,6 +140,13 @@ const buildTrackedKeys = (
       "recent_local",
       "waku10",
       "motor_stats",
+      // モーターpt 素点の内訳。日次バッチの成果物なので当日中に差し替わることは
+      // まず無いが、上流が backfill で作り直したときにモーター詳細ページの
+      // 内訳が変わるので監視対象に含める。未生成なら 404 → undefined で
+      // 「両方未存在ならスキップ」に落ちるため、上流導入前でも害はない。
+      "motor_pt_runs",
+      "motor_pt_motors",
+      "motor_pt_baseline",
       "racer_st",
       "suji",
       "kimarite",

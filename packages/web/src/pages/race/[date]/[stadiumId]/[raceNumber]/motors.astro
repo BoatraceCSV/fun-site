@@ -1,11 +1,18 @@
 ---
-import type { MotorPtSessionBreakdown, RacePrediction, RaceRacer } from "@fun-site/shared";
+import type {
+  MotorPtHistory,
+  MotorPtSessionBreakdown,
+  MotorPtSteps,
+  RacePrediction,
+  RaceRacer,
+} from "@fun-site/shared";
 import {
   BOAT_COLORS,
   MOTOR_NEGATIVE_SCORE,
   MOTOR_PT_GRADE_BUCKET_LABELS,
   MOTOR_PT_PARAMS,
   MOTOR_PT_SCORE_TABLE,
+  computeMotorPtSteps,
   computeMotorSessionBreakdown,
   getStadiumById,
   isValidBoatNumber,
@@ -53,9 +60,20 @@ const title = `${stadiumName} ${prediction.raceNumber}R モーター詳細 - モ
 const evaluation = prediction.aiEvaluation;
 const entryByBoat = new Map(evaluation.entries.map((e) => [e.boatNumber, e]));
 
+/*
+  素点（モーターpt の生値）は当場の直近6節ぶんの全モーターの走と、全24場を横断した
+  コース補正ベースラインから決まる。fun-site 側では計算できないので、上流が
+  `estimate/motor_pt/` に配る内訳をそのまま読む（選手pt に対する近況5節と同じ関係）。
+  場別 μ/σ/w は weights CSV 由来で、素点 → 偏差値pt → 寄与 の変換だけに使う。
+*/
+const motorBasis = prediction.motorPtBasis;
+const baselineCells = prediction.motorPtBaseline ?? [];
+
 type MotorPtView = {
   readonly racer: RaceRacer;
   readonly session: MotorPtSessionBreakdown;
+  readonly history: MotorPtHistory | undefined;
+  readonly steps: MotorPtSteps | undefined;
   readonly motorPt: number | undefined;
   readonly contribution: number | undefined;
   readonly strengthPt: number;
@@ -65,6 +83,7 @@ const views: MotorPtView[] = [...prediction.racers]
   .sort((a, b) => a.boatNumber - b.boatNumber)
   .map((racer) => {
     const entry = entryByBoat.get(racer.boatNumber);
+    const history = racer.motorPtHistory;
     return {
       racer,
       session: computeMotorSessionBreakdown(
@@ -72,6 +91,11 @@ const views: MotorPtView[] = [...prediction.racers]
         racer.classGrade,
         prediction.grade ?? "",
       ),
+      history,
+      steps:
+        motorBasis !== undefined && history !== undefined
+          ? computeMotorPtSteps(motorBasis, history.rawPt)
+          : undefined,
       // motor4 は v4_motor 系（退役済み）のモーターpt。過去日の JSON で primary が
       // 差し替わっていた場合に備えてフォールバックする。
       motorPt: entry?.components?.motor ?? entry?.components?.motor4,
@@ -79,6 +103,9 @@ const views: MotorPtView[] = [...prediction.racers]
       strengthPt: entry?.strengthPt ?? 0,
     };
   });
+
+/** 素点の内訳が 1 基でも取れているか。取れていなければ根拠セクションごと落とす */
+const hasHistory = views.some((v) => v.history !== undefined);
 
 /** モーターpt の場内順位（1 が最上位）。未取得の艇は順位を付けない */
 const ptRank = new Map<number, number>();
@@ -133,6 +160,7 @@ const num = (v: number | undefined | null, digits: number): string =>
           <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
             <th scope="col" class="text-left py-1 px-1 font-medium">枠</th>
             <th scope="col" class="text-left py-1 px-1 font-medium">モーター</th>
+            {hasHistory && <th scope="col" class="text-right py-1 px-1 font-medium">素点</th>}
             <th scope="col" class="text-left py-1 px-1 font-medium w-1/3">モーターpt</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">寄与</th>
             <th scope="col" class="text-right py-1 px-1 font-medium">強さpt</th>
@@ -167,6 +195,21 @@ const num = (v: number | undefined | null, digits: number): string =>
                   </a>
                   <span class="block text-[10px] text-gray-400">{v.racer.racerName}</span>
                 </td>
+                {hasHistory && (
+                  <td class="py-1 px-1 text-right align-middle font-mono tabular-nums text-gray-800">
+                    {v.history?.rawPt !== undefined && v.history?.rawPt !== null ? (
+                      <>
+                        {v.history.rawPt >= 0 ? "+" : ""}
+                        {v.history.rawPt.toFixed(3)}
+                        <span class="block text-[10px] text-gray-400">
+                          {v.history.runs.length}走
+                        </span>
+                      </>
+                    ) : (
+                      <span class="text-gray-300">—</span>
+                    )}
+                  </td>
+                )}
                 <td class="py-1 px-1 align-middle">
                   <span class="flex items-center gap-1.5">
                     <span class="flex-1 h-3 bg-gray-100 rounded overflow-hidden min-w-6">
@@ -219,6 +262,7 @@ const num = (v: number | undefined | null, digits: number): string =>
       </table>
     </div>
     <p class="text-[11px] text-gray-400 mt-2">
+      {hasHistory && "素点は直近6節の走をコース補正・時間減衰・ベイズ収縮して出した加重平均で、0 が場の平均近辺。"}
       モーターptは偏差値スケール（この場の平均が50、標準偏差が10）。寄与 = 場別重み × モーターpt で、
       強さptはこの寄与を含む5成分の合計です。
       {hasSessionRuns && "「今節」列は今節の走りをスコア表で採点した参考値で、モーターptには含まれません。"}
@@ -228,12 +272,89 @@ const num = (v: number | undefined | null, digits: number): string =>
     </p>
   </section>
 
+  {/* コース補正のベースライン */}
+  {baselineCells.length > 0 && (
+    <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <details>
+        <summary class="font-bold text-lg cursor-pointer">
+          コース補正のベースライン
+          <span class="ml-2 text-xs font-normal text-gray-500">
+            このレースの6基が引いた {baselineCells.length} セル
+          </span>
+        </summary>
+
+        <p class="text-[13px] text-gray-700 mt-3">
+          素点は生の得点ではなく <span class="font-mono">(得点 − μ) ÷ σ</span> の z 残差を集計します。
+          この μ・σ は「級別 × グレード × 進入コース」のセルごとに、
+          <span class="font-bold">全24場の直近{MOTOR_PT_PARAMS.historySessions}節を横断して</span>
+          算出されます。1コースの1着と6コースの1着を同じ価値として扱わないための補正で、
+          <span class="font-bold">これが fun-site 側で素点を計算できない理由</span>です
+          （当日ぶんのCSVだけでは全場のサンプルを集められません）。
+        </p>
+
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-[11px] border-collapse">
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">級別</th>
+                <th scope="col" class="text-left py-1 px-1 font-medium">グレード</th>
+                <th scope="col" class="text-left py-1 px-1 font-medium">進入</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">μ</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">σ</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">サンプル数</th>
+              </tr>
+            </thead>
+            <tbody class="font-mono tabular-nums text-gray-800">
+              {baselineCells.map((cell) => (
+                <tr class="border-b border-gray-100">
+                  <th
+                    scope="row"
+                    class="text-left py-1 px-1 font-sans font-medium text-gray-600 whitespace-nowrap"
+                  >
+                    {cell.racerClass}
+                  </th>
+                  <td class="py-1 px-1 font-sans text-gray-500 whitespace-nowrap">
+                    {MOTOR_PT_GRADE_BUCKET_LABELS[cell.bucket]}
+                  </td>
+                  <td class="py-1 px-1 font-sans whitespace-nowrap">
+                    {cell.entryCourse > 0 ? (
+                      `${cell.entryCourse}コース`
+                    ) : (
+                      <span class="text-violet-700" title="進入コース別のセルが使えないときの受け皿">
+                        コース問わず
+                      </span>
+                    )}
+                  </td>
+                  <td class="text-right py-1 px-1">{cell.mu.toFixed(2)}</td>
+                  <td class="text-right py-1 px-1">{cell.sigma.toFixed(2)}</td>
+                  <td class="text-right py-1 px-1 text-gray-500">
+                    {cell.sampleCount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p class="text-[11px] text-gray-500 mt-2">
+          サンプルが {MOTOR_PT_PARAMS.laneBaselineMinSamples} 本未満のセルはそもそも作られず、
+          <span class="text-violet-700 font-bold">コース問わず</span>の行（級別 × グレードだけの平均）に
+          フォールバックします。σ には下限 {MOTOR_PT_PARAMS.laneBaselineSdFloor} を置いて、
+          サンプルが偏ったセルで z が暴れないようにしています。
+        </p>
+      </details>
+    </section>
+  )}
+
   {/* モーターごとの内訳 */}
   <div class="space-y-4 mb-6">
     {views.map((v) => (
       <MotorPtCard
         racer={v.racer}
         session={v.session}
+        history={v.history}
+        basis={motorBasis}
+        steps={v.steps}
         motorPt={v.motorPt}
         contribution={v.contribution}
         strengthPt={v.strengthPt}
@@ -371,15 +492,24 @@ const num = (v: number | undefined | null, digits: number): string =>
         </div>
 
         <div>
-          <h3 class="font-bold text-sm mb-1">このページで素点を出していない理由</h3>
+          <h3 class="font-bold text-sm mb-1">素点はどこから来ているか</h3>
           <p class="text-[13px]">
-            素点の再現には当場の過去 {MOTOR_PT_PARAMS.historySessions} 節ぶんの出走表（全モーターの
-            全走）と、コース補正のための全24場横断のベースラインが必要です。fun-site が取得しているのは
-            当日ぶんの CSV だけなので、モーターptは
-            <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>しています。
-            計算過程まで開示しているのは
+            素点の計算には当場の過去 {MOTOR_PT_PARAMS.historySessions} 節ぶんの出走表（全モーターの
+            全走）と、コース補正のための<span class="font-bold">全24場横断のベースライン</span>が
+            必要です。fun-site が取得しているのは当日ぶんの CSV だけなので、
+            <span class="font-bold">素点をこちらで計算することはできません</span>。
+            そこで BoatraceCSV 側が計算過程を明細として書き出し
+            （<span class="font-mono">data/estimate/motor_pt/</span>）、このページはそれを
+            読んで表示しています。
             <a href={`${raceHref}racers/`} class="text-blue-600 hover:underline">選手pt</a>
-            （入力の近況5節を手元に持っているため）だけです。
+            の近況5節（<span class="font-mono">programs/recent_national</span>）と同じ関係です。
+          </p>
+          <p class="text-[13px] mt-1">
+            素点から先の <span class="font-mono">50 + 10 × (素点 − μ) ÷ σ</span> と
+            <span class="font-mono">重み × モーターpt</span> は場別の学習値
+            （<span class="font-mono">estimate/stadium/weights/</span>）で fun-site 側が計算しており、
+            各カードの再現値が index CSV の表示値と一致していれば
+            <span class="font-bold">（表示値と一致）</span>と出ます。
           </p>
         </div>
 

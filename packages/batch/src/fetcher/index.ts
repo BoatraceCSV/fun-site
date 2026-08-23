@@ -2,6 +2,9 @@ import type {
   AnaPicksRow,
   IndexRow,
   KimariteRow,
+  MotorPtBaselineRow,
+  MotorPtMotorRow,
+  MotorPtRunRow,
   MotorStatsRow,
   OriginalExhibitionRow,
   PredictorSpec,
@@ -31,6 +34,7 @@ import {
   fetchWeightsCsv,
 } from "./csv-client.js";
 import { parseKimarite } from "./kimarite-schemas.js";
+import { parseMotorPtBaseline, parseMotorPtMotors, parseMotorPtRuns } from "./motor-pt-schemas.js";
 import { parseMotorStats } from "./motor-stats-schemas.js";
 import { parsePayouts } from "./payout-schemas.js";
 import { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
@@ -82,6 +86,17 @@ export type FetchedCsvData = {
   readonly waku10: readonly Waku10Row[];
   /** モーター期成績 (programs/motor_stats)。1 モーター 1 行。未生成時は空配列。 */
   readonly motorStats: readonly MotorStatsRow[];
+  /**
+   * モーターpt 素点の内訳 (estimate/motor_pt/runs)。1 走 1 行で当日出走する全モーター
+   * ぶん (1 日 2 万行前後)。**素点は全 24 場横断のコース補正ベースラインに依存する
+   * ため fun-site 側では計算できない**ので、上流が明細を配ってくれている。
+   * 未生成時は空配列 (モーター詳細ページが「内訳未取得」の表示に倒れる)。
+   */
+  readonly motorPtRuns: readonly MotorPtRunRow[];
+  /** 同 1 モーター 1 行の集計 (Σw / n_eff / 素点)。未生成時は空配列。 */
+  readonly motorPtMotors: readonly MotorPtMotorRow[];
+  /** 同 コース補正セルの μ/σ/サンプル数。未生成時は空配列。 */
+  readonly motorPtBaseline: readonly MotorPtBaselineRow[];
   /**
    * 穴予想 A案 v9_suji の買い目 (estimate/suji)。レース × 状態 で 1 行。
    *
@@ -146,6 +161,12 @@ export type FetchedCsvData = {
    * 取得失敗時は undefined。
    */
   readonly exhibitWeights?: StadiumWeightsFetch;
+  /**
+   * 同じ weights CSV の モーターpt 成分。他の 3 つと違い生値（素点）は
+   * `motorPtMotors` から来るので、これは「素点 → 偏差値pt → 寄与」の変換だけに使う。
+   * 取得失敗時は undefined。
+   */
+  readonly motorWeights?: StadiumWeightsFetch;
 };
 
 /** 場別重み CSV の 1 成分ぶんの取得結果 (どの予想者のどの月のファイルを引けたか付き) */
@@ -178,6 +199,7 @@ type StadiumTablesFetch = {
   wakuWeights?: StadiumWeightsFetch;
   weatherWeights?: StadiumWeightsFetch;
   exhibitWeights?: StadiumWeightsFetch;
+  motorWeights?: StadiumWeightsFetch;
 };
 
 /**
@@ -187,8 +209,9 @@ type StadiumTablesFetch = {
  * どちらも日付パーティションを持たない静的テーブルで、monthly-weights が
  * 月 1 回だけ更新する。μ / σ / w は予想者ごとに違いうるので、両詳細ページが
  * 解説する **primary predictor (slot 最小)** のぶんだけを取る (weights CSV は
- * 1 回だけ取得して 枠番 / 気象 / 展示 の 3 成分に切り分ける)。展示pt に対応する
- * 静的テーブルは無い (生値がレース内で閉じている) ので weights だけで足りる。
+ * 1 回だけ取得して 枠番 / 気象 / 展示 / モーター の 4 成分に切り分ける)。展示pt に
+ * 対応する静的テーブルは無い (生値がレース内で閉じている) ので weights だけで足りる。
+ * モーターpt は生値 (素点) が上流から内訳 CSV で配られるので、これも weights だけ。
  * 失敗しても他のセクションには影響しないので、warn して欠損扱いにする。
  */
 const fetchStadiumTables = async (
@@ -223,6 +246,7 @@ const fetchStadiumTables = async (
     wakuWeights: forComponent("waku"),
     weatherWeights: forComponent("weather"),
     exhibitWeights: forComponent("exhibit"),
+    motorWeights: forComponent("motor"),
   };
 };
 
@@ -278,6 +302,9 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentLocal,
     waku10,
     motorStats,
+    motorPtRuns,
+    motorPtMotors,
+    motorPtBaseline,
     racerSt,
     suji,
     kimaritePicks,
@@ -297,6 +324,9 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("recent_local", date, parseRecentForm),
     fetchAndParse("waku10", date, parseWaku10),
     fetchAndParse("motor_stats", date, parseMotorStats),
+    fetchAndParse("motor_pt_runs", date, parseMotorPtRuns),
+    fetchAndParse("motor_pt_motors", date, parseMotorPtMotors),
+    fetchAndParse("motor_pt_baseline", date, parseMotorPtBaseline),
     fetchAndParse("racer_st", date, parseRacerSt),
     fetchAndParse("suji", date, parseAnaPicks),
     fetchAndParse("kimarite_picks", date, parseAnaPicks),
@@ -306,12 +336,10 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     fetchAndParse("payouts", date, parsePayouts),
   ]);
 
-  // 枠番pt / 気象pt の根拠テーブル。primary predictor は slot 昇順の先頭
-  // (activePredictors() が slot 順に返す)。
-  const { wakuTable, suiParams, wakuWeights, weatherWeights } = await fetchStadiumTables(
-    predictors[0],
-    date,
-  );
+  // 枠番pt / 気象pt / 展示pt / モーターpt の根拠テーブル。primary predictor は
+  // slot 昇順の先頭 (activePredictors() が slot 順に返す)。
+  const { wakuTable, suiParams, wakuWeights, weatherWeights, exhibitWeights, motorWeights } =
+    await fetchStadiumTables(predictors[0], date);
 
   return {
     titles,
@@ -325,6 +353,9 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     recentLocal,
     waku10,
     motorStats,
+    motorPtRuns,
+    motorPtMotors,
+    motorPtBaseline,
     racerSt,
     suji,
     kimaritePicks,
@@ -336,6 +367,8 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     suiParams,
     ...(wakuWeights ? { wakuWeights } : {}),
     ...(weatherWeights ? { weatherWeights } : {}),
+    ...(exhibitWeights ? { exhibitWeights } : {}),
+    ...(motorWeights ? { motorWeights } : {}),
   };
 };
 
@@ -351,6 +384,11 @@ export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
 export { parseAnaPicks } from "./ana-picks-schemas.js";
 export { parseKimarite } from "./kimarite-schemas.js";
+export {
+  parseMotorPtBaseline,
+  parseMotorPtMotors,
+  parseMotorPtRuns,
+} from "./motor-pt-schemas.js";
 export { parseOriginalExhibition, parseSui, parseTkz } from "./preview-schemas.js";
 export { parseIndex, parseRaceCards, parseStt } from "./race-card-schemas.js";
 export { parseRecentForm } from "./recent-form-schemas.js";

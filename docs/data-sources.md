@@ -17,6 +17,9 @@ fun-site が取得・利用する [BoatraceCSV](https://github.com/BoatraceCSV) 
 | `programs/recent_local` | `programs/recent_local/YYYY/MM/DD.csv` | 当地近況5節（同形式、当地ソースのみ） | 選手pt詳細ページの素点内訳 |
 | `programs/waku10` | `programs/waku10/YYYY/MM/DD.csv` | 枠番別過去10走（今回と同じ枠番での勝率・平均ST・平均スタート順 + 過去10走の着順/進入/グレード） | 枠番別過去10走セクション |
 | `programs/motor_stats` | `programs/motor_stats/YYYY/MM/DD.csv` | モーター期成績（1 モーター 1 行: 3連率・優勝/優出回数・平均ラップ等） | 出走表のモーター情報 |
+| `estimate/motor_pt/runs` | `estimate/motor_pt/runs/YYYY/MM/DD.csv` | モーターpt **素点の内訳**（1 走 1 行: 生得点・セル μ/σ・残差z・減衰重み。当日出走する全モーターぶんで 1 日 2 万行前後） | モーターpt詳細ページの素点内訳 |
+| `estimate/motor_pt/motors` | `estimate/motor_pt/motors/YYYY/MM/DD.csv` | 同 1 モーター 1 行の集計（Σw / n_eff / 素点） | 同上 |
+| `estimate/motor_pt/baseline` | `estimate/motor_pt/baseline/YYYY/MM/DD.csv` | 同 コース補正セルの μ/σ/サンプル数（級別 × グレード分類 × 進入。**全 24 場横断**で算出される） | 同上（「素点を fun-site で計算できない理由」の実物） |
 | `estimate/racer_st` | `estimate/racer_st/YYYY/MM/DD.csv` | 選手別 AI 推定 ST（1 レース 1 行 × 6 枠。実測 ST 履歴の時間減衰平均 + コース/F 補正）。`N枠_推定ST_p25` / `_p75` に予測区間（スタート予想図の帯）を持つ | 全予想者共通のスタート予想図（帯つき）の予測 ST と、`useEstimatedST` な予想者の 1 マーク走行距離の予測 ST（`useEstimatedST` を持つ予想者は現行 active には無く、過去日の退役予想者ぶんでのみ効く） |
 | `estimate/{predictor_id}` | `estimate/{predictor_id}/YYYY/MM/DD.csv` | 各 active 予想者の強さpt と寄与pt | 予想者ごとの AI 総合評価・買い目・回収率 |
 | `results/realtime` | `results/realtime/YYYY/MM/DD.csv` | 当日確定直後のレース結果 | レース結果セクション・的中判定 |
@@ -31,7 +34,7 @@ preview-realtime / daily-sync の GCS ミラーに相乗りして配信される
 |---|---|---|---|
 | `waku_table` | `estimate/stadium/win_rate.csv` | 24場 × 4季節 × 6コースの長期勝率（= 平均得点。1着率(%) ではない）。枠番pt の生値ソース | 枠番詳細ページのコース強度テーブルと計算過程 |
 | `sui_params` | `estimate/stadium/sui_params.csv` | 24場 × 6特徴量 × 6コースの気象線形回帰係数。気象pt の生値ソース（切片 `base_c*` は 枠番pt と重複するため使わない） | 気象詳細ページの係数テーブルと計算過程 |
-| `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` / `weather` / `exhibit` 成分ぶん | 上記 2 つと組で raw → 偏差値pt → 寄与 の変換。`exhibit` は**単独で**（生値がレース内で閉じているため静的テーブル不要） |
+| `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` / `weather` / `exhibit` / `motor` の 4 成分ぶん | 上記 2 つと組で raw → 偏差値pt → 寄与 の変換。`exhibit` は**単独で**（生値がレース内で閉じているため静的テーブル不要）、`motor` は生値（素点）が `estimate/motor_pt/motors` から来るので**偏差値化と寄与の 2 段だけ**に使う |
 
 取得は [`fetchWakuTableCsvText()`](../packages/batch/src/fetcher/csv-client.ts) /
 `fetchSuiParamsCsvText()` と `fetchWeightsCsv(predictorId, date)`。weights は
@@ -99,6 +102,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `TokutenHayamiRow` / `TokutenHayamiRacer` / `TokutenHayamiIfRank` | `previews/tokuten_hayami` | 準優ボーダー順位・レースの着順点と、艇別の得点率 / 節内順位 / ボーダー状態 / 早見 / 着順別の想定得点率。得点率セルは `賞除` `欠場` `帰郷` `追配` の文字列が来るため、数値は `scoreRate`(null 可)、生値は `scoreRateLabel` に持つ |
 | `Waku10Row` / `Waku10Boat` / `Waku10Run` | `programs/waku10` | 艇別の枠番別勝率・平均ST・平均スタート順と、過去10走（着順トークン・進入コース・グレード）。**登録番号列を持たない**ため突合は艇番。進入コースの空欄は枠なり進入を意味するので 0 のまま保持する |
 | `MotorStatsRow` | `programs/motor_stats` | `(記録日, 場コード, モーター番号)` キー。勝率・2/3連率・優勝/優出回数・平均ラップ秒など |
+| `MotorPtRunRow` / `MotorPtMotorRow` / `MotorPtBaselineRow` | `estimate/motor_pt/{runs,motors,baseline}` | `(記録日, 場コード, モーター番号)` キー。素点の計算過程そのもの。レース JSON には該当 6 基ぶんを `MotorPtHistory` に畳んで焼き込む（走からはモーター単位で一定の `recordDate` / `stadiumCode` / `motorNumber` を落とし `MotorPtHistoryRun` にする） |
 | `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST, 推定ST_p25, 推定ST_p75)`。欠場枠は null。帯 2 列は導入前の CSV でも null（列が無くても読める）。未生成日は空配列（全国平均 ST フォールバック） |
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
 | `RaceResultRow` / `RaceResultFinish` / `RaceResultCourse` / `RaceResultWeather` | `results/realtime` | 着順、決まり手、ST、天候 |
@@ -120,6 +124,8 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `RaceWaku10` / `RacerWaku10` / `Waku10RunView` | 枠番別過去10走。`RacePrediction.waku10` にぶら下がる。waku10 を艇番で突合し、着順が空のスロット（出走歴 10 走未満）は除外、進入コースは空欄（枠なり進入）を枠番で補完して `courseIsAsWaku` で補完済みかを示す。CSV 未取得のレースでは `waku10` 自体が undefined |
 | `RaceTokutenHayami` | 得点率早見。`RacePrediction.tokutenHayami` にぶら下がる。上流は公開済み (`status=1`) の行しか書かないので、**行があれば表示できる**。予選最終日を過ぎた節・得点率早見を出さない節では行が来ないため undefined |
 | `MotorStats`（`RaceRacer.motorStats`） | モーター期成績。motor_stats を `(場コード-モーター番号)` で各艇に突合（同一キーは記録日が新しい行を採用）。3連率・3連率順位・優勝/優出回数・平均ラップ秒を保持。当該場が motor_stats 未収録のレースでは undefined |
+| `MotorPtHistory`（`RaceRacer.motorPtHistory`） | モーターpt **素点の内訳**。`estimate/motor_pt/{motors,runs}` を `(場コード-モーター番号)` で各艇に突合。`motorStats` とは別物で、あちらは通算成績（**モーターptの入力ではない**）、こちらが素点そのものの計算過程。内訳 CSV 未取得なら undefined、取得できていて直近6節に有効な走が無ければ `runs` が空 + `rawPt` が null（この 2 つを画面が区別する） |
+| `MotorPtBasis`（`RacePrediction.motorPtBasis`） / `MotorPtBaselineCell[]`（`RacePrediction.motorPtBaseline`） | 前者は場別 μ/σ/w（素点 → 偏差値pt → 寄与 の変換用）。後者はそのレースの 6 基が実際に引いたコース補正セルだけを抜き出したもの（1 レース 10〜30 行） |
 | `AiEvaluation` / `AiEvaluationEntry` / `AiEvaluationContribution` | AI 総合評価（`componentKeys` ぶんの寄与pt と強さpt、および成分pt そのもの `components`（偏差値スケール。選手pt の内訳ページが使う。古い JSON では未設定）） |
 | `BetHitStatus` | 当日買い目・直前買い目の三連単フォーメーションが結果と一致したか |
 | `BetPayoutResult` / `RaceBetPayoutSummary` / `DailyBetPayoutAggregate` | 3連単 フォーメーションを 1 点 ¥100 で買った場合の払戻 / 回収率（レース単位 / 当日集計） |

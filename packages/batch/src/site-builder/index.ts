@@ -67,6 +67,12 @@ export {
   buildRacePrediction,
 } from "./prediction-builder.js";
 export {
+  buildMotorPtBasisByStadium,
+  buildMotorPtHistoryLookup,
+  motorPtKey,
+  selectMotorPtBaselineCells,
+} from "./motor-pt-basis.js";
+export {
   buildSeriesSummary,
   SERIES_LOOKBACK_DAYS,
   type SeriesSummary,

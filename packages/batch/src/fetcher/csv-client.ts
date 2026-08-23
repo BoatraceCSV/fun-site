@@ -27,6 +27,9 @@ export type CsvType =
   | "recent_local"
   | "waku10"
   | "motor_stats"
+  | "motor_pt_runs"
+  | "motor_pt_motors"
+  | "motor_pt_baseline"
   | "racer_st"
   | "suji"
   | "kimarite"
@@ -46,6 +49,11 @@ const CSV_PATH_PREFIX: Record<CsvType, string> = {
   recent_local: "programs/recent_local",
   waku10: "programs/waku10",
   motor_stats: "programs/motor_stats",
+  // モーターpt 素点の内訳。runs は 1 日 2 万行 / 約 1.8MB と他より大きいが、
+  // 日次バッチの成果物なので当日中は差し替わらない (BoatraceCSV docs/data/motor_pt.md)。
+  motor_pt_runs: "estimate/motor_pt/runs",
+  motor_pt_motors: "estimate/motor_pt/motors",
+  motor_pt_baseline: "estimate/motor_pt/baseline",
   racer_st: "estimate/racer_st",
   suji: "estimate/suji",
   kimarite: "estimate/kimarite",

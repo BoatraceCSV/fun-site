@@ -15,6 +15,11 @@
  *
  * 展示pt だけは静的テーブルを引かない（生値がレース内で閉じている）ので、
  * 必要なのは weights CSV の 3 列だけである。
+ *
+ * モーターpt (`N枠_モーターpt`) は事情が違い、**生値 (素点) を fun-site では
+ * 計算できない**（全 24 場横断のコース補正ベースラインに依存するため）。素点は
+ * 上流が `data/estimate/motor_pt/` に内訳として配るので、weights の役割は
+ * 「素点 → 偏差値pt → 寄与」の後半 2 段だけになる。
  */
 
 /** win_rate.csv の季節軸。上流 `SEASON_BY_MONTH` と同じ 4 値 */
@@ -39,10 +44,13 @@ export type WakuTableRow = {
 };
 
 /**
- * weights CSV が持つ成分のうち、fun-site が生値から pt を再現している 3 つ。
- * CSV の列名サフィックス（`mu_waku` / `mu_weather` / `mu_exhibit` 等）と同じ綴り。
+ * weights CSV から fun-site が読み出す成分。CSV の列名サフィックス
+ * （`mu_waku` / `mu_weather` / `mu_exhibit` / `mu_motor`）と同じ綴り。
+ *
+ * `waku` / `weather` / `exhibit` は生値から pt まで丸ごと再現するのに使い、
+ * `motor` は上流が配る素点を偏差値pt と寄与に変換するのに使う。
  */
-export const STADIUM_WEIGHTS_COMPONENTS = ["waku", "weather", "exhibit"] as const;
+export const STADIUM_WEIGHTS_COMPONENTS = ["waku", "weather", "exhibit", "motor"] as const;
 
 export type StadiumWeightsComponent = (typeof STADIUM_WEIGHTS_COMPONENTS)[number];
 
@@ -165,6 +173,38 @@ export type ExhibitPtBasis = {
   /** その場の展示pt 生値の標準偏差 */
   readonly sigma: number;
   /** 強さpt に足し込むときの展示pt の重み（非負・全成分で合計 1） */
+  readonly weight: number;
+  /** 由来した weights ファイルの月 ("YYYY-MM")。学習窓はこの 6 ヶ月前〜前月 */
+  readonly weightsMonth: string;
+};
+
+// === モーターpt の根拠（生値は上流から配られる） ===
+
+/**
+ * 1 レースぶんの モーターpt の根拠。`RacePrediction.motorPtBasis` に載る。
+ *
+ * 形は {@link ExhibitPtBasis} と同じ場別 μ / σ / w だが、意味が一段違う。
+ * 展示pt は生値まで fun-site が計算するのに対し、モーターpt の生値（素点）は
+ * **全 24 場横断のコース補正ベースラインに依存する**ので fun-site では計算できず、
+ * 上流が `data/estimate/motor_pt/` に内訳として配ったものを使う
+ * （{@link ../types/motor-pt-history.js} の `MotorPtHistory`）。
+ *
+ * したがってここにある μ / σ / w が担うのは
+ *
+ *     モーターpt = 50 + 10 × (素点 − μ) ÷ σ
+ *     寄与       = w × モーターpt
+ *
+ * の 2 段だけである。重みは月次で更新されうるので、他の成分と同じく
+ * **ビルド時点の値をレース JSON に焼き込む**。
+ */
+export type MotorPtBasis = {
+  /** μ / σ / w の由来予想者 ID。レース詳細の primary predictor と同じ */
+  readonly predictorId: string;
+  /** その場の素点の平均 */
+  readonly mu: number;
+  /** その場の素点の標準偏差 */
+  readonly sigma: number;
+  /** 強さpt に足し込むときの モーターpt の重み（非負・全成分で合計 1） */
   readonly weight: number;
   /** 由来した weights ファイルの月 ("YYYY-MM")。学習窓はこの 6 ヶ月前〜前月 */
   readonly weightsMonth: string;

@@ -1,17 +1,35 @@
 ---
-import type { MotorPtRun, MotorPtSessionBreakdown, RaceRacer } from "@fun-site/shared";
+import type {
+  MotorPtBasis,
+  MotorPtHistory,
+  MotorPtRun,
+  MotorPtSessionBreakdown,
+  MotorPtSteps,
+  RaceRacer,
+} from "@fun-site/shared";
 import {
   BOAT_COLORS,
   MOTOR_NEGATIVE_SCORE,
+  MOTOR_NEGATIVE_TOKENS,
   MOTOR_PT_GRADE_BUCKET_LABELS,
+  MOTOR_PT_MISSING_FALLBACK,
   MOTOR_PT_PARAMS,
+  groupMotorPtRunsBySession,
   isValidBoatNumber,
+  motorPtMatchesIndex,
+  recomputeMotorRawPt,
 } from "@fun-site/shared";
 
 interface Props {
   racer: RaceRacer;
   /** 今節の走りをスコア表で採点した参考値。モーターpt には未算入 */
   session: MotorPtSessionBreakdown;
+  /** 素点の内訳（上流 `estimate/motor_pt/` 由来）。CSV 未取得なら undefined */
+  history: MotorPtHistory | undefined;
+  /** この場の μ / σ / w。weights 未取得なら undefined */
+  basis: MotorPtBasis | undefined;
+  /** 素点から再現した モーターpt / 寄与。`history` か `basis` が欠けたら undefined */
+  steps: MotorPtSteps | undefined;
   /** モーターpt（偏差値）。index CSV 由来。古い JSON では undefined */
   motorPt: number | undefined;
   /** 寄与pt = 場別重み × モーターpt。index CSV 由来 */
@@ -20,15 +38,19 @@ interface Props {
   strengthPt: number;
 }
 
-const { racer, session, motorPt, contribution, strengthPt } = Astro.props;
+const { racer, session, history, basis, steps, motorPt, contribution, strengthPt } = Astro.props;
 
 const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
 
-/** 場別重み w。寄与 = w × モーターpt の関係から逆算する（weights CSV は未取り込み） */
+/**
+ * 場別重み w。weights CSV が取れていればその実値、取れていなければ
+ * 寄与 ÷ モーターpt から逆算する（古い JSON のためのフォールバック）。
+ */
 const weight =
-  motorPt !== undefined && contribution !== undefined && motorPt !== 0
+  basis?.weight ??
+  (motorPt !== undefined && contribution !== undefined && motorPt !== 0
     ? contribution / motorPt
-    : undefined;
+    : undefined);
 
 /** 偏差値 → z。「平均から何σ上か」の言い換えに使う */
 const z = motorPt !== undefined ? (motorPt - 50) / 10 : undefined;
@@ -39,6 +61,9 @@ const sharePct =
 
 const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
+
+const signed = (v: number | undefined | null, digits: number): string =>
+  v === undefined || v === null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
 
 /** 未計測（0）は "—" */
 const stat = (v: number, digits: number): string => (v > 0 ? v.toFixed(digits) : "—");
@@ -52,6 +77,22 @@ for (const run of session.runs) {
   if (last && last.day === run.day) last.runs.push(run);
   else runsByDay.push({ day: run.day, runs: [run] });
 }
+
+// ── 素点の内訳 ─────────────────────────────────────────────────────
+/** 直近 6 節を節ごとに畳んだもの（節 0 = 直近） */
+const historySessions = history ? groupMotorPtRunsBySession(history.runs) : [];
+/** 配られた明細から素点を組み直したもの。Σw / n_eff の表示と検算に使う */
+const recomputed = history ? recomputeMotorRawPt(history.runs) : null;
+/** 再現した モーターpt が index CSV の表示値と一致しているか */
+const ptMatches = motorPtMatchesIndex(steps?.pt, motorPt, basis?.sigma);
+/** 内訳が配られていて、かつ有効な走が 1 本もない（期切替直後・長期休養明け） */
+const historyEmpty = history !== undefined && history.runs.length === 0;
+
+const mmdd = (iso: string): string => iso.slice(5).replace("-", "/");
+
+/** 走行日から見た経過日数。減衰重みの説明に使う */
+const daysAgo = (recordDate: string, raceDate: string): number =>
+  Math.max(0, Math.round((Date.parse(recordDate) - Date.parse(raceDate)) / 86_400_000));
 ---
 
 <section
@@ -96,12 +137,20 @@ for (const run of session.runs) {
       <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-orange-900">
         <li class="inline-flex items-baseline gap-1">
           <span class="text-orange-700">素点</span>
-          <span
-            class="font-bold text-orange-400"
-            title="素点の再現には当場の過去6節ぶんの出走表と全24場横断のベースラインが要るため、fun-site 側では計算できません"
-          >
-            再現不可
-          </span>
+          {history === undefined ? (
+            <span
+              class="font-bold text-orange-400"
+              title="素点の内訳 CSV (estimate/motor_pt/) が未取得です"
+            >
+              未取得
+            </span>
+          ) : history.rawPt === null ? (
+            <span class="font-bold text-orange-400" title="直近6節に有効な走がありません">
+              —
+            </span>
+          ) : (
+            <span class="font-mono font-bold tabular-nums">{signed(history.rawPt, 4)}</span>
+          )}
         </li>
         <li aria-hidden="true" class="text-orange-400">→</li>
         <li class="inline-flex items-baseline gap-1">
@@ -120,11 +169,206 @@ for (const run of session.runs) {
         </li>
       </ol>
 
-      {weight !== undefined && (
+      {/* 素点が欠損の基は上流が偏差値変換を通さず 50 を入れるので、式は出さない
+          （代わりに下の琥珀のバナーで補完であることを説明する）*/}
+      {basis !== undefined && steps !== undefined && steps.rawPt !== null ? (
+        <p class="mt-1.5 text-[10px] text-orange-700">
+          モーターpt = 50 + 10 × (素点 {signed(steps.rawPt, 4)}{" "}
+          {basis.mu < 0 ? "+" : "−"}{" "}
+          <span class="font-mono">{Math.abs(basis.mu).toFixed(4)}</span>) ÷{" "}
+          <span class="font-mono">{basis.sigma.toFixed(4)}</span> ={" "}
+          <span class="font-mono font-bold">{steps.pt.toFixed(2)}</span>
+          {ptMatches && <span class="ml-1 text-orange-800">（表示値と一致）</span>}
+          、寄与 = 重み <span class="font-mono">{basis.weight.toFixed(3)}</span> × モーターpt ={" "}
+          <span class="font-mono font-bold">{steps.contribution.toFixed(2)}</span>。 μ・σ・w は{" "}
+          {basis.weightsMonth} の場別学習値（{basis.predictorId}）です。
+        </p>
+      ) : weight !== undefined ? (
         <p class="mt-1.5 text-[10px] text-orange-700">
           モーターpt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × モーターpt。
           重みは直近6ヶ月のデータから場別・月次で学習された値です。
         </p>
+      ) : null}
+
+      {steps !== undefined && steps.rawPt !== null && !ptMatches && motorPt !== undefined && (
+        <p class="mt-1.5 text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+          再現値 <span class="font-mono">{steps.pt.toFixed(2)}</span> が表示値{" "}
+          <span class="font-mono">{motorPt.toFixed(2)}</span> とずれています。
+          index CSV を作ったあとに内訳 CSV か場別重みが差し替わった可能性があります
+          （過去日の再ビルドで起きます）。
+        </p>
+      )}
+
+      {historyEmpty && (
+        <p class="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+          直近 {MOTOR_PT_PARAMS.historySessions} 節に有効な走が 1 本もないため素点を計算できません
+          （モーター期の切替直後・長期休養明けなど）。この場合のモーターptは平均の{" "}
+          <span class="font-mono font-bold">{MOTOR_PT_MISSING_FALLBACK}</span> で補完されます。
+        </p>
+      )}
+    </div>
+
+    {/* 素点の計算根拠 */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+        素点の計算根拠<span class="ml-1 font-normal text-gray-400">
+          （直近 {MOTOR_PT_PARAMS.historySessions} 節・当日を含む節は対象外）</span
+        >
+      </h3>
+
+      {history === undefined ? (
+        <p class="text-[11px] text-gray-500">
+          素点の内訳（<span class="font-mono">estimate/motor_pt/</span>）が未取得のため、
+          計算過程を表示できません。
+        </p>
+      ) : historyEmpty ? (
+        <p class="text-[11px] text-gray-500">対象となる走がありません。</p>
+      ) : (
+        <div class="space-y-2">
+          {historySessions.map((s) => (
+            <div>
+              <div class="flex items-baseline gap-2 flex-wrap text-[10px] mb-0.5">
+                <span class="font-bold text-gray-500">
+                  {s.sessionIndex === 0 ? "前節" : `${s.sessionIndex + 1}節前`}
+                </span>
+                <span class="text-gray-400 tabular-nums">〜{s.sessionEnd}</span>
+                <span class="text-gray-400 tabular-nums">{s.runs.length}走</span>
+                <span class="text-gray-400 tabular-nums" title="この節ぶんの減衰重みの合計">
+                  Σw {s.sumW.toFixed(2)}
+                </span>
+                <span
+                  class={`tabular-nums ${s.sumWeightedResidual >= 0 ? "text-orange-600" : "text-blue-600"}`}
+                  title="この節が素点の分子に足し込む量 Σ(重み × 残差z)"
+                >
+                  Σ(w×z) {signed(s.sumWeightedResidual, 2)}
+                </span>
+              </div>
+              <div class="overflow-x-auto">
+                <span class="flex items-end gap-x-1 gap-y-1 flex-wrap">
+                  {s.runs.map((run) => {
+                    const negative = MOTOR_NEGATIVE_TOKENS.includes(run.finish);
+                    return (
+                      <span
+                        class="inline-flex flex-col items-center leading-none w-9 rounded-[2px] px-0.5 py-0.5 bg-gray-50"
+                        title={`${run.raceDate}（${daysAgo(history.recordDate, run.raceDate)}日前） ${run.day}日目${run.run}走 / ${run.entryCourse > 0 ? `${run.entryCourse}コース` : "進入不明"} / ${run.racerClass} × ${MOTOR_PT_GRADE_BUCKET_LABELS[run.bucket]} → 生得点 ${run.rawScore} / セル μ=${run.cellMu} σ=${run.cellSigma} → z=${run.residual.toFixed(4)} / 減衰重み ${run.weight.toFixed(4)}`}
+                      >
+                        <span class="text-[9px] text-gray-400 tabular-nums">
+                          {mmdd(run.raceDate)}
+                        </span>
+                        <span class="text-[9px] text-gray-500 tabular-nums">
+                          {run.entryCourse > 0 ? `${run.entryCourse}c` : "—"}
+                        </span>
+                        <span
+                          class={`text-sm font-bold tabular-nums ${negative ? "text-red-600" : "text-gray-800"}`}
+                        >
+                          {run.finish}
+                        </span>
+                        <span
+                          class={`text-[10px] tabular-nums ${run.residual >= 0 ? "text-orange-700" : "text-blue-600"}`}
+                        >
+                          {signed(run.residual, 2)}
+                        </span>
+                        <span class="text-[9px] text-gray-400 tabular-nums">
+                          ×{run.weight.toFixed(2)}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {/* 集計 → 収縮 → 素点 */}
+          {recomputed !== null && (
+            <div class="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-[11px] text-gray-700 space-y-1">
+              <div class="font-mono tabular-nums">
+                Σ(w×z) {signed(recomputed.sumWeightedResidual, 3)} ÷ Σw{" "}
+                {recomputed.sumW.toFixed(3)} = 加重平均残差{" "}
+                {signed(recomputed.meanResidual, 4)}
+              </div>
+              <div class="font-mono tabular-nums">
+                n_eff {recomputed.nEff.toFixed(2)} ÷ (n_eff +{" "}
+                {MOTOR_PT_PARAMS.shrinkagePriorK}) = ×{" "}
+                {(recomputed.nEff / (recomputed.nEff + MOTOR_PT_PARAMS.shrinkagePriorK)).toFixed(3)}{" "}
+                → 素点 <span class="font-bold">{signed(history.rawPt, 4)}</span>
+              </div>
+              <p class="text-[10px] text-gray-500 font-sans">
+                {history.runs.length} 走 / {history.sessionCount} 節。z は
+                「級別 × グレード × 進入コース」のセル平均からの偏差で、w は半減期{" "}
+                {MOTOR_PT_PARAMS.decayHalfLifeDays} 日の時間減衰。n_eff は重みを考慮した
+                実効走数（Kish）で、これが小さいほど素点は 0 側に縮みます。
+              </p>
+            </div>
+          )}
+
+          <details class="text-[11px]">
+            <summary class="cursor-pointer text-gray-500 hover:text-gray-700">
+              全 {history.runs.length} 走の数値
+            </summary>
+            <div class="overflow-x-auto mt-1">
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">節</th>
+                    <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">
+                      走行日
+                    </th>
+                    <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">
+                      級別/グレード
+                    </th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">進入</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">着順</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">生得点</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">セルμ</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">セルσ</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">残差z</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">重み</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">w×z</th>
+                  </tr>
+                </thead>
+                <tbody class="font-mono tabular-nums text-gray-800">
+                  {history.runs.map((run) => (
+                    <tr class="border-b border-gray-100">
+                      <td class="py-1 px-1 text-gray-400">{run.sessionIndex}</td>
+                      <td class="py-1 px-1 whitespace-nowrap">{run.raceDate}</td>
+                      <td class="py-1 px-1 font-sans text-gray-500 whitespace-nowrap">
+                        {run.racerClass} / {MOTOR_PT_GRADE_BUCKET_LABELS[run.bucket]}
+                      </td>
+                      <td class="text-right py-1 px-1">
+                        {run.entryCourse > 0 ? run.entryCourse : "—"}
+                      </td>
+                      <td
+                        class={`text-right py-1 px-1 font-bold ${MOTOR_NEGATIVE_TOKENS.includes(run.finish) ? "text-red-600" : ""}`}
+                      >
+                        {run.finish}
+                      </td>
+                      <td class="text-right py-1 px-1">{run.rawScore}</td>
+                      <td class="text-right py-1 px-1 text-gray-500">{run.cellMu.toFixed(2)}</td>
+                      <td class="text-right py-1 px-1 text-gray-500">{run.cellSigma.toFixed(2)}</td>
+                      <td
+                        class={`text-right py-1 px-1 ${run.residual >= 0 ? "text-orange-700" : "text-blue-600"}`}
+                      >
+                        {signed(run.residual, 4)}
+                      </td>
+                      <td class="text-right py-1 px-1 text-gray-500">{run.weight.toFixed(4)}</td>
+                      <td class="text-right py-1 px-1">
+                        {signed(run.weight * run.residual, 4)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <p class="text-[10px] text-gray-400">
+            転・落・沈・エは {MOTOR_NEGATIVE_SCORE} 点で計上し、F・L・失・妨・欠・不は集計から
+            外すため<span class="font-bold">この一覧に出てきません</span>。
+            素点は全24場を横断したセル統計に依存するので fun-site 側では計算できず、
+            BoatraceCSV が配る内訳をそのまま表示しています。
+          </p>
+        </div>
       )}
     </div>
 
@@ -246,17 +490,9 @@ for (const run of session.runs) {
             モーターptの集計は<span class="font-bold">当日を含む節を対象外</span>にするため、
             この {session.countedRuns} 打点は上のモーターptには入っていません。時間減衰・
             コース補正・ベイズ収縮もかけていない単純平均です。
-            転・落・沈・エは {MOTOR_NEGATIVE_SCORE} 点、F・L・失・妨・欠・不は集計から外します。
           </p>
         </div>
       )}
     </div>
-
-    {/* 素点を出せない理由 */}
-    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
-      素点の内訳（直近 {MOTOR_PT_PARAMS.historySessions} 節ぶんの走とその重み）は、当場の過去
-      {MOTOR_PT_PARAMS.historySessions} 節ぶんの出走表と、コース補正のための全24場横断の
-      ベースラインが要ります。fun-site は当日ぶんの CSV しか取得していないため再現できません。
-    </p>
   </div>
 </section>
