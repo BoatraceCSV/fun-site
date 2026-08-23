@@ -69,7 +69,7 @@ HTML 骨組み、meta タグ（OGP / Twitter Card）、ヘッダー（トップ 
 | `DailyBetSummary.astro` | トップページの当日サマリー。締切済み全レースを集計した 3連単 戦略の的中率・回収率を予想者別（直前買い目のみ）に表示（本命直前 / スジ直前 / 穴直前 の 3 カード。`activePredictors()` を slot 昇順でループするため active 予想者の増減に自動追従。新スキーマ `prediction.predictions[]` を優先し、無い場合のみ primary 予想者を legacy `prediction.betPayout.realtime` でフォールバック） |
 | `StadiumSeriesSummary.astro` | レース詳細ページの 1R-12R リンクバー直下に表示する今節成績。`_meta/series-summary.json` から当該会場の「節初日〜当日」3連単 戦略（直前買い目）の的中率・回収率・期間を表示 |
 | `RaceResultSection.astro` | レース結果（着順・スタート・決まり手・天候）。天候の風向は `RacePreviewSection` と同じく shared の `formatWindDirection()` で「南（向かい風）」の形に読み替える（場コードは `RaceResultRow.stadiumId` から取る。結果 CSV が "東(向い風)" のような文字列を返す場合はその生値をそのまま出す）。「スタート（進入順）」は表ではなく `StartResultDiagram` の図で出す（コース / 艇 / ST / F は図に全部載る）。`predictions` prop（`PredictorPrediction[]`）が渡されると、**直前買い目**が的中した予想者ぶんの的中バッジ「{予想者短縮名}直前買い目 的中」を slot 昇順で表示（本命 🎯 / スジ 🧩 / 穴 💎。アイコン・配色は `getPredictorBadge()` 経由でレジストリから引く）。当日買い目の的中は `PredictorCard` 内の `BetPayoutSummary` 側にのみ出す |
-| `RaceCard.astro` | トップ・会場別ページのレース概要カード（グレードバッジ・締切・確定状態）。3 行目に「今節成績」(直前買い目戦略の的中率 / 回収率) を表示。`seriesAggregate` prop を渡さない / null の場合は「集計データなし」表示 |
+| `RaceCard.astro` | トップ・会場別ページのレース概要カード（グレードバッジ・締切・確定状態）。3 行目に「今節成績」(直前買い目戦略の**予想者別 回収率**) を、節の期間・締切済みレース数とあわせて表示（本命 / 穴。`activePredictors()` を slot 昇順でループし、ラベルは `getPredictorBadge().shortName`＝「本命予想」→「本命」で解決するため active 予想者の増減に自動追従）。値は `SeriesBetPayoutAggregate.byPredictor[predictorId]` から引く。予想者ごとに開始日が違うため、その節に集計対象が無い予想者は `—` 表示（例: 穴予想 `v10_kimarite` の開始 2026-08-13 より前の節）。`byPredictor` を持たない旧 JSON はトップフィールドを primary（本命）として扱い、他は `—`。`seriesAggregate` prop を渡さない / null / 全予想者の集計対象 0 件の場合は「集計データなし」表示 |
 | `ConfidenceStars.astro` | 信頼度を星で表示 |
 | `PredictionImage.astro` | 予想画像（OGP 用） |
 | `ShareButton.astro` | SNS 共有ボタン |
