@@ -45,9 +45,6 @@ const stForDraw = (st: number): number => effectiveAvgST(st);
 // 進入コースごとに 1〜6 の lane を割り当て
 const entriesByCourse = [...start.entries].sort((a, b) => a.courseNumber - b.courseNumber);
 
-// いずれかの艇に展示ST実測があるか（注記の出し分け用）
-const hasExhibitionSt = start.entries.some((e) => e.exhibitionStartTiming != null);
-
 // いずれかの艇に予測区間（帯）があるか。AI推定ST版でのみ入る
 const hasBand = start.entries.some((e) => e.startTimingP25 != null && e.startTimingP75 != null);
 ---
@@ -184,10 +181,15 @@ const hasBand = start.entries.some((e) => e.startTimingP25 != null && e.startTim
       スタートタイミング(秒)
     </text>
 
-    {/* 艇番バッジ・コース番号・ST 値（上: 予想/平均ST、下: 展示ST実測） */}
+    {/* 艇番バッジ・コース番号・ST 値（上: 予想/平均ST、下: 艇体下バーの最速〜最遅） */}
     {entriesByCourse.map((entry, i) => {
       const cy = TOP_PAD + i * LANE_HEIGHT + LANE_HEIGHT / 2;
       const color = isValidBoatNumber(entry.boatNumber) ? BOAT_COLORS[entry.boatNumber] : undefined;
+      // 艇体下のバーと同じ 25〜75 パーセンタイル。数字は最速(P25)→最遅(P75) の順で出す
+      const range =
+        entry.startTimingP25 != null && entry.startTimingP75 != null
+          ? { fastest: entry.startTimingP25, slowest: entry.startTimingP75 }
+          : null;
       return (
         <g>
           {/* 艇番。艇体は ST が遅いほど水面外へ出るので番号はここに固定で出す */}
@@ -223,22 +225,22 @@ const hasBand = start.entries.some((e) => e.startTimingP25 != null && e.startTim
           </text>
           <text
             x={TRACK_RIGHT + 8}
-            y={entry.exhibitionStartTiming != null ? cy - 2 : cy + 4}
+            y={range != null ? cy - 2 : cy + 4}
             font-size="13"
             fill="#0f172a"
             font-family="monospace"
           >
             {entry.startTiming.toFixed(2)}
           </text>
-          {entry.exhibitionStartTiming != null && (
+          {range && (
             <text
               x={TRACK_RIGHT + 8}
               y={cy + 12}
-              font-size="10"
-              fill="#2563eb"
+              font-size="9"
+              fill="#64748b"
               font-family="monospace"
             >
-              展{entry.exhibitionStartTiming.toFixed(2)}
+              {range.fastest.toFixed(2)}〜{range.slowest.toFixed(2)}
             </text>
           )}
         </g>
@@ -261,12 +263,7 @@ const hasBand = start.entries.some((e) => e.startTimingP25 != null && e.startTim
       <>
         {" "}
         艇体下のバーは舳先位置の予測のブレ幅(25〜75パーセンタイル)で、実際のSTが約半分の確率でこの範囲に入ります。
-      </>
-    )}
-    {hasExhibitionSt && (
-      <>
-        {" "}
-        <span class="text-blue-600">展xx.xx はスタート展示の実測STです。</span>
+        ST 値の下に併記した小さい数字は、そのブレ幅の最速〜最遅です。
       </>
     )}
   </figcaption>
