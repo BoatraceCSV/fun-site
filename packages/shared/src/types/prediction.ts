@@ -2,10 +2,11 @@ import type { ComponentKey } from "../predictors.js";
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
 import type { BettingPicks } from "../utils/one-mark-distance.js";
+import type { MotorPtBaselineCell, MotorPtHistory } from "./motor-pt-history.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
-import type { ExhibitPtBasis, WakuPtBasis, WeatherPtBasis } from "./stadium-table.js";
+import type { ExhibitPtBasis, MotorPtBasis, WakuPtBasis, WeatherPtBasis } from "./stadium-table.js";
 import type { TokutenHayamiRacer } from "./tokuten-hayami.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
@@ -57,6 +58,18 @@ export type RaceRacer = {
    * 当日 motor_stats が未取得 / 当該場が未収録のレースでは undefined。
    */
   readonly motorStats?: MotorStats;
+  /**
+   * モーターpt の素点の内訳（`estimate/motor_pt/` 由来、場×モーター番号で突合）。
+   * モーター詳細ページが「素点 → モーターpt → 寄与」を出すのに使う。
+   *
+   * `motorStats` とは別物である点に注意 — あちらは 3連率・優勝回数などの通算成績で
+   * **モーターpt の入力ではない**。こちらが素点そのものの計算過程。
+   *
+   * 内訳 CSV が未取得のビルドと **2026-08-23 以前の JSON では undefined**
+   * (UI 側は undefined フォールバックすること)。取得できていて履歴が無い場合は
+   * `runs` が空で `rawPt` が null になるので、両者は区別できる。
+   */
+  readonly motorPtHistory?: MotorPtHistory;
 };
 
 /**
@@ -488,5 +501,25 @@ export type RacePrediction = {
    * (UI 側は undefined フォールバックすること)。
    */
   readonly exhibitPtBasis?: ExhibitPtBasis;
+  /**
+   * モーターpt の根拠（場別 μ/σ/w のみ）。モーター詳細ページが
+   * 「素点 → モーターpt → 寄与」の後半 2 段を出すのに使う。
+   *
+   * 生値（素点）は他成分と違って fun-site では計算できず、上流が配る内訳
+   * (`RaceRacer.motorPtHistory`) から読む。
+   *
+   * 上流の `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` 由来で、
+   * 取得できなかったビルドと **2026-08-23 以前の JSON では undefined**
+   * (UI 側は undefined フォールバックすること)。
+   */
+  readonly motorPtBasis?: MotorPtBasis;
+  /**
+   * このレースの 6 基が実際に引いたコース補正セル（級別 × グレード分類 × 進入の
+   * μ/σ/サンプル数）。モーター詳細ページが「素点が fun-site で再現できない理由」
+   * = 全 24 場横断のベースラインを実物で見せるのに使う。
+   *
+   * 内訳 CSV が未取得のビルドと 2026-08-23 以前の JSON では undefined。
+   */
+  readonly motorPtBaseline?: readonly MotorPtBaselineCell[];
   readonly generatedAt: string;
 };

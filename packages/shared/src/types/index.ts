@@ -24,6 +24,14 @@ export type {
   Waku10RunView,
 } from "./prediction.js";
 export type { MotorStatsRow } from "./motor-stats.js";
+export type {
+  MotorPtBaselineCell,
+  MotorPtBaselineRow,
+  MotorPtHistory,
+  MotorPtHistoryRun,
+  MotorPtMotorRow,
+  MotorPtRunRow,
+} from "./motor-pt-history.js";
 export type { RacerStEntry, RacerStRow } from "./racer-st.js";
 export type { KimariteRow } from "./kimarite.js";
 export type { AnaPick, AnaPicksRow } from "./ana.js";
@@ -49,6 +57,7 @@ export type {
   CourseCoefs,
   CourseRates,
   ExhibitPtBasis,
+  MotorPtBasis,
   StadiumComponentWeightsRow,
   StadiumWeightsComponent,
   SuiParamsRow,

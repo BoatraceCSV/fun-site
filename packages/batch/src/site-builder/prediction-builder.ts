@@ -8,6 +8,11 @@ import type {
   ExhibitPtBasis,
   IndexRow,
   KimariteRow,
+  MotorPtBaselineRow,
+  MotorPtBasis,
+  MotorPtHistory,
+  MotorPtMotorRow,
+  MotorPtRunRow,
   MotorStats,
   MotorStatsRow,
   OriginalExhibition,
@@ -57,6 +62,11 @@ import {
   parseRaceCode,
 } from "@fun-site/shared";
 import type { PredictorIndexFetch } from "../fetcher/index.js";
+import {
+  buildMotorPtHistoryLookup,
+  motorPtKey,
+  selectMotorPtBaselineCells,
+} from "./motor-pt-basis.js";
 
 const BOAT_COUNT = 6;
 
@@ -374,6 +384,7 @@ const toRaceRacers = (
   stadiumCode: string,
   motorStatsByKey: ReadonlyMap<string, MotorStats>,
   racerSt: RacerStRow | undefined,
+  motorPtHistoryByKey: ReadonlyMap<string, MotorPtHistory>,
 ): RaceRacer[] => {
   const estimatedByBoat = new Map<number, number>();
   const bandByBoat = new Map<number, { p25: number; p75: number }>();
@@ -410,6 +421,9 @@ const toRaceRacers = (
     sessionResults: r.sessionResults,
     ...(motorStatsByKey.has(motorStatsKey(stadiumCode, r.motorNumber))
       ? { motorStats: motorStatsByKey.get(motorStatsKey(stadiumCode, r.motorNumber)) }
+      : {}),
+    ...(motorPtHistoryByKey.has(motorPtKey(stadiumCode, r.motorNumber))
+      ? { motorPtHistory: motorPtHistoryByKey.get(motorPtKey(stadiumCode, r.motorNumber)) }
       : {}),
     ...(estimatedByBoat.has(r.boatNumber)
       ? { estimatedST: estimatedByBoat.get(r.boatNumber) }
@@ -551,6 +565,15 @@ export const buildRacePrediction = (
   weatherPtBasis?: WeatherPtBasis,
   /** この場の 展示pt 根拠 (場別 μ/σ/w のみ)。未取得なら undefined。 */
   exhibitPtBasis?: ExhibitPtBasis,
+  /** この場の モーターpt 根拠 (場別 μ/σ/w のみ)。未取得なら undefined。 */
+  motorPtBasis?: MotorPtBasis,
+  /**
+   * `(場コード-モーター番号) → 素点の内訳`。上流の内訳 CSV 由来で、
+   * 当日出走する全モーターぶんが入っている。未取得なら空 Map。
+   */
+  motorPtHistoryByKey: ReadonlyMap<string, MotorPtHistory> = new Map(),
+  /** 当日の コース補正セル全件。このレースが引いたぶんだけ抜き出して載せる。 */
+  motorPtBaselineRows: readonly MotorPtBaselineRow[] = [],
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -558,7 +581,20 @@ export const buildRacePrediction = (
   const stadiumName =
     stadium?.name ?? title?.stadium?.replace(/^ボートレース/, "") ?? parsed.stadiumId;
 
-  const racers = toRaceRacers(cards, parsed.stadiumId, motorStatsByKey, racerSt);
+  const racers = toRaceRacers(
+    cards,
+    parsed.stadiumId,
+    motorStatsByKey,
+    racerSt,
+    motorPtHistoryByKey,
+  );
+
+  // このレースの 6 基が実際に引いたコース補正セルだけを載せる (全件は日次で
+  // 40 行程度だが、レース JSON 150 本ぶん重複させる意味が無いため)。
+  const motorPtBaseline = selectMotorPtBaselineCells(
+    motorPtBaselineRows,
+    racers.flatMap((r) => r.motorPtHistory?.runs ?? []),
+  );
 
   // active 予想者ごとに PredictorPrediction を作成
   const predictors = activePredictors();
@@ -622,6 +658,8 @@ export const buildRacePrediction = (
     ...(wakuPtBasis !== undefined ? { wakuPtBasis } : {}),
     ...(weatherPtBasis !== undefined ? { weatherPtBasis } : {}),
     ...(exhibitPtBasis !== undefined ? { exhibitPtBasis } : {}),
+    ...(motorPtBasis !== undefined ? { motorPtBasis } : {}),
+    ...(motorPtBaseline.length > 0 ? { motorPtBaseline } : {}),
     generatedAt,
   };
 };
@@ -649,6 +687,12 @@ export const buildAllRacePredictions = (
   waku10: readonly Waku10Row[],
   tokutenHayami: readonly TokutenHayamiRow[],
   motorStats: readonly MotorStatsRow[],
+  /** モーターpt 素点の内訳。1 モーター 1 行の集計 */
+  motorPtMotors: readonly MotorPtMotorRow[],
+  /** 同 1 走 1 行の明細 */
+  motorPtRuns: readonly MotorPtRunRow[],
+  /** 同 コース補正セル */
+  motorPtBaseline: readonly MotorPtBaselineRow[],
   indexesByPredictor: readonly PredictorIndexFetch[],
   titles: readonly TitleRow[],
   results: readonly RaceResultRow[],
@@ -660,6 +704,8 @@ export const buildAllRacePredictions = (
   weatherPtBasisByStadium?: ReadonlyMap<string, WeatherPtBasis>,
   /** 場コード → 展示pt の根拠。`buildExhibitPtBasisByStadium` の出力。 */
   exhibitPtBasisByStadium?: ReadonlyMap<string, ExhibitPtBasis>,
+  /** 場コード → モーターpt の根拠。`buildMotorPtBasisByStadium` の出力。 */
+  motorPtBasisByStadium?: ReadonlyMap<string, MotorPtBasis>,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const racerStByCode = new Map(racerSt.map((r) => [r.raceCode, r]));
@@ -671,6 +717,7 @@ export const buildAllRacePredictions = (
   const waku10ByCode = new Map(waku10.map((w) => [w.raceCode, w]));
   const tokutenHayamiByCode = new Map(tokutenHayami.map((t) => [t.raceCode, t]));
   const motorStatsByKey = buildMotorStatsLookup(motorStats);
+  const motorPtHistoryByKey = buildMotorPtHistoryLookup(motorPtMotors, motorPtRuns);
   const titleByCode = new Map(titles.map((t) => [t.raceCode, t]));
   const resultByCode = new Map(results.map((r) => [r.raceCode, r]));
   const payoutByCode = new Map(payouts.map((p) => [p.raceCode, p]));
@@ -737,6 +784,9 @@ export const buildAllRacePredictions = (
       wakuPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
       weatherPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
       exhibitPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
+      motorPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
+      motorPtHistoryByKey,
+      motorPtBaseline,
     ),
   );
 };

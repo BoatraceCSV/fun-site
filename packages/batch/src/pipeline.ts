@@ -11,6 +11,7 @@ import { parseTriggerEvent } from "./event-parser.js";
 import { fetchAllCsvData } from "./fetcher/index.js";
 import { buildExhibitPtBasisByStadium } from "./site-builder/exhibit-pt-basis.js";
 import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js";
+import { buildMotorPtBasisByStadium } from "./site-builder/motor-pt-basis.js";
 import { buildWakuPtBasisByStadium } from "./site-builder/waku-pt-basis.js";
 import { buildWeatherPtBasisByStadium } from "./site-builder/weather-pt-basis.js";
 
@@ -101,6 +102,9 @@ export const runPipeline = async (): Promise<void> => {
     csvData.waku10,
     csvData.tokutenHayami,
     csvData.motorStats,
+    csvData.motorPtMotors,
+    csvData.motorPtRuns,
+    csvData.motorPtBaseline,
     csvData.indexesByPredictor,
     csvData.titles,
     csvData.results,
@@ -109,6 +113,7 @@ export const runPipeline = async (): Promise<void> => {
     buildWakuPtBasisByStadium(csvData.wakuTable, csvData.wakuWeights, raceDate),
     buildWeatherPtBasisByStadium(csvData.suiParams, csvData.weatherWeights),
     buildExhibitPtBasisByStadium(csvData.exhibitWeights),
+    buildMotorPtBasisByStadium(csvData.motorWeights),
   );
   console.info(`Built ${predictions.length} predictions`);
 
