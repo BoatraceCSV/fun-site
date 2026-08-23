@@ -31,19 +31,22 @@ preview-realtime / daily-sync の GCS ミラーに相乗りして配信される
 |---|---|---|---|
 | `waku_table` | `estimate/stadium/win_rate.csv` | 24場 × 4季節 × 6コースの長期勝率（= 平均得点。1着率(%) ではない）。枠番pt の生値ソース | 枠番詳細ページのコース強度テーブルと計算過程 |
 | `sui_params` | `estimate/stadium/sui_params.csv` | 24場 × 6特徴量 × 6コースの気象線形回帰係数。気象pt の生値ソース（切片 `base_c*` は 枠番pt と重複するため使わない） | 気象詳細ページの係数テーブルと計算過程 |
-| `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` / `weather` 成分ぶん | 上記 2 つと組で raw → 偏差値pt → 寄与 の変換 |
+| `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` / `weather` / `exhibit` 成分ぶん | 上記 2 つと組で raw → 偏差値pt → 寄与 の変換。`exhibit` は**単独で**（生値がレース内で閉じているため静的テーブル不要） |
 
 取得は [`fetchWakuTableCsvText()`](../packages/batch/src/fetcher/csv-client.ts) /
 `fetchSuiParamsCsvText()` と `fetchWeightsCsv(predictorId, date)`。weights は
 上流 `build_index.py` と同じく**対象月以下で最新**のファイルを使うため、対象月から
 1 ヶ月ずつ最大 12 ヶ月遡って最初に見つかったものを採用する（遡り中の試行はリトライ無し）。
-weights CSV は 1 回だけ取得して `waku` / `weather` の 2 成分に切り分ける。
+weights CSV は 1 回だけ取得して `waku` / `weather` / `exhibit` の 3 成分に切り分ける。
 
 パースは [`stadium-table-schemas.ts`](../packages/batch/src/fetcher/stadium-table-schemas.ts)、
-レース単位への切り出しは [`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) と
-[`weather-pt-basis.ts`](../packages/batch/src/site-builder/weather-pt-basis.ts)。
+レース単位への切り出しは [`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) /
+[`weather-pt-basis.ts`](../packages/batch/src/site-builder/weather-pt-basis.ts) /
+[`exhibit-pt-basis.ts`](../packages/batch/src/site-builder/exhibit-pt-basis.ts)。
 テーブルと weights の片方でも欠けるとその成分を再現できないので、その場合は
 `wakuPtBasis` / `weatherPtBasis` を付けず UI 側が「テーブル未取得」の表示に倒れる。
+展示pt は突き合わせる静的テーブルが無いので、weights が取れていれば
+`exhibitPtBasis` が付く。
 
 廃止済み:
 
@@ -100,7 +103,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
 | `RaceResultRow` / `RaceResultFinish` / `RaceResultCourse` / `RaceResultWeather` | `results/realtime` | 着順、決まり手、ST、天候 |
 | `WakuTableRow` / `StadiumComponentWeightsRow` | `estimate/stadium/win_rate.csv`, `estimate/stadium/weights/...` | 場コード × 季節 × 6コース勝率 / 場名 × (μ, σ, w)（成分指定でパースする）。レース単位に切り出したものが `RacePrediction.wakuPtBasis`（`WakuPtBasis`） |
-| `SuiParamsRow` | `estimate/stadium/sui_params.csv` | 場名 × 6特徴量 × 6コースの気象回帰係数（切片 `base_c*` は読まない）。weights の `weather` 成分と組でレース単位に切り出したものが `RacePrediction.weatherPtBasis`（`WeatherPtBasis`） |
+| `SuiParamsRow` | `estimate/stadium/sui_params.csv` | 場名 × 6特徴量 × 6コースの気象回帰係数（切片 `base_c*` は読まない）。weights の `weather` 成分と組でレース単位に切り出したものが `RacePrediction.weatherPtBasis`（`WeatherPtBasis`）。weights の `exhibit` 成分だけを切り出したものが `RacePrediction.exhibitPtBasis`（`ExhibitPtBasis`。展示pt は静的テーブルを引かないので組む相手がいない） |
 | `RacePayoutRow` / `SinglePayout` / `CombinationPayout` | `results/payouts` | 単勝・複勝・2連単・2連複・拡連複（3スロット固定）・3連単・3連複の組番／払戻金／人気 |
 
 ### 統合した予想型

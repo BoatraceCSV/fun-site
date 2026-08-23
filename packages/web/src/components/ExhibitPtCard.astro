@@ -1,48 +1,66 @@
 ---
 import type {
+  ExhibitPtBasis,
   ExhibitPtBoatAggregate,
+  ExhibitPtRaw,
+  ExhibitPtSteps,
   RacePreviewBoat,
   RaceRacer,
 } from "@fun-site/shared";
-import { BOAT_COLORS, EXHIBIT_PT_DAILY_NEUTRAL, isValidBoatNumber } from "@fun-site/shared";
+import {
+  BOAT_COLORS,
+  EXHIBIT_PT_DAILY_NEUTRAL,
+  exhibitPtMatchesIndex,
+  isValidBoatNumber,
+} from "@fun-site/shared";
 
 interface Props {
   racer: RaceRacer;
-  /** 展示pt と展示タイム / スタート展示ST を並べた参考値 */
+  /** 展示pt と展示タイム / スタート展示ST を並べた集計 */
   aggregate: ExhibitPtBoatAggregate;
   /** 体重・チルト（tkz 由来）。preview 未取得のレースでは undefined */
   previewBoat: RacePreviewBoat | undefined;
-  /** オリジナル展示の計測項目ラベル。未取得なら空配列 */
-  originalLabels: readonly string[];
-  /** `originalLabels` と同順のこの艇の計測値。未取得なら空配列 */
-  originalValues: readonly (number | null)[];
   /** 寄与pt = 場別重み × 展示pt。index CSV 由来 */
   contribution: number | undefined;
   /** 強さpt（この艇の全成分の寄与合計） */
   strengthPt: number;
   /** 評価が daily（展示前の中立値）か */
   isDaily: boolean;
+  /**
+   * 展示pt の根拠（場別 μ/σ/w）。weights CSV 未取得のビルド / 古い JSON では
+   * undefined で、その場合は生値までしか出せない。
+   */
+  basis: ExhibitPtBasis | undefined;
+  /** 系列ごとのレース内偏差値と生値。μ/σ/w が無くてもここまでは出せる */
+  raw: ExhibitPtRaw | undefined;
+  /** 偏差値・寄与まで再現した計算過程。`basis` が無ければ undefined */
+  steps: ExhibitPtSteps | undefined;
 }
 
 const {
   racer,
   aggregate,
   previewBoat,
-  originalLabels,
-  originalValues,
   contribution,
   strengthPt,
   isDaily,
+  basis,
+  raw,
+  steps,
 } = Astro.props;
 
 const color = isValidBoatNumber(racer.boatNumber) ? BOAT_COLORS[racer.boatNumber] : undefined;
 const exhibitPt = aggregate.exhibitPt;
 
-/** 場別重み w。寄与 = w × 展示pt の関係から逆算する（weights CSV は未取り込み） */
-const weight =
-  exhibitPt !== undefined && contribution !== undefined && exhibitPt !== 0
-    ? contribution / exhibitPt
-    : undefined;
+/**
+ * 再現値が index CSV の値と一致するか。
+ *
+ * 過去日を再ビルドすると、当時の index を作ったあとに重みが更新されていたり、
+ * 直前情報 CSV が差し替わっていたりしてずれることがある。ずれたまま「= 展示pt」と
+ * 書くと嘘になるので、一致したときだけ検算済みとして扱う（daily の行は計算式の外で
+ * 50 に固定されるので対象外）。
+ */
+const reproduced = !isDaily && exhibitPtMatchesIndex(steps?.pt, exhibitPt);
 
 /** 偏差値 → z。「この場の平均から何σ上か」の言い換えに使う */
 const z = exhibitPt !== undefined ? (exhibitPt - 50) / 10 : undefined;
@@ -56,7 +74,7 @@ const isNeutral = exhibitPt !== undefined && exhibitPt === EXHIBIT_PT_DAILY_NEUT
 
 /**
  * 展示pt の順位と展示タイムの順位のずれ。展示pt は展示タイムだけで決まる値では
- * ないので、ずれ自体は異常ではない。読み手が差分に気づけるように出す。
+ * ないので（オリジナル展示 3 項目と等重み）、ずれ自体は異常ではない。
  */
 const rankGap = aggregate.rankGap;
 
@@ -74,9 +92,17 @@ const num = (v: number | undefined | null, digits: number): string =>
   v === undefined || v === null ? "—" : v.toFixed(digits);
 
 /** ST は符号付きで出す（負値はフライング側） */
-const st = (v: number | null): string => (v === null ? "—" : v < 0 ? `F${Math.abs(v).toFixed(2)}` : v.toFixed(2));
+const st = (v: number | null): string =>
+  v === null ? "—" : v < 0 ? `F${Math.abs(v).toFixed(2)}` : v.toFixed(2);
 
-const hasOriginal = originalLabels.length > 0;
+const signed = (v: number, digits: number): string => `${v >= 0 ? "+" : ""}${v.toFixed(digits)}`;
+
+/** 式の中に埋める負数は括弧で囲む（「50 + 10 × -1.665」を避ける） */
+const term = (v: number, digits: number): string =>
+  v < 0 ? `(${v.toFixed(digits)})` : v.toFixed(digits);
+
+/** 計算過程を出せるか（生値が 1 系列でも取れているか） */
+const hasBreakdown = raw !== undefined && raw.usedCount > 0;
 ---
 
 <section
@@ -125,16 +151,13 @@ const hasOriginal = originalLabels.length > 0;
         )}
       </div>
 
-      {/* 展示計測 → 展示pt → 寄与 のフロー */}
+      {/* 展示走行の評価（生値） → 展示pt → 寄与 のフロー */}
       <ol class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-purple-900">
         <li class="inline-flex items-baseline gap-1">
-          <span class="text-purple-700">展示走行の評価</span>
-          <span
-            class="font-bold text-purple-400"
-            title="展示タイム・スタート展示・周回展示をどう重み付けしているかは BoatraceCSV 側の実装で、fun-site は取り込んでいません"
-          >
-            再現不可
+          <span class="text-purple-700">
+            展示走行の評価{raw !== undefined && raw.usedCount > 0 && `（${raw.usedCount}項目の平均）`}
           </span>
+          <span class="font-mono font-bold tabular-nums">{num(raw?.raw, 2)}</span>
         </li>
         <li aria-hidden="true" class="text-purple-400">→</li>
         <li class="inline-flex items-baseline gap-1">
@@ -153,9 +176,9 @@ const hasOriginal = originalLabels.length > 0;
         </li>
       </ol>
 
-      {weight !== undefined && !isDaily && (
+      {basis !== undefined && !isDaily && (
         <p class="mt-1.5 text-[10px] text-purple-700">
-          展示pt = 50 + 10 × z、寄与 = 場別重み {weight.toFixed(3)} × 展示pt。
+          展示pt = 50 + 10 × z、寄与 = 場別重み {basis.weight.toFixed(3)} × 展示pt。
           重みは場別・月次で学習された値です。
         </p>
       )}
@@ -176,25 +199,165 @@ const hasOriginal = originalLabels.length > 0;
         rankGap !== 0 && (
           <p class="mt-1.5 text-[10px] text-purple-700">
             {rankNote}
-            展示ptは展示タイムだけの数字ではないので、順位が一致しないことはあります。
+            展示ptは展示タイムだけの数字ではなく、オリジナル展示と等重みの平均です。
           </p>
         )
       )}
     </div>
 
-    {/* 同じ直前情報スナップショットの計測値（参考値） */}
+    {/* 計算過程: 直前情報の計測値から index CSV の値まで */}
     <div>
       <h3 class="text-xs font-bold text-gray-500 mb-1.5">
-        この艇の直前情報<span class="ml-1 font-normal text-gray-400"
-          >（参考値・展示ptの内訳ではありません）</span
+        展示ptの計算過程
+        {reproduced && <span class="ml-1 font-normal text-emerald-600">（表示値と一致）</span>}
+        {isDaily && hasBreakdown && steps !== undefined && (
+          <span class="ml-1 font-normal text-amber-600">（参考: この展示なら）</span>
+        )}
+      </h3>
+
+      {!hasBreakdown ? (
+        <p class="text-[11px] text-gray-500">
+          この艇は展示タイムもオリジナル展示も取れていないため、計算過程を出せません。
+          展示ptは中立値 {EXHIBIT_PT_DAILY_NEUTRAL} で補完されています。
+        </p>
+      ) : (
+        <div class="overflow-x-auto">
+          {/* 1. 系列ごとのレース内偏差値 */}
+          <table class="w-full text-[11px] border-collapse mb-2">
+            <caption class="text-left text-[10px] text-gray-500 pb-1">
+              1. 計測項目ごとに、この6艇の中での偏差値にする（速いほど高い）
+            </caption>
+            <thead>
+              <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                <th scope="col" class="text-left py-1 px-1 font-medium">計測項目</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">この艇の値</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">6艇内順位</th>
+                <th scope="col" class="text-right py-1 px-1 font-medium">レース内偏差値</th>
+              </tr>
+            </thead>
+            <tbody class="text-gray-800">
+              {raw?.terms.map((t) => (
+                <tr class={`border-b border-gray-100 ${t.hensachi === null ? "text-gray-400" : ""}`}>
+                  <th scope="row" class="text-left py-1 px-1 font-medium">
+                    {t.label}
+                    {t.source === "original" && (
+                      <span class="ml-1 font-normal text-gray-400 text-[10px]">オリジナル展示</span>
+                    )}
+                  </th>
+                  <td class="py-1 px-1 text-right font-mono tabular-nums">
+                    {num(t.value, 2)}
+                    {t.source === "exhibitionTime" &&
+                      aggregate.gapToFastestTime !== null && (
+                        <span class="ml-1 text-[10px] font-normal text-gray-400">
+                          {aggregate.gapToFastestTime === 0
+                            ? "最速"
+                            : `+${aggregate.gapToFastestTime.toFixed(2)}`}
+                        </span>
+                      )}
+                  </td>
+                  <td class="py-1 px-1 text-right font-mono tabular-nums text-gray-500">
+                    {t.rank === null ? "—" : `${t.rank}位`}
+                  </td>
+                  <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                    {t.hensachi === null ? "—" : t.hensachi.toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <th scope="row" colspan="3" class="text-right py-1 px-1 font-medium text-gray-500">
+                  展示走行の評価（{raw?.usedCount}項目の等重み平均）
+                </th>
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                  {num(raw?.raw, 2)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* 2〜4. 偏差値化と重み付け */}
+          {basis === undefined || steps === undefined || steps.raw === null ? (
+            <p class="text-[11px] text-gray-500">
+              このビルドでは場別の μ / σ / 重み
+              （<span class="font-mono">estimate/stadium/weights</span>）を取得できていないため、
+              ここから先を出せません。展示ptは BoatraceCSV が出した値をそのまま表示しています。
+            </p>
+          ) : (
+            <>
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    <th scope="col" class="text-left py-1 px-1 font-medium">手順</th>
+                    <th scope="col" class="text-left py-1 px-1 font-medium">計算</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">値</th>
+                  </tr>
+                </thead>
+                <tbody class="text-gray-800">
+                  <tr class="border-b border-gray-100">
+                    <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                      2. 場内で標準化
+                    </th>
+                    <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                      ({term(steps.raw, 2)} − {term(basis.mu, 3)}) ÷ {basis.sigma.toFixed(3)}
+                    </td>
+                    <td class="py-1 px-1 text-right font-mono tabular-nums font-bold">
+                      {signed(steps.z, 3)}
+                    </td>
+                  </tr>
+                  <tr class="border-b border-gray-100">
+                    <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                      3. 偏差値に直す
+                    </th>
+                    <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                      50 + 10 × {term(steps.z, 3)}
+                    </td>
+                    <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-purple-800">
+                      {steps.pt.toFixed(2)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row" class="text-left py-1 px-1 font-medium text-gray-500">
+                      4. 重みを掛ける
+                    </th>
+                    <td class="py-1 px-1 font-mono tabular-nums text-gray-600">
+                      {basis.weight.toFixed(3)} × {steps.pt.toFixed(2)}
+                    </td>
+                    <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-purple-800">
+                      {steps.contribution.toFixed(2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <p class="mt-1.5 text-[10px] text-gray-400">
+                μ = {basis.mu.toFixed(3)} / σ = {basis.sigma.toFixed(3)} / 重み w ={" "}
+                {basis.weight.toFixed(3)} はこの場の値（{basis.weightsMonth} 版の
+                <span class="font-mono">weights/{basis.predictorId}</span>。直近6ヶ月から月次で学習）。
+                計測項目ごとの重みはありません — 全項目が等重みです。
+                {!isDaily && !reproduced && exhibitPt !== undefined && (
+                  <span class="text-amber-700">
+                    {" "}再現値 {steps.pt.toFixed(2)} が表示値 {exhibitPt.toFixed(2)} と
+                    一致していません。この評価を作ったあとに重みまたは直前情報が
+                    更新された過去日のレースです。
+                  </span>
+                )}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* 展示ptの入力ではない参考値 */}
+    <div>
+      <h3 class="text-xs font-bold text-gray-500 mb-1.5">
+        この艇のその他の直前情報<span class="ml-1 font-normal text-gray-400"
+          >（展示ptの入力ではありません）</span
         >
       </h3>
 
-      {aggregate.exhibitionTime === null &&
-      aggregate.exhibitionStartTiming === null &&
-      previewBoat === undefined ? (
+      {aggregate.exhibitionStartTiming === null && previewBoat === undefined ? (
         <p class="text-[11px] text-gray-500">
-          このレースは直前情報（展示タイム・スタート展示）を取得できていません。
+          このレースはスタート展示・体重・チルトを取得できていません。
         </p>
       ) : (
         <div class="space-y-2">
@@ -202,8 +365,6 @@ const hasOriginal = originalLabels.length > 0;
             <table class="w-full text-[11px] border-collapse">
               <thead>
                 <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
-                  <th scope="col" class="text-right py-1 px-1 font-medium">展示タイム</th>
-                  <th scope="col" class="text-right py-1 px-1 font-medium">トップ差</th>
                   <th scope="col" class="text-right py-1 px-1 font-medium">展示ST</th>
                   <th scope="col" class="text-right py-1 px-1 font-medium">体重kg</th>
                   <th scope="col" class="text-right py-1 px-1 font-medium">チルト</th>
@@ -211,21 +372,6 @@ const hasOriginal = originalLabels.length > 0;
               </thead>
               <tbody class="font-mono tabular-nums text-gray-800">
                 <tr>
-                  <td class="text-right py-1 px-1 font-bold">
-                    {num(aggregate.exhibitionTime, 2)}
-                    {aggregate.timeRank !== null && (
-                      <span class="ml-1 text-[10px] font-normal text-gray-400">
-                        {aggregate.timeRank}位
-                      </span>
-                    )}
-                  </td>
-                  <td class="text-right py-1 px-1 text-gray-500">
-                    {aggregate.gapToFastestTime === null
-                      ? "—"
-                      : aggregate.gapToFastestTime === 0
-                        ? "最速"
-                        : `+${aggregate.gapToFastestTime.toFixed(2)}`}
-                  </td>
                   <td class="text-right py-1 px-1">
                     {st(aggregate.exhibitionStartTiming)}
                     {aggregate.startTimingRank !== null && (
@@ -247,47 +393,13 @@ const hasOriginal = originalLabels.length > 0;
             </table>
           </div>
 
-          {hasOriginal && (
-            <div class="overflow-x-auto">
-              <table class="w-full text-[11px] border-collapse">
-                <thead>
-                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
-                    <th scope="col" colspan={originalLabels.length} class="text-left py-1 px-1 font-medium">
-                      オリジナル展示
-                    </th>
-                  </tr>
-                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
-                    {originalLabels.map((label) => (
-                      <th scope="col" class="text-right py-1 px-1 font-medium">{label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody class="font-mono tabular-nums text-gray-800">
-                  <tr>
-                    {originalLabels.map((_, i) => (
-                      <td class="text-right py-1 px-1">{num(originalValues[i] ?? null, 2)}</td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
           <p class="text-[10px] text-gray-400">
-            展示タイム・展示STは小さいほど速く、展示STの「F」表示はフライング側です。
-            順位はこのレースの6艇内の順位（同値は同順位）。
-            オリジナル展示の計測項目は場により異なります。
+            スタート展示ST（<span class="font-mono">previews/stt</span>）は展示ptの入力では
+            ありません。上流が stt から読むのは進入コースだけで、それを使うのは枠番pt と
+            気象pt のほうです。体重・チルトはどの成分の入力にもなっていません。
           </p>
         </div>
       )}
     </div>
-
-    {/* 再現できない理由 */}
-    <p class="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
-      展示ptそのものの内訳（展示走行のどの計測値をどう重み付けするか）は BoatraceCSV 側の
-      実装で、fun-site は重みを取り込んでいません。展示ptは
-      <span class="font-bold">BoatraceCSV が出した値をそのまま表示</span>し、
-      同じ直前情報スナップショットの計測値を横に並べています。
-    </p>
   </div>
 </section>

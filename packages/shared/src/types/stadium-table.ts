@@ -8,8 +8,13 @@
  *
  * win_rate.csv + weights で 枠番pt (`N枠_枠番pt`) と 寄与 (`N枠_寄与_枠番pt`) を、
  * sui_params.csv + weights + 当日の水面気象で 気象pt (`N枠_気象pt`) と
- * 寄与 (`N枠_寄与_気象pt`) を fun-site 側で **完全に再現** できる。計算式は
- * {@link ../utils/waku-pt.js} / {@link ../utils/weather-pt.js} を参照。
+ * 寄与 (`N枠_寄与_気象pt`) を、weights + 当日の直前情報で 展示pt (`N枠_展示pt`) と
+ * 寄与 (`N枠_寄与_展示pt`) を fun-site 側で **完全に再現** できる。計算式は
+ * {@link ../utils/waku-pt.js} / {@link ../utils/weather-pt.js} /
+ * {@link ../utils/exhibit-pt.js} を参照。
+ *
+ * 展示pt だけは静的テーブルを引かない（生値がレース内で閉じている）ので、
+ * 必要なのは weights CSV の 3 列だけである。
  */
 
 /** win_rate.csv の季節軸。上流 `SEASON_BY_MONTH` と同じ 4 値 */
@@ -34,10 +39,10 @@ export type WakuTableRow = {
 };
 
 /**
- * weights CSV が持つ成分のうち、fun-site が生値から pt を再現している 2 つ。
- * CSV の列名サフィックス（`mu_waku` / `mu_weather` 等）と同じ綴り。
+ * weights CSV が持つ成分のうち、fun-site が生値から pt を再現している 3 つ。
+ * CSV の列名サフィックス（`mu_waku` / `mu_weather` / `mu_exhibit` 等）と同じ綴り。
  */
-export const STADIUM_WEIGHTS_COMPONENTS = ["waku", "weather"] as const;
+export const STADIUM_WEIGHTS_COMPONENTS = ["waku", "weather", "exhibit"] as const;
 
 export type StadiumWeightsComponent = (typeof STADIUM_WEIGHTS_COMPONENTS)[number];
 
@@ -133,6 +138,33 @@ export type WeatherPtBasis = {
   /** その場の気象pt 生値の標準偏差 */
   readonly sigma: number;
   /** 強さpt に足し込むときの気象pt の重み（非負・全成分で合計 1） */
+  readonly weight: number;
+  /** 由来した weights ファイルの月 ("YYYY-MM")。学習窓はこの 6 ヶ月前〜前月 */
+  readonly weightsMonth: string;
+};
+
+// === 展示pt の根拠（静的テーブル無し） ===
+
+/**
+ * 1 レースぶんの 展示pt の根拠。`RacePrediction.exhibitPtBasis` に載る。
+ *
+ * 枠番pt / 気象pt と違い、**引く静的テーブルが無い**。展示pt の生値は
+ * 「展示タイム + オリジナル展示 1〜3 をレース内で偏差値化して等重み平均した値」で、
+ * そのレースの直前情報だけで閉じているためである（項目別の重みは存在しない）。
+ * したがって外から要るのは場別の μ / σ / w だけ。
+ *
+ * 重みは月次で更新されうるので、枠番pt / 気象pt と同じく **ビルド時点の値を
+ * レース JSON に焼き込む**。生値の材料（展示タイム・オリジナル展示）はレース JSON の
+ * `preview` に既にあるのでここには持たない。
+ */
+export type ExhibitPtBasis = {
+  /** μ / σ / w の由来予想者 ID。レース詳細の primary predictor と同じ */
+  readonly predictorId: string;
+  /** その場の展示pt 生値（レース内偏差値の平均）の平均。ほぼ 50 */
+  readonly mu: number;
+  /** その場の展示pt 生値の標準偏差 */
+  readonly sigma: number;
+  /** 強さpt に足し込むときの展示pt の重み（非負・全成分で合計 1） */
   readonly weight: number;
   /** 由来した weights ファイルの月 ("YYYY-MM")。学習窓はこの 6 ヶ月前〜前月 */
   readonly weightsMonth: string;

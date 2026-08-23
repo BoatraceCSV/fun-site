@@ -48,6 +48,7 @@ export {
 export type {
   CourseCoefs,
   CourseRates,
+  ExhibitPtBasis,
   StadiumComponentWeightsRow,
   StadiumWeightsComponent,
   SuiParamsRow,

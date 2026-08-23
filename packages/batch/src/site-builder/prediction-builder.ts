@@ -5,6 +5,7 @@ import type {
   BetHitStatus,
   BettingPicks,
   ComponentKey,
+  ExhibitPtBasis,
   IndexRow,
   KimariteRow,
   MotorStats,
@@ -548,6 +549,8 @@ export const buildRacePrediction = (
   wakuPtBasis?: WakuPtBasis,
   /** この場の 気象pt 根拠 (気象回帰係数 + 場別 μ/σ/w)。未取得なら undefined。 */
   weatherPtBasis?: WeatherPtBasis,
+  /** この場の 展示pt 根拠 (場別 μ/σ/w のみ)。未取得なら undefined。 */
+  exhibitPtBasis?: ExhibitPtBasis,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -618,6 +621,7 @@ export const buildRacePrediction = (
     })(),
     ...(wakuPtBasis !== undefined ? { wakuPtBasis } : {}),
     ...(weatherPtBasis !== undefined ? { weatherPtBasis } : {}),
+    ...(exhibitPtBasis !== undefined ? { exhibitPtBasis } : {}),
     generatedAt,
   };
 };
@@ -654,6 +658,8 @@ export const buildAllRacePredictions = (
   wakuPtBasisByStadium?: ReadonlyMap<string, WakuPtBasis>,
   /** 場コード → 気象pt の根拠。`buildWeatherPtBasisByStadium` の出力。 */
   weatherPtBasisByStadium?: ReadonlyMap<string, WeatherPtBasis>,
+  /** 場コード → 展示pt の根拠。`buildExhibitPtBasisByStadium` の出力。 */
+  exhibitPtBasisByStadium?: ReadonlyMap<string, ExhibitPtBasis>,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const racerStByCode = new Map(racerSt.map((r) => [r.raceCode, r]));
@@ -730,6 +736,7 @@ export const buildAllRacePredictions = (
       kimariteByCode.get(cards.raceCode),
       wakuPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
       weatherPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
+      exhibitPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
     ),
   );
 };

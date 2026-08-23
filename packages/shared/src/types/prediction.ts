@@ -5,7 +5,7 @@ import type { BettingPicks } from "../utils/one-mark-distance.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
 import type { RaceResultRow } from "./race-result.js";
-import type { WakuPtBasis, WeatherPtBasis } from "./stadium-table.js";
+import type { ExhibitPtBasis, WakuPtBasis, WeatherPtBasis } from "./stadium-table.js";
 import type { TokutenHayamiRacer } from "./tokuten-hayami.js";
 
 /** 出走表に表示する選手情報（race_cards 由来の主要項目を集約） */
@@ -477,5 +477,16 @@ export type RacePrediction = {
    * (UI 側は undefined フォールバックすること)。
    */
   readonly weatherPtBasis?: WeatherPtBasis;
+  /**
+   * 展示pt の根拠（場別 μ/σ/w のみ）。展示詳細ページが 展示pt の内訳を
+   * 再現するのに使う。生値の材料（展示タイム・オリジナル展示）は `preview` から
+   * 組み立てるのでここには入っていない — 展示pt は引く静的テーブルが無い唯一の
+   * 再現可能成分である。
+   *
+   * 上流の `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` 由来で、
+   * 取得できなかったビルドと **2026-08-23 以前の JSON では undefined**
+   * (UI 側は undefined フォールバックすること)。
+   */
+  readonly exhibitPtBasis?: ExhibitPtBasis;
   readonly generatedAt: string;
 };
