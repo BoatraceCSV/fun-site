@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import type { PredictorSpec, RacePrediction } from "@fun-site/shared";
-import { activePredictors, allPredictors, isSettledResult } from "@fun-site/shared";
-import { fetchHistoricalPredictions } from "../site-builder/data-writer.js";
+import type { PredictorSpec } from "@fun-site/shared";
+import { activePredictors, allPredictors } from "@fun-site/shared";
+import type { PredictionDigest } from "./prediction-digest.js";
 
 /**
  * 1 予想者ぶんの 1 ヶ月集計。回収率 = payoutYen / betCostYen (betCostYen=0 のときは null)。
@@ -117,7 +117,7 @@ const accumulate = (
 };
 
 /**
- * `predictions` (= 任意の日数ぶんの RacePrediction) を予想者 × 月でグループ化し、
+ * `digests` (= 任意の日数ぶんの PredictionDigest) を予想者 × 月でグループ化し、
  * 各予想者の月次・通算統計を返す。
  *
  * **直前 (realtime) 買い目のみ** を対象に、直前買い目が組めた確定済みレースを
@@ -128,7 +128,7 @@ const accumulate = (
  * 純関数で副作用なし。テストはこの関数に対して書く。
  */
 export const aggregatePredictorStats = (
-  predictions: readonly RacePrediction[],
+  digests: readonly PredictionDigest[],
 ): PredictorStatsReport => {
   // predictorId → month → stats のバケット
   const byPredictor = new Map<string, Map<string, PredictorMonthlyStats>>();
@@ -138,12 +138,11 @@ export const aggregatePredictorStats = (
     byPredictor.set(p.id, new Map());
   }
 
-  for (const pred of predictions) {
+  for (const pred of digests) {
     // 未確定レース（結果未着・中止・不成立）は母数・購入額・分子から一括除外。
-    if (!isSettledResult(pred.raceResult)) continue;
+    if (!pred.settled) continue;
     const month = monthOf(pred.raceDate);
-    const perPredictor = pred.predictions ?? [];
-    for (const pp of perPredictor) {
+    for (const pp of pred.predictors) {
       let perMonth = byPredictor.get(pp.predictorId);
       if (!perMonth) {
         // レジストリに無い (退役済みで registry からも削除された)
@@ -152,19 +151,11 @@ export const aggregatePredictorStats = (
         byPredictor.set(pp.predictorId, perMonth);
       }
       const current = perMonth.get(month) ?? emptyMonthStats(month);
-      const realtime = pp.betPayout.realtime;
-      // 集計対象は「直前買い目が組めた」レース (realtime.betCostYen > 0) のみ。
-      if (realtime.betCostYen === 0) continue;
+      // 集計対象は「直前買い目が組めた」レース (betCostYen > 0) のみ。
+      if (pp.betCostYen === 0) continue;
       perMonth.set(
         month,
-        accumulate(
-          current,
-          realtime.betCostYen,
-          realtime.payoutYen,
-          pp.betHitStatus.dailyHit,
-          pp.betHitStatus.realtimeHit,
-          realtime.betCount,
-        ),
+        accumulate(current, pp.betCostYen, pp.payoutYen, pp.dailyHit, pp.realtimeHit, pp.betCount),
       );
     }
   }
@@ -252,30 +243,16 @@ export const aggregatePredictorStats = (
 };
 
 /**
- * `data/predictions/{date}/{raceCode}.json` を GCS から日付範囲ぶん引いてきて
+ * 集計期間ぶんの `PredictionDigest[]` (`collectPredictionDigests()` の結果) から
  * 予想者統計レポートを生成し、`packages/web/src/data/predictors/stats.json` に保存する。
  *
- * 呼び出し側は対象日付リストを与える。Phase 1 では Web ビルド時に
- * 「`activePredictors()` の最古 `startedAt` から当日まで」を毎回フル集計する想定
- * (件数が少ないので問題ない)。Phase 3 で increment 化を検討。
+ * 呼び出し側 (pipeline) が `datesForActivePredictors()` の範囲でダイジェストを集め、
+ * `buildPredictorBreakdown` と同じ配列を渡す (元 JSON の読み込みは 1 回で済む)。
  */
 export const buildPredictorStats = async (
-  dates: readonly string[],
+  digests: readonly PredictionDigest[],
 ): Promise<PredictorStatsReport> => {
-  const all: RacePrediction[] = [];
-  for (const date of dates) {
-    try {
-      const day = await fetchHistoricalPredictions(date);
-      all.push(...day);
-    } catch (error) {
-      console.warn(
-        `Failed to fetch predictions for ${date}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  }
-  const report = aggregatePredictorStats(all);
+  const report = aggregatePredictorStats(digests);
   await mkdir(dirname(LOCAL_STATS_PATH), { recursive: true });
   await writeFile(LOCAL_STATS_PATH, JSON.stringify(report, null, 2), "utf-8");
   console.info(

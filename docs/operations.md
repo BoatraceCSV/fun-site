@@ -114,11 +114,18 @@ gcloud run jobs update fun-site-batch \
 |---|---|---|
 | `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` | レース予想の生 JSON。節集計の incremental キャッシュにヒットしなかった過去日を補完するために `fetchHistoricalPredictions(date)` で取得する | 当日ビルド毎に上書き |
 | `gs://${GCS_DATA_BUCKET}/_meta/series-state.json` | stadium × date のスナップショット (`settledRaceCount` / `hitCount` / `totalBetCostYen` / `totalPayoutYen` + `dayLabel`) を保持。過去日エントリは再計算せずに再利用、当日分は毎ビルド上書き、`SERIES_LOOKBACK_DAYS` 上限を超えた古い日は prune | 当日ビルド毎 |
+| `gs://${GCS_DATA_BUCKET}/_meta/prediction-digests/{YYYY-MM-DD}.json` | 予想者統計 (`/predictors`) と分析軸別集計 (`/stats`) 用の日別ダイジェスト (`PredictionDigest[]`)。集計に必要な項目だけを持つ軽量版で、過去日はこれを再利用、当日は毎ビルド上書き。無い過去日は `predictions/{date}/` から射影して補完する ([batch.md](batch.md) 4.4) | 当日ビルド毎 (過去日は初回のみ) |
 | `packages/web/src/data/_meta/series-summary.json` | Astro が読む集計結果 (`byStadium[stadiumId]: SeriesBetPayoutAggregate`)。GCS にはアップロードせず Astro ビルド入力としてのみ使う | 当日ビルド毎 |
 
 通常運用では追加の操作は不要。手動で state を捨てて作り直したい場合は GCS の
 `_meta/series-state.json` を削除すれば、次回ビルドで `lookback` 範囲を GCS から
 再構築する (一時的に集計が縮退するだけで致命的ではない)。
+
+統計集計のダイジェストも同様で、`_meta/prediction-digests/<date>.json` を削除すれば
+次回ビルドでその日だけ `predictions/<date>/` から作り直す。全日を作り直したいときは
+コード側で `PREDICTION_DIGEST_SCHEMA_VERSION` を上げる。初回 (キャッシュが無い状態)
+のビルドは全期間の予想 JSON を読むため数分かかるが、メモリは日単位で解放されるので
+期間の長さで OOM にはならない。
 
 ## アーカイブ日付インデックスのシード
 

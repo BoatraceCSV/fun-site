@@ -1,6 +1,11 @@
 import type { RacePrediction, RaceResultRow } from "@fun-site/shared";
 import { describe, expect, it } from "vitest";
-import { aggregatePredictorStats } from "../aggregator/predictor-stats.js";
+import { toPredictionDigest } from "../aggregator/prediction-digest.js";
+import { aggregatePredictorStats as aggregateDigests } from "../aggregator/predictor-stats.js";
+
+/** テストは RacePrediction で組み立て、集計器には本番と同じダイジェストを渡す。 */
+const aggregatePredictorStats = (predictions: readonly RacePrediction[]) =>
+  aggregateDigests(predictions.map(toPredictionDigest));
 
 const PID = "v1_basic"; // A君予想 (active)
 

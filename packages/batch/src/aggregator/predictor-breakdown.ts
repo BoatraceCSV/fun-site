@@ -1,17 +1,15 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type {
-  AiEvaluation,
   Bucket,
   Metrics,
   PredictorBreakdown,
   PredictorBreakdownReport,
   PredictorSpec,
-  RacePrediction,
   TimeseriesPoint,
 } from "@fun-site/shared";
-import { STADIUMS, allPredictors, isSettledResult } from "@fun-site/shared";
-import { fetchHistoricalPredictions } from "../site-builder/data-writer.js";
+import { STADIUMS, allPredictors } from "@fun-site/shared";
+import type { PredictionDigest } from "./prediction-digest.js";
 
 /**
  * 統計ページ (`/stats`) 用の分析軸別集計。
@@ -97,16 +95,6 @@ const finalize = (acc: Acc): Metrics => ({
 const binKeyOf = (bins: readonly { key: string; max: number }[], value: number): string =>
   bins.find((b) => value <= b.max)?.key ?? bins[bins.length - 1]!.key;
 
-/** 直前 AI 評価の strengthPt 最大艇 (= 本命) の枠番。同 pt は若い枠番優先。 */
-const honmeiWaku = (evaluation: AiEvaluation | undefined): number | undefined => {
-  if (!evaluation || evaluation.entries.length === 0) return undefined;
-  let best = evaluation.entries[0]!;
-  for (const e of evaluation.entries) {
-    if (e.strengthPt > best.strengthPt) best = e;
-  }
-  return best.boatNumber;
-};
-
 /**
  * 1 軸ぶんのバケット集計器。`order` で表示順 (key → 順序) を制御し、
  * 未知 key は末尾に回す。`raceCount === 0` のバケットは出力しない。
@@ -145,11 +133,11 @@ class AxisAggregator {
 }
 
 /**
- * `predictions` (= 任意の日数ぶんの RacePrediction) を予想者ごとに直前のみ集計し、
+ * `digests` (= 任意の日数ぶんの PredictionDigest) を予想者ごとに直前のみ集計し、
  * 7 軸の分析レポートを返す。純関数で副作用なし。テストはこの関数に対して書く。
  */
 export const aggregatePredictorBreakdown = (
-  predictions: readonly RacePrediction[],
+  digests: readonly PredictionDigest[],
 ): PredictorBreakdownReport => {
   const known = allPredictors();
   const specById = new Map<string, PredictorSpec>(known.map((p) => [p.id, p]));
@@ -199,15 +187,14 @@ export const aggregatePredictorBreakdown = (
   const accById = new Map<string, PredictorAcc>();
   for (const p of known) accById.set(p.id, newPredictorAcc());
 
-  for (const pred of predictions) {
+  for (const pred of digests) {
     // 未確定レース（結果未着・中止・不成立）は母数・購入額・分子から一括除外。
-    if (!isSettledResult(pred.raceResult)) continue;
-    const windSpeed = pred.raceResult?.weather.windSpeed;
-    const grade = pred.grade?.trim() ? pred.grade.trim() : UNKNOWN_KEY;
-    for (const pp of pred.predictions ?? []) {
-      const realtime = pp.betPayout.realtime;
+    if (!pred.settled) continue;
+    const windSpeed = pred.windSpeed;
+    const grade = pred.grade.trim() ? pred.grade.trim() : UNKNOWN_KEY;
+    for (const pp of pred.predictors) {
       // 集計対象は直前買い目が組めたレースのみ。
-      if (realtime.betCostYen <= 0) continue;
+      if (pp.betCostYen <= 0) continue;
 
       let acc = accById.get(pp.predictorId);
       if (!acc) {
@@ -216,9 +203,9 @@ export const aggregatePredictorBreakdown = (
         accById.set(pp.predictorId, acc);
       }
 
-      const hit = pp.betHitStatus.realtimeHit;
-      const cost = realtime.betCostYen;
-      const payout = realtime.payoutYen;
+      const hit = pp.realtimeHit;
+      const cost = pp.betCostYen;
+      const payout = pp.payoutYen;
 
       addToAcc(acc.total, hit, cost, payout);
 
@@ -235,14 +222,14 @@ export const aggregatePredictorBreakdown = (
       acc.byGrade.add(grade, hit, cost, payout);
 
       // 買い目点数別。
-      acc.byBetCount.add(binKeyOf(BET_COUNT_BINS, realtime.betCount), hit, cost, payout);
+      acc.byBetCount.add(binKeyOf(BET_COUNT_BINS, pp.betCount), hit, cost, payout);
 
-      // 本命枠番別。
-      const waku = honmeiWaku(pp.aiEvaluationRealtime);
+      // 本命枠番別 (直前 AI 評価の strengthPt 最大艇。ダイジェスト生成時に確定済み)。
+      const waku = pp.honmeiWaku;
       acc.byHonmeiWaku.add(waku === undefined ? UNKNOWN_KEY : String(waku), hit, cost, payout);
 
       // 配当帯別 (確定 3連単 配当。欠損は不明)。
-      const sanrentanPayout = realtime.actualSanrentan?.payout;
+      const sanrentanPayout = pp.sanrentanPayout;
       acc.byPayoutBand.add(
         sanrentanPayout === undefined ? UNKNOWN_KEY : binKeyOf(PAYOUT_BANDS, sanrentanPayout),
         hit,
@@ -313,27 +300,14 @@ export const aggregatePredictorBreakdown = (
 };
 
 /**
- * `data/predictions/{date}/{raceCode}.json` を GCS から日付範囲ぶん引いてきて
+ * 集計期間ぶんの `PredictionDigest[]` (`collectPredictionDigests()` の結果) から
  * 分析軸別レポートを生成し、`packages/web/src/data/predictors/breakdown.json`
- * に保存する。`buildPredictorStats` と同じ日付リストを与える想定。
+ * に保存する。`buildPredictorStats` と同じ配列を渡す想定。
  */
 export const buildPredictorBreakdown = async (
-  dates: readonly string[],
+  digests: readonly PredictionDigest[],
 ): Promise<PredictorBreakdownReport> => {
-  const all: RacePrediction[] = [];
-  for (const date of dates) {
-    try {
-      const day = await fetchHistoricalPredictions(date);
-      all.push(...day);
-    } catch (error) {
-      console.warn(
-        `Failed to fetch predictions for ${date}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  }
-  const report = aggregatePredictorBreakdown(all);
+  const report = aggregatePredictorBreakdown(digests);
   await mkdir(dirname(LOCAL_BREAKDOWN_PATH), { recursive: true });
   await writeFile(LOCAL_BREAKDOWN_PATH, JSON.stringify(report, null, 2), "utf-8");
   console.info(
