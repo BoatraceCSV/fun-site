@@ -1,4 +1,5 @@
 import { toJSTDateString } from "@fun-site/shared";
+import { collectPredictionDigests } from "./aggregator/prediction-digest-store.js";
 import { buildPredictorBreakdown } from "./aggregator/predictor-breakdown.js";
 import { buildPredictorStats, datesForActivePredictors } from "./aggregator/predictor-stats.js";
 import {
@@ -117,32 +118,26 @@ export const runPipeline = async (): Promise<void> => {
   );
   console.info(`Built ${predictions.length} predictions`);
 
-  // Step 2.5: 予想者統計集計 (active 予想者の startedAt 〜 当日)。
-  // 書き出し先は packages/web/src/data/predictors/stats.json で、Astro が
-  // /predictors ページを描画する際に読み込む。失敗は非致命 (集計データ無しで
-  // /predictors が空状態になるだけ)。
+  // Step 2.5: 予想者統計 (/predictors) と分析軸別集計 (/stats)。
+  // active 予想者の startedAt 〜 当日の予想を、集計に必要な数項目だけの
+  // PredictionDigest に畳んで 1 回だけ集める (過去日は GCS のキャッシュを再利用、
+  // 当日はメモリ上の predictions から作る)。RacePrediction 全体を期間ぶん保持すると
+  // ヒープを使い切るため、集計器には必ずダイジェストを渡す。
+  // 書き出し先は packages/web/src/data/predictors/{stats,breakdown}.json で、
+  // 失敗は非致命 (集計データ無しで /predictors・/stats が空状態になるだけ)。
   try {
     const dates = datesForActivePredictors(raceDate);
     console.info(`Step 2.5: Aggregating predictor stats over ${dates.length} day(s)...`);
-    await buildPredictorStats(dates);
+    const digests = await collectPredictionDigests({
+      dates,
+      raceDate,
+      currentPredictions: predictions,
+    });
+    await buildPredictorStats(digests);
+    await buildPredictorBreakdown(digests);
   } catch (error) {
     console.warn(
       `Failed to build predictor stats (non-fatal): ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-
-  // Step 2.6: 統計ページ用の分析軸別集計 (直前のみ・7 軸)。書き出し先は
-  // packages/web/src/data/predictors/breakdown.json で、Astro が /stats ページを
-  // 描画する際に読み込む。失敗は非致命 (集計データ無しで /stats が空状態になるだけ)。
-  try {
-    const dates = datesForActivePredictors(raceDate);
-    console.info(`Step 2.6: Aggregating predictor breakdown over ${dates.length} day(s)...`);
-    await buildPredictorBreakdown(dates);
-  } catch (error) {
-    console.warn(
-      `Failed to build predictor breakdown (non-fatal): ${
         error instanceof Error ? error.message : String(error)
       }`,
     );

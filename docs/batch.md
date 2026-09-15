@@ -98,11 +98,26 @@ CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参�
 場コード単位の `WakuPtBasis` / `WeatherPtBasis` に畳み込み、各レースの `wakuPtBasis` /
 `weatherPtBasis` として**ビルド時点の値を JSON に焼き込む**（テーブルも重みも月次で動くので、後日ビルドし直しても当時の値で検算できるように）。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。直前情報 (`RacePreview`) は tkz / sui / original_exhibition を結合したもので、sui からは天候・風速・**風向コード**・波高・気温・水温を持つ（風向は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う）。
 
+### 4.4. prediction-digest (集計用ダイジェストと incremental キャッシュ)
+
+[`packages/batch/src/aggregator/prediction-digest.ts`](../packages/batch/src/aggregator/prediction-digest.ts) /
+[`packages/batch/src/aggregator/prediction-digest-store.ts`](../packages/batch/src/aggregator/prediction-digest-store.ts)
+
+predictor-stats / predictor-breakdown は active 予想者の startedAt から当日までの数か月分を毎ビルドで集計する。`RacePrediction` は選手成績・近況・過去10走などを抱えて 1 件 100KB 超あり、期間ぶんを丸ごとメモリに載せると Node のヒープ上限 (2Gi コンテナで約 1GB) を超えて OOM でクラッシュする。そのため集計器には `RacePrediction` を渡さず、集計に必要な項目だけを抜いた **`PredictionDigest`** (レース: 日付・場・グレード・確定済みか・風速、予想者ごと: 直前買い目の点数・購入額・払戻・当日/直前的中・本命枠番・確定 3連単配当) を渡す。`toPredictionDigest(pred)` が射影の唯一の入口。
+
+`collectPredictionDigests({ dates, raceDate, currentPredictions })` が集計期間ぶんのダイジェストを日付順に集めて返す:
+
+- **当日 (raceDate)** はメモリ上の `RacePrediction[]` から毎回作り直し、`gs://${GCS_DATA_BUCKET}/_meta/prediction-digests/{date}.json` に上書き保存する
+- **過去日** はまず同パスのキャッシュを読む。無い (または `schemaVersion` が `PREDICTION_DIGEST_SCHEMA_VERSION` と違う) 場合だけ `predictions/{date}/*.json` を `mapHistoricalPredictions(date, toPredictionDigest)` で 1 件ずつ射影しながら読み、結果を保存する。元データが空の日は保存しない (一覧取得の一時失敗を「レース無し」として固定しないため)
+- 過去日は最大 4 日並列、日の中では 16 並列で読む。ダイジェストは数か月分でも数 MB に収まるので、期間が伸びてもメモリはほぼ一定
+
+ダイジェストの形を変えるときは `PREDICTION_DIGEST_SCHEMA_VERSION` を上げる (次回ビルドで全日を作り直す)。バックフィル (`BUILD_TARGET_DATE`) ではその日が raceDate になるので当日扱いで上書きされる。手動で捨てたい日は GCS のファイルを削除すればよい。
+
 ### 4.5. predictor-stats aggregator
 
 [`packages/batch/src/aggregator/predictor-stats.ts`](../packages/batch/src/aggregator/predictor-stats.ts)
 
-`gs://${GCS_DATA_BUCKET}/predictions/{date}/*.json` を active 予想者の startedAt から当日まで読み、各予想者の月次・通算統計 (レース数・的中率・購入額・払戻・回収率) を計算して `packages/web/src/data/predictors/stats.json` に書き出す。**指標は直前 (realtime) 買い目のみ** を対象とし (/stats・会場「今節成績」と統一)、当日 (daily) の的中数は `dailyHitCount` に参考値として残す。**集計対象 (母数) は結果確定済みかつ直前買い目が組めたレースのみ** (`isSettledResult(raceResult)` かつ `betPayout.realtime.betCostYen > 0`)。結果未着・中止・不成立のレースは的中数・払戻 (分子) と母数・購入額 (分母) の両方から除外し、当日進行中の未確定レースで母数が水増しされないようにする。`/predictors/` ページがこの JSON を読み込んで比較表を描画する。集計失敗は非致命で、`/predictors/` は空状態で表示される。
+`collectPredictionDigests()` が集めた active 予想者の startedAt から当日までの `PredictionDigest[]` を受け取り、各予想者の月次・通算統計 (レース数・的中率・購入額・払戻・回収率) を計算して `packages/web/src/data/predictors/stats.json` に書き出す。**指標は直前 (realtime) 買い目のみ** を対象とし (/stats・会場「今節成績」と統一)、当日 (daily) の的中数は `dailyHitCount` に参考値として残す。**集計対象 (母数) は結果確定済みかつ直前買い目が組めたレースのみ** (`isSettledResult(raceResult)` かつ `betPayout.realtime.betCostYen > 0`)。結果未着・中止・不成立のレースは的中数・払戻 (分子) と母数・購入額 (分母) の両方から除外し、当日進行中の未確定レースで母数が水増しされないようにする。`/predictors/` ページがこの JSON を読み込んで比較表を描画する。集計失敗は非致命で、`/predictors/` は空状態で表示される。
 
 主なロジック:
 
@@ -119,7 +134,7 @@ CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参�
 
 [`packages/batch/src/aggregator/predictor-breakdown.ts`](../packages/batch/src/aggregator/predictor-breakdown.ts)
 
-predictor-stats と同じ日付範囲 (active 予想者の startedAt 〜 当日) の `predictions/{date}/*.json` を読み、各予想者の **直前 (realtime) のみ** の回収率・的中率を 7 軸で集計して `packages/web/src/data/predictors/breakdown.json` に書き出す。`/stats/` ページがこの JSON を読み込んで描画する。集計失敗は非致命で、`/stats/` は空状態で表示される。
+predictor-stats と同じ `PredictionDigest[]` (pipeline が 1 回だけ集めて両方に渡す。元 JSON を 2 回読まない) から、各予想者の **直前 (realtime) のみ** の回収率・的中率を 7 軸で集計して `packages/web/src/data/predictors/breakdown.json` に書き出す。`/stats/` ページがこの JSON を読み込んで描画する。集計失敗は非致命で、`/stats/` は空状態で表示される。
 
 集計対象レースは `isSettledResult(raceResult)` (結果確定済み) かつ `betPayout.realtime.betCostYen > 0` (直前買い目が組めた) のみ。未確定レースは母数・購入額から除外する。1 レースは各軸へちょうど 1 回だけ加算する。なお集計対象が確定済みに限られるため、確定結果が必ず持つ風速は「不明」バケットに入らない (配当は欠損しうるので不明バケットが立つ)。
 
@@ -128,9 +143,9 @@ predictor-stats と同じ日付範囲 (active 予想者の startedAt 〜 当日)
 - **時系列**: 日次の集計と、startedAt からの累積を各日付について保持
 - **場別 / グレード別**: `RacePrediction.stadiumId` / `grade` で区分 (グレード空文字は「不明」)
 - **買い目点数別**: `betPayout.realtime.betCount` のビン (1〜4 / 5〜9 / 10〜19 / 20点〜)
-- **本命枠番別**: 直前 AI 評価 (`aiEvaluationRealtime`) の `strengthPt` 最大艇の枠番 (1〜6)
-- **配当帯別**: 確定 3連単 配当 (`betPayout.realtime.actualSanrentan.payout`) のビン。欠損は「不明」
-- **風速別**: 確定結果 (`raceResult.weather.windSpeed`) のビン。欠損は「不明」
+- **本命枠番別**: 直前 AI 評価 (`aiEvaluationRealtime`) の `strengthPt` 最大艇の枠番 (1〜6)。ダイジェスト生成時に `honmeiWaku` として確定する
+- **配当帯別**: 確定 3連単 配当 (`betPayout.realtime.actualSanrentan.payout` = ダイジェストの `sanrentanPayout`) のビン。欠損は「不明」
+- **風速別**: 確定結果 (`raceResult.weather.windSpeed` = ダイジェストの `windSpeed`) のビン。欠損は「不明」
 
 `byStadium` / `byGrade` / `byBetCount` / `byHonmeiWaku` の `raceCount` 合計は `total.raceCount` と一致する。`byPayoutBand` / `byWindSpeed` は「不明」バケットを含めれば一致する (= 監査可能)。スキーマは [docs/data-sources.md](data-sources.md) の breakdown.json を参照。ビンの境界は実データ分布を見て調整可能 (定数で集約)。
 
@@ -140,10 +155,10 @@ predictor-stats と同じ日付範囲 (active 予想者の startedAt 〜 当日)
 
 | ファイル | 役割 |
 |---|---|
-| `data-writer.ts` | `RacePrediction[]` を JSON として (a) ローカル `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に書き出し、(b) `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` へアップロード (節集計の incremental キャッシュ生成用、非致命)。`fetchHistoricalPredictions(date)` で過去日 JSON を取り戻すヘルパも持つ |
+| `data-writer.ts` | `RacePrediction[]` を JSON として (a) ローカル `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に書き出し、(b) `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` へアップロード (節集計・統計集計の incremental キャッシュ生成用、非致命)。`mapHistoricalPredictions(date, project)` で過去日 JSON を 1 件ずつ射影しながら読むヘルパと、それを恒等射影で包んだ `fetchHistoricalPredictions(date)` (1 日ぶんを丸ごと返す。節集計の 7 日範囲向け) を持つ |
 | `dates-index.ts` | `gs://${GCS_WEB_BUCKET}/_meta/dates.json` を取得 → 当日マージ → `packages/web/src/data/_meta/dates.json` に書き出し。デプロイ後に GCS へ書き戻し |
 | `series-aggregator.ts` | 節集計 (直前買い目戦略の的中率・回収率)。会場ページの「今節成績」セクション用。`SERIES_LOOKBACK_DAYS = 7`。`_meta/series-summary.json` を `packages/web/src/data/_meta/` に書き出す |
-| `series-state-store.ts` | 節集計の incremental キャッシュ。`gs://${GCS_DATA_BUCKET}/_meta/series-state.json` で stadium × date のスナップショット + dayLabel を保持。過去日は再計算不要、当日分のみ毎ビルドで上書き。`lookback` 上限を超えた古い日は prune |
+| `series-state-store.ts` | 節集計の incremental キャッシュ (統計集計側のキャッシュは `aggregator/prediction-digest-store.ts`)。`gs://${GCS_DATA_BUCKET}/_meta/series-state.json` で stadium × date のスナップショット + dayLabel を保持。過去日は再計算不要、当日分のみ毎ビルドで上書き。`lookback` 上限を超えた古い日は prune |
 | `build.ts` | Astro CLI を直接実行（pnpm 経由のオーバーヘッドを避ける） |
 | `deploy.ts` | `web/dist/` 配下を GCS の Web バケットへアップロード。content-type と cache-control (`.html`=`no-cache` / `_astro/`=`immutable` 1年 / その他=`max-age=3600`) を設定。古い日付の HTML (`race/{date}/`, `archive/{date}/`) と `_astro/` (content-hash 付き CSS / JS チャンク)、`images/`、`_meta/` は削除しないフィルタで GCS に残置 |
 | `index.ts` | `buildAndDeploy(predictions, raceDate)` で上記を順に呼び、最後に `last-build.json` を更新 |

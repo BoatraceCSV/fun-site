@@ -93,15 +93,19 @@ export const savePredictionDataToGcs = async (
 };
 
 /**
- * 過去日の予想 JSON を GCS Data バケットから取得する。
+ * 過去日の予想 JSON を GCS Data バケットから 1 件ずつ読み、`project` で変換した
+ * 結果だけを集めて返す。
  *
- * 節集計のため、節候補の各日 × 24 会場 × 12 レースを引きに行く。
- * 取得失敗 (404 含む) は静かに空配列扱いとし、節集計は「キャッシュ未ヒット」
- * として扱う (後続フローで埋まる)。
+ * パース済みの `RacePrediction` は `project` に渡した直後に捨てるので、
+ * 1 日ぶんの全レースを同時にメモリへ載せない。集計器が使う数項目だけを
+ * 抜く用途 (`aggregator/prediction-digest.ts`) はこちらを使う。
  *
- * 戻り値は `RacePrediction[]`。各 JSON のパースに失敗したものは除外する。
+ * 取得失敗 (404 含む) は静かに空配列扱いとし、各 JSON のパースに失敗したものは除外する。
  */
-export const fetchHistoricalPredictions = async (date: string): Promise<RacePrediction[]> => {
+export const mapHistoricalPredictions = async <T>(
+  date: string,
+  project: (prediction: RacePrediction) => T,
+): Promise<T[]> => {
   const bucket = getStorage().bucket(DATA_BUCKET);
   let files: File[];
   try {
@@ -120,7 +124,7 @@ export const fetchHistoricalPredictions = async (date: string): Promise<RacePred
 
   const CONCURRENCY = 16;
   let cursor = 0;
-  const results: RacePrediction[] = [];
+  const results: T[] = [];
   const workers = Array.from({ length: Math.min(CONCURRENCY, files.length) }, async () => {
     while (true) {
       const i = cursor++;
@@ -130,7 +134,7 @@ export const fetchHistoricalPredictions = async (date: string): Promise<RacePred
       try {
         const [buffer] = await file.download();
         const parsed = JSON.parse(buffer.toString("utf-8")) as RacePrediction;
-        results.push(parsed);
+        results.push(project(parsed));
       } catch (error) {
         console.warn(
           `Failed to download/parse ${file.name}: ${
@@ -143,3 +147,17 @@ export const fetchHistoricalPredictions = async (date: string): Promise<RacePred
   await Promise.all(workers);
   return results;
 };
+
+/**
+ * 過去日の予想 JSON を GCS Data バケットから取得する。
+ *
+ * 節集計のため、節候補の各日 × 24 会場 × 12 レースを引きに行く。
+ * 取得失敗 (404 含む) は静かに空配列扱いとし、節集計は「キャッシュ未ヒット」
+ * として扱う (後続フローで埋まる)。
+ *
+ * 戻り値は `RacePrediction[]`。各 JSON のパースに失敗したものは除外する。
+ * 1 日ぶんの `RacePrediction` を丸ごと保持するので、数か月分を読む用途には
+ * `mapHistoricalPredictions` で射影しながら読むこと。
+ */
+export const fetchHistoricalPredictions = (date: string): Promise<RacePrediction[]> =>
+  mapHistoricalPredictions(date, (prediction) => prediction);
