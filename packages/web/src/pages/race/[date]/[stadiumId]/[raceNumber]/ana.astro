@@ -1,0 +1,598 @@
+---
+import type {
+  AiEvaluation,
+  AnaBasisState,
+  BetCombo,
+  PredictorPrediction,
+  RacePrediction,
+} from "@fun-site/shared";
+import {
+  ANA_BLEND_PARAMS,
+  BOAT_COLORS,
+  bettingStyleFor,
+  cellProbabilityMatrix,
+  getStadiumById,
+  isValidBoatNumber,
+  kimariteDistribution,
+  modulatePairProbabilities,
+  parseRaceCode,
+  strengthZScore,
+  upsetFirstCourseShares,
+} from "@fun-site/shared";
+import UpsetMeter from "../../../../../components/UpsetMeter.astro";
+import BaseLayout from "../../../../../layouts/BaseLayout.astro";
+import { loadAvailableDates, loadPredictions } from "../../../../../lib/data";
+
+/**
+ * 穴予想 (`v10_kimarite`) の内訳ページ。
+ *
+ * 買い目と確率は BoatraceCSV が確定させて配ったものをそのまま出す (fun-site は再計算しない)。
+ * このページの役目は「なぜこの 5 点か」を、上流が配る Stage1 のセル確率・Stage2 のペア表・
+ * 出目ごとの決まり手分布で追えるようにすること。
+ *
+ * 表示の可否は BoatraceCSV docs/design/ana_prediction.md §14 に従う:
+ * - 出す: 荒れ度 (1 − P(逃げ_1))、荒れるなら何コース頭か、出目ごとの決まり手注釈、
+ *   決まり手の確率分布 (全種類を並べる)
+ * - 出さない: 「このレースは○○で決まる」というレース単位の決まり手予測 (argmax)
+ */
+
+export async function getStaticPaths() {
+  const dates = await loadAvailableDates();
+  const paths = [];
+  for (const date of dates) {
+    for (const prediction of await loadPredictions(date)) {
+      const parsed = parseRaceCode(prediction.raceCode);
+      paths.push({
+        params: {
+          date: parsed.date,
+          stadiumId: parsed.stadiumId,
+          raceNumber: String(prediction.raceNumber),
+        },
+        props: { prediction },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  prediction: RacePrediction;
+}
+
+const { prediction } = Astro.props;
+const stadium = getStadiumById(prediction.stadiumId);
+const stadiumName = stadium?.name ?? prediction.stadiumName;
+const raceHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/`;
+const title = `${stadiumName} ${prediction.raceNumber}R 穴予想の内訳 - なぜこの5点か`;
+
+/** 穴予想の予想者 (買い目が決まり手モデル由来の予想者)。レジストリ駆動で ID を直書きしない。 */
+const ana: PredictorPrediction | undefined = (prediction.predictions ?? []).find(
+  (p) => bettingStyleFor(p.predictorId) === "kimarite",
+);
+const anaName = ana?.predictorName ?? "穴予想";
+
+/** 根拠。2026-09-19 以前の JSON と荒れ度メーター未生成のレースでは undefined。 */
+const basis = prediction.anaBasis;
+
+/** 主表示は直前、無ければ朝。 */
+const primaryKind: "daily" | "realtime" = basis?.realtime ? "realtime" : "daily";
+const primary: AnaBasisState | undefined = basis?.realtime ?? basis?.daily;
+const primaryLabel = primaryKind === "realtime" ? "直前" : "朝時点";
+const primaryEval: AiEvaluation | undefined =
+  primaryKind === "realtime" ? ana?.aiEvaluationRealtime : ana?.aiEvaluationDaily;
+
+const pct = (v: number | undefined, digits = 1): string =>
+  v === undefined ? "—" : `${(v * 100).toFixed(digits)}%`;
+
+/** コース → 艇番 (主表示の状態)。根拠が無ければ枠なり。 */
+const boatAt = (course: number): number => primary?.boatByCourse[course - 1] ?? course;
+
+/** 立場の宣言に使う数字 */
+const nigeProbability = primary ? 1 - primary.upsetRate : undefined;
+/** 荒れるなら何コース頭か (上位 2 つ) */
+const upsetCourses = primary ? upsetFirstCourseShares(primary.cellProbabilities).slice(0, 2) : [];
+
+/** Stage1 の 決まり手 × 1着コース 行列と、その最大値 (セルの濃淡用) */
+const matrix = primary ? cellProbabilityMatrix(primary.cellProbabilities) : [];
+const matrixMax = Math.max(0.01, ...matrix.flatMap((r) => [...r.byCourse]));
+const courseTotals = [1, 2, 3, 4, 5, 6].map((c) =>
+  matrix.reduce((a, r) => a + (r.byCourse[c - 1] ?? 0), 0),
+);
+const kimariteTotals = primary ? kimariteDistribution(primary.cellProbabilities) : [];
+
+/** 強さpt (主表示の状態) をコース順の z 得点に。評価が無ければ変調列を出さない */
+const zByCourse: readonly number[] | undefined = (() => {
+  if (!primary || !primaryEval) return undefined;
+  const ptByBoat = new Map(primaryEval.entries.map((e) => [e.boatNumber, e.strengthPt]));
+  const z = primary.boatByCourse.map((boat) => strengthZScore(ptByBoat.get(boat) ?? 50));
+  return z.length === 6 ? z : undefined;
+})();
+
+/** 買い目セクション (朝 / 直前)。根拠が無い古い JSON では買い目 CSV の値だけで組む。 */
+type PickRow = {
+  readonly combo: BetCombo;
+  readonly courses?: readonly [number, number, number];
+  readonly kimarite: string;
+  readonly probability?: number;
+  readonly shares?: readonly { kimarite: string; share: number }[];
+  readonly sharesN?: number;
+};
+type PickSection = {
+  readonly kind: "daily" | "realtime";
+  readonly heading: string;
+  readonly hit: boolean;
+  readonly rows: readonly PickRow[] | null;
+  readonly fromExhibition: boolean;
+};
+
+const toRows = (
+  state: AnaBasisState | undefined,
+  fallbackPicks: PredictorPrediction["dailyPicks"],
+  fallbackMarks: readonly string[] | undefined,
+): readonly PickRow[] | null => {
+  if (state && state.picks.length > 0) {
+    return state.picks.map((p) => ({
+      combo: p.combo,
+      courses: p.courses,
+      kimarite: p.kimarite,
+      probability: p.probability,
+      shares: p.kimariteShares
+        ? Object.entries(p.kimariteShares.shares)
+            .map(([kimarite, share]) => ({ kimarite, share }))
+            .filter((e) => e.share > 0)
+            .sort((a, b) => b.share - a.share)
+            .slice(0, 3)
+        : undefined,
+      sharesN: p.kimariteShares?.n,
+    }));
+  }
+  if (fallbackPicks?.kind === "combos" && fallbackPicks.combos.length > 0) {
+    return fallbackPicks.combos.map((combo, i) => ({ combo, kimarite: fallbackMarks?.[i] ?? "" }));
+  }
+  return null;
+};
+
+const sections: readonly PickSection[] = [
+  {
+    kind: "daily",
+    heading: "当日買い目 (朝時点・枠なり)",
+    hit: ana?.betHitStatus.dailyHit ?? false,
+    rows: toRows(basis?.daily, ana?.dailyPicks, ana?.dailyKimarite),
+    fromExhibition: false,
+  },
+  {
+    kind: "realtime",
+    heading: "直前買い目 (展示進入)",
+    hit: ana?.betHitStatus.realtimeHit ?? false,
+    rows: toRows(basis?.realtime, ana?.realtimePicks, ana?.realtimeKimarite),
+    fromExhibition: prediction.startPrediction.fromExhibition,
+  },
+];
+
+const showsProbability = sections.some((s) => s.rows?.some((r) => r.probability !== undefined));
+const showsShares = sections.some((s) => s.rows?.some((r) => r.shares !== undefined));
+
+const boatBoxStyle = (boatNumber: number): string => {
+  const color = isValidBoatNumber(boatNumber) ? BOAT_COLORS[boatNumber] : undefined;
+  const border = boatNumber === 1 ? " border: 1px solid #cbd5e1;" : "";
+  return `background-color: ${color?.hex ?? "#999"}; color: ${color?.textHex ?? "#fff"};${border}`;
+};
+
+---
+
+<BaseLayout title={title}>
+  {/* パンくず */}
+  <nav class="text-sm text-gray-500 mb-4">
+    <a href="/" class="hover:text-blue-600">トップ</a>
+    <span class="mx-1">/</span>
+    <a href={`/stadium/${prediction.stadiumId}/`} class="hover:text-blue-600">{stadiumName}</a>
+    <span class="mx-1">/</span>
+    <a href={raceHref} class="hover:text-blue-600">{prediction.raceNumber}R</a>
+    <span class="mx-1">/</span>
+    <span>穴予想の内訳</span>
+  </nav>
+
+  {/* ヘッダ */}
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold flex items-baseline gap-2 flex-wrap">
+      <span>{stadiumName}</span>
+      <span class="text-blue-600">{prediction.raceNumber}R</span>
+      <span class="text-base text-gray-700 font-normal">穴予想の内訳</span>
+    </h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {prediction.raceDate}
+      {prediction.raceName && ` / ${prediction.raceName}`}
+      {" / "}
+      <span class="font-bold text-cyan-700">{anaName}</span>
+      の買い目 5 点が<span class="font-bold">どの確率からどう選ばれたか</span>を開示するページです。
+    </p>
+  </header>
+
+  {/* 荒れ度と立場の宣言 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-2">荒れ度と穴予想の立場</h2>
+    {prediction.upsetMeter ? (
+      <UpsetMeter meter={prediction.upsetMeter} />
+    ) : (
+      <p class="text-[11px] text-gray-500">このレースの荒れ度メーターは未生成です。</p>
+    )}
+    {primary && nigeProbability !== undefined && (
+      <div class="mt-3 text-[13px] text-gray-700 space-y-1">
+        <p>
+          このレースは <span class="font-bold">イン逃げが {pct(nigeProbability, 0)}</span>
+          {" "}濃厚です（{primaryLabel}）。
+          {anaName}は残り <span class="font-bold">{pct(primary.upsetRate, 0)}</span>
+          {" "}——「1 コースが飛ぶ側」に賭けます。
+        </p>
+        {upsetCourses.length > 0 && (
+          <p>
+            荒れるなら
+            {upsetCourses.map((e, i) => (
+              <>
+                {i > 0 && "、次点"}
+                <span class="font-bold">
+                  {" "}{e.course}コース頭
+                  <span class="inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold mx-1 align-middle" style={boatBoxStyle(boatAt(e.course))}>
+                    {boatAt(e.course)}
+                  </span>
+                </span>
+                （荒れた場合の {pct(e.share, 0)}）
+              </>
+            ))}
+            。
+          </p>
+        )}
+        <p class="text-[11px] text-gray-500">
+          「何コース頭か」は当たる要素として出しています（実測 45% 対ベースライン 30%）。
+          「どの決まり手か」はレース単位では当たらない（常に「まくり」と言うのと同じ 34%）ので、
+          レースの予測としては出しません。決まり手は下の買い目 1 点ごとの注釈としてだけ使います。
+        </p>
+      </div>
+    )}
+  </section>
+
+  {/* 買い目と根拠 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-1">買い目 5 点と根拠</h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      120 通りの 3連単確率のうち、<span class="font-bold">1 コース頭を除いた上位 {ANA_BLEND_PARAMS.topK} 点</span>。
+      1 レースの 5 点に複数の 1 着艇が混ざるのは、1 着を 1 艇に決め打たず確率の中で選ぶためです。
+    </p>
+    <div class="space-y-5">
+      {sections.map((section) => (
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+            <span>{section.heading}</span>
+            {section.hit && (
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300">
+                的中
+              </span>
+            )}
+          </h3>
+          {section.rows === null ? (
+            <p class="text-xs text-gray-400">
+              {section.kind === "realtime"
+                ? "直前情報がまだ反映されていません。"
+                : "当日の買い目が取得できていません。"}
+            </p>
+          ) : (
+            <div class="overflow-x-auto">
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    <th scope="col" class="text-left py-1 px-1 font-medium">出目</th>
+                    <th scope="col" class="text-left py-1 px-1 font-medium">コース並び</th>
+                    {showsProbability && (
+                      <th scope="col" class="text-right py-1 px-1 font-medium">確率</th>
+                    )}
+                    <th scope="col" class="text-left py-1 px-1 font-medium">決まり手</th>
+                    {showsShares && (
+                      <th scope="col" class="text-left py-1 px-1 font-medium">この並びで決まった決まり手の実績</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.rows.map((row) => (
+                    <tr class="border-b border-gray-100">
+                      <td class="py-1 px-1">
+                        <span class="flex items-center gap-1">
+                          {row.combo.map((bn, bi) => (
+                            <>
+                              {bi > 0 && <span class="text-gray-400 font-bold" aria-hidden="true">-</span>}
+                              <span class="inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold" style={boatBoxStyle(bn)}>
+                                {bn}
+                              </span>
+                            </>
+                          ))}
+                        </span>
+                      </td>
+                      <td class="py-1 px-1 font-mono tabular-nums text-gray-700">
+                        {row.courses ? row.courses.join("-") : "—"}
+                      </td>
+                      {showsProbability && (
+                        <td class="py-1 px-1 text-right font-mono tabular-nums">{pct(row.probability, 2)}</td>
+                      )}
+                      <td class="py-1 px-1 text-gray-700">{row.kimarite || "—"}</td>
+                      {showsShares && (
+                        <td class="py-1 px-1 text-gray-600">
+                          {row.shares
+                            ? row.shares.map((e) => `${e.kimarite} ${pct(e.share, 0)}`).join(" / ")
+                            : "—"}
+                          {row.sharesN !== undefined && (
+                            <span class="text-gray-400"> (n={row.sharesN})</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {section.kind === "realtime" && section.rows !== null && (
+            <p class="text-[11px] text-gray-400 mt-1">
+              コース並びは{section.fromExhibition ? "スタート展示の実測進入" : "枠なり進入の仮置き"}で写像しています。
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+    <p class="text-[11px] text-gray-500 mt-3">
+      「決まり手」は<span class="font-bold">その出目の並びが実際にどの決まり手で決まっていることが多いか</span>の注釈で、
+      モデルの予測ではありません（過去実績の静的テーブル由来。的中した買い目で注釈と実際の決まり手が一致した率は
+      63%、1 着コースだけで決めると 49%）。
+      {showsProbability
+        ? "「確率」は決まり手モデルと強さpt のブレンド後の 3連単確率で、1 コース頭を除く前の 120 通り合計 1 の値です。"
+        : "このビルドの買い目 CSV には確率列がまだ無いため、確率は表示していません。"}
+    </p>
+  </section>
+
+  {/* Stage1: 決まり手 × 1着コース */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-1">Stage1: 決まり手 × 1着コース の確率</h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      出走表・展示・気象から多項ロジスティック回帰で出した 32 セルの確率（{primaryLabel}）。
+      荒れ度は <span class="font-mono">1 − P(逃げ_1)</span>、つまり左上のセルの残りです。
+      <span class="font-bold">最有力セルは 9 割以上のレースで「逃げ_1」になる</span>ので、
+      どれか 1 つを強調せず全セルを並べています。
+    </p>
+    {!primary ? (
+      <p class="text-[11px] text-gray-500">
+        このビルドには Stage1 のセル確率が入っていません（2026-09-19 より前のビルド、または荒れ度メーター未生成）。
+      </p>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-[11px] border-collapse">
+          <thead>
+            <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+              <th scope="col" class="text-left py-1 px-1 font-medium whitespace-nowrap">決まり手 ＼ 1着</th>
+              {[1, 2, 3, 4, 5, 6].map((c) => (
+                <th scope="col" class="text-right py-1 px-1 font-medium whitespace-nowrap">
+                  {c}コース
+                  <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded text-[9px] font-bold ml-1 align-middle" style={boatBoxStyle(boatAt(c))} title={`${boatAt(c)}号艇が${c}コース`}>
+                    {boatAt(c)}
+                  </span>
+                </th>
+              ))}
+              <th scope="col" class="text-right py-1 px-1 font-medium">計</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row) => {
+              const total = kimariteTotals.find((k) => k.kimarite === row.kimarite)?.probability ?? 0;
+              return (
+                <tr class="border-b border-gray-100">
+                  <th scope="row" class="text-left py-1 px-1 font-medium text-gray-600 whitespace-nowrap">{row.kimarite}</th>
+                  {row.byCourse.map((p, i) => (
+                    <td
+                      class="py-1 px-1 text-right font-mono tabular-nums text-gray-800"
+                      style={`background-color: rgba(8, 145, 178, ${((p / matrixMax) * 0.35).toFixed(3)});`}
+                      title={`${row.kimarite}_${i + 1}`}
+                    >
+                      {p > 0 ? pct(p, 1) : <span class="text-gray-300">—</span>}
+                    </td>
+                  ))}
+                  <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-gray-700">{pct(total, 1)}</td>
+                </tr>
+              );
+            })}
+            <tr class="border-t border-gray-300">
+              <th scope="row" class="text-left py-1 px-1 font-medium text-gray-600 whitespace-nowrap">計 (1着コース)</th>
+              {courseTotals.map((p) => (
+                <td class="py-1 px-1 text-right font-mono tabular-nums font-bold text-gray-700">{pct(p, 1)}</td>
+              ))}
+              <td class="py-1 px-1"></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )}
+    {primary && (
+      <p class="text-[11px] text-gray-400 mt-2">
+        「その他」は学習データで 60 レース未満だった組合せの受け皿です。「逃げ_2」のような組合せは
+        展示進入と本番の進入が変わったレースで、定義どおりの挙動です。
+        行の計 = 決まり手の確率分布（校正は良好。ただし argmax はベースレートに負けるので予測として使わない）。
+      </p>
+    )}
+  </section>
+
+  {/* Stage2: 荒れ側の上位セルのペア表 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <h2 class="font-bold text-lg mb-1">Stage2: 1着セルが決まったときの 2着・3着</h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      荒れ側（1 コース頭以外）で確率の高いセルについて、<span class="font-mono">P(2着, 3着 | セル)</span> の上位ペアと、
+      強さpt で変調した値（γ={ANA_BLEND_PARAMS.gamma}）。同じ 3 コース頭でも「まくり差し」なら 1 コースが 2 着に残り、
+      「まくり」なら外が続く——この型の違いが買い目の並びを決めます。
+    </p>
+    {!primary || primary.pairTables.length === 0 ? (
+      <p class="text-[11px] text-gray-500">
+        このビルドには Stage2 のペア表（<span class="font-mono">estimate/kimarite/tables/pair_table.csv</span>）が入っていません。
+      </p>
+    ) : (
+      <div class="grid gap-4 md:grid-cols-3">
+        {primary.pairTables.map((pt) => {
+          const modulated = zByCourse ? modulatePairProbabilities(pt.pairs, zByCourse) : undefined;
+          return (
+            <div class="border border-gray-100 rounded p-2">
+              <h3 class="text-sm font-semibold text-gray-700 mb-1">
+                {pt.cell.replace("_", " / 1着")}コース
+                <span class="text-[11px] font-normal text-gray-500 ml-1">セル確率 {pct(pt.cellProbability, 1)}</span>
+              </h3>
+              <table class="w-full text-[11px] border-collapse">
+                <thead>
+                  <tr class="border-b border-gray-200 text-gray-500 text-[10px]">
+                    <th scope="col" class="text-left py-1 px-1 font-medium">2着-3着</th>
+                    <th scope="col" class="text-right py-1 px-1 font-medium">表の値</th>
+                    {modulated && (
+                      <th scope="col" class="text-right py-1 px-1 font-medium">強さpt 変調後</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pt.pairs.map((pair, i) => (
+                    <tr class="border-b border-gray-100">
+                      <td class="py-1 px-1 text-gray-700">
+                        <span class="font-mono">{pair.second}-{pair.third}</span>
+                        <span class="text-gray-400 ml-1">
+                          ({boatAt(pair.second)}-{boatAt(pair.third)}号艇)
+                        </span>
+                      </td>
+                      <td class="py-1 px-1 text-right font-mono tabular-nums">{pct(pair.probability, 1)}</td>
+                      {modulated && (
+                        <td class="py-1 px-1 text-right font-mono tabular-nums">{pct(modulated[i], 1)}</td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+    )}
+    {primary && primary.pairTables.length > 0 && (
+      <p class="text-[11px] text-gray-400 mt-2">
+        「表の値」はセル内 20 ペアの分布、「変調後」は上位ペアの中だけで再正規化した比率です。
+        表示は上位 {primary.pairTables[0]?.pairs.length ?? 0} ペアまで。コースの後ろの括弧は、そのコースに入る艇番です。
+      </p>
+    )}
+  </section>
+
+  {/* 計算ロジックの解説 */}
+  <section class="bg-white rounded-lg shadow-sm p-4 mb-6">
+    <details>
+      <summary class="font-bold text-lg cursor-pointer">穴予想の計算ロジック</summary>
+
+      <div class="mt-3 space-y-4 text-sm text-gray-700">
+        <div>
+          <h3 class="font-bold text-sm mb-1">本命予想との関係</h3>
+          <p class="text-[13px]">
+            AI 総合評価（枠番・選手・モーター・展示・気象の 5 成分と強さpt）は
+            <span class="font-bold">本命予想と同じ値</span>です。違うのは買い目の作り方だけ。
+            本命予想は 1 マーク予想の走行距離で候補を絞りますが、穴予想は
+            「どう決まるか」の確率モデルから出目を選びます。
+            現行モデルの 5 成分は「誰が強いか」はよく分けますが「荒れるかどうか」を持っていないため、
+            その穴を決まり手モデルで埋めています。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">3 段階で決まる</h3>
+          <ol class="list-decimal list-inside space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">Stage1</span> — 「決まり手 × 1着コース」32 セルの確率。
+              多項ロジスティック回帰（L2 正則化）で、特徴量は出走表（級別・勝率・モーター2連率・全国平均ST）、
+              スタート展示（ST・進入）、展示タイム・チルト、気象、場コード。
+              すべて<span class="font-bold">進入コース順</span>に並べ替えて入れます。
+              朝は枠なり仮定の daily 版、直前は展示込みの realtime 版の 2 本を持ちます
+            </li>
+            <li>
+              <span class="font-bold">Stage2</span> — セルごとの 2着・3着コース分布（過去実績の 640 行の表）に、
+              強さpt の変調 <span class="font-mono">exp(γ·z₂)·exp(γ·z₃/2)</span>（γ={ANA_BLEND_PARAMS.gamma}、
+              z = (強さpt − 50) / 10）を掛けます。「同じ決まり手なら強い艇が上に来やすい」を表す項です
+            </li>
+            <li>
+              <span class="font-bold">合成とブレンド</span> — 32 セル × 2着3着分布を足し合わせて 3連単 120 通りの確率にし、
+              強さpt だけから作った Plackett-Luce 分布（β={ANA_BLEND_PARAMS.beta}）と
+              {ANA_BLEND_PARAMS.blendWeight} : {(1 - ANA_BLEND_PARAMS.blendWeight).toFixed(1)} で混ぜます。
+              両者は補完的で、混ぜると単独より確率の質（log-loss）が良くなります
+            </li>
+          </ol>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">買い目ルール</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">1 コース頭は買わない</span> — 穴予想なので 1着コース = 1 の出目は候補から外し、
+              残りの確率上位 {ANA_BLEND_PARAMS.topK} 点を 1 点 100 円で買います。
+              除外しないと平均配当が 1,300 円弱まで下がり、点数が同じでも穴として成立しません
+            </li>
+            <li>
+              <span class="font-bold">荒れそうなレースだけ買う、はしない</span> —
+              「予測しやすく荒れるレース」は配当も安く、絞るほど回収率が下がりました。全レースで買い目を出します
+            </li>
+            <li>
+              <span class="font-bold">オッズは使わない</span> — オッズ帯で絞るとモデルが上位に置いた出目を捨てることになり悪化しました
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">言えることと言えないこと</h3>
+          <ul class="space-y-1 text-[13px]">
+            <li>
+              <span class="font-bold">荒れ度（1 − P(逃げ_1)）</span> — 予測帯ごとの実測とのずれは概ね ±3pt で、そのまま見せてよい値です
+            </li>
+            <li>
+              <span class="font-bold">荒れるなら何コース頭か</span> — 荒れたレースでの的中 45% 対ベースライン 30%。出します
+            </li>
+            <li>
+              <span class="font-bold">「このレースはまくりで決まる」</span> — 1 着コースを与えた条件でも過去実績の最頻値を超えません（−1.1pt）。
+              出しません。決まり手は<span class="font-bold">出目 1 点ごとの注釈</span>（出目の並びが語る型）としてだけ使います
+            </li>
+            <li>
+              <span class="font-bold">回収率 100% 超え</span> — 目標にしません。市場オッズの確率の質にはまだ届いておらず、
+              控除率 25% を破るには log(1/0.75) ≒ 0.29 nat の優位が要ります
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">成績の見方</h3>
+          <p class="text-[13px]">
+            この予想者の主判定は回収率ではなく <span class="font-bold">3連単 log-loss</span>（確率の質）で、
+            BoatraceCSV 側が月次で集計します。穴予想どうしを回収率で比べると差の検出に 8 ヶ月かかるためです。
+            レース詳細や予想者比較に出る回収率は「破滅的な劣化を検知するガードレール」、
+            平均配当・万舟/1万円は「穴予想として成立しているか」の体験指標として見てください。
+            設計時のホールドアウトでは回収率 87%（本命予想 86% と有意差なし）、的中率 13%、平均配当 3,400 円台でした。
+          </p>
+        </div>
+
+        <div>
+          <h3 class="font-bold text-sm mb-1">経緯</h3>
+          <p class="text-[13px]">
+            2026-08-12 に「1 コース以外で強さpt 最大の艇を頭に、スジ表で 2-3 着を決める」スジ予想（A案）を、
+            翌 08-13 にこの決まり手モデル（B案）を投入し、2 スロットで並行運用しました。
+            買い目の重なりが 5 点中 2.7 点あり回収率では区別できなかったため、
+            確率モデルを持ち log-loss で判定できる B案を残して 08-22 に A案を統合しています。
+          </p>
+        </div>
+
+        <p class="text-[11px] text-gray-500">
+          データと計算式の一次情報は
+          <a
+            href="https://github.com/BoatraceCSV/boatracecsv.github.io"
+            class="text-blue-600 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer">BoatraceCSV</a
+          >（docs/design/ana_prediction.md）を参照してください。
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <p class="text-sm">
+    <a href={raceHref} class="text-blue-600 hover:underline">← {stadiumName} {prediction.raceNumber}R のレース詳細に戻る</a>
+  </p>
+</BaseLayout>

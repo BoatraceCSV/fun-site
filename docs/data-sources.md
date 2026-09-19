@@ -34,6 +34,8 @@ preview-realtime / daily-sync の GCS ミラーに相乗りして配信される
 |---|---|---|---|
 | `waku_table` | `estimate/stadium/win_rate.csv` | 24場 × 4季節 × 6コースの長期勝率（= 平均得点。1着率(%) ではない）。枠番pt の生値ソース | 枠番詳細ページのコース強度テーブルと計算過程 |
 | `sui_params` | `estimate/stadium/sui_params.csv` | 24場 × 6特徴量 × 6コースの気象線形回帰係数。気象pt の生値ソース（切片 `base_c*` は 枠番pt と重複するため使わない） | 気象詳細ページの係数テーブルと計算過程 |
+| `kimarite_pair_table` | `estimate/kimarite/tables/pair_table.csv` | 穴予想 Stage2 = 決まり手セル条件付きの 2着・3着コース分布 `P(2着,3着 \| セル)`。32 セル × 20 ペア = 640 行 | 穴予想詳細ページの Stage2 ペア表（荒れ側上位 3 セル × 上位 5 ペアをレース JSON の `anaBasis` に切り出す） |
+| `kimarite_table` | `estimate/suji/tables/kimarite_table.csv` | 出目（コース並び）ごとの決まり手の分布と最頻値。120 行。買い目 1 点ごとの決まり手注釈の出どころ（A案 v9_suji のディレクトリだが v10_kimarite が読み続けている） | 穴予想詳細ページの「この並びで決まった決まり手の実績」 |
 | `weights:{predictor_id}` | `estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` | 場別の μ / σ / 重み w（成分ごと）。fun-site が読むのは primary predictor の `waku` / `weather` / `exhibit` / `motor` の 4 成分ぶん | 上記 2 つと組で raw → 偏差値pt → 寄与 の変換。`exhibit` は**単独で**（生値がレース内で閉じているため静的テーブル不要）、`motor` は生値（素点）が `estimate/motor_pt/motors` から来るので**偏差値化と寄与の 2 段だけ**に使う |
 
 取得は [`fetchWakuTableCsvText()`](../packages/batch/src/fetcher/csv-client.ts) /
@@ -41,6 +43,12 @@ preview-realtime / daily-sync の GCS ミラーに相乗りして配信される
 上流 `build_index.py` と同じく**対象月以下で最新**のファイルを使うため、対象月から
 1 ヶ月ずつ最大 12 ヶ月遡って最初に見つかったものを採用する（遡り中の試行はリトライ無し）。
 weights CSV は 1 回だけ取得して `waku` / `weather` / `exhibit` の 3 成分に切り分ける。
+
+穴予想の根拠テーブル 2 枚は `fetchKimaritePairTableCsvText()` / `fetchKimariteTableCsvText()` で取得し、
+[`ana-tables-schemas.ts`](../packages/batch/src/fetcher/ana-tables-schemas.ts) でパースして
+[`ana-basis.ts`](../packages/batch/src/site-builder/ana-basis.ts) がレース単位の `anaBasis` に切り出す
+（未取得なら Stage2 ペア表と決まり手分布が欠けるだけで、買い目には影響しない）。
+`build-state.ts` の generation 監視にも `kimarite_pair_table` / `kimarite_table` として含める。
 
 パースは [`stadium-table-schemas.ts`](../packages/batch/src/fetcher/stadium-table-schemas.ts)、
 レース単位への切り出しは [`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) /
@@ -104,6 +112,9 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 | `MotorStatsRow` | `programs/motor_stats` | `(記録日, 場コード, モーター番号)` キー。勝率・2/3連率・優勝/優出回数・平均ラップ秒など |
 | `MotorPtRunRow` / `MotorPtMotorRow` / `MotorPtBaselineRow` | `estimate/motor_pt/{runs,motors,baseline}` | `(記録日, 場コード, モーター番号)` キー。素点の計算過程そのもの。レース JSON には該当 6 基ぶんを `MotorPtHistory` に畳んで焼き込む（走からはモーター単位で一定の `recordDate` / `stadiumCode` / `motorNumber` を落とし `MotorPtHistoryRun` にする） |
 | `RacerStRow` / `RacerStEntry` | `estimate/racer_st` | レースコードキー。枠番昇順 6 エントリの `(登録番号, 推定ST, 推定ST_p25, 推定ST_p75)`。欠場枠は null。帯 2 列は導入前の CSV でも null（列が無くても読める）。未生成日は空配列（全国平均 ST フォールバック） |
+| `AnaPicksRow` / `AnaPick` | `estimate/kimarite/picks`（旧 `estimate/suji`） | レースコード × 状態。出目 (`combo`)・決まり手注釈・ブレンド後確率 (`probability`、2026-09-19 以降の CSV のみ) |
+| `KimariteRow` | `estimate/kimarite` | レースコード × 状態。荒れ度 (`1 − P(逃げ_1)`) と 32 セルの確率 (`cellProbabilities`)。荒れ度は `RacePrediction.upsetMeter`、セル確率は `RacePrediction.anaBasis` に載る |
+| `PairTableRow` / `KimariteTableRow` | `estimate/kimarite/tables/pair_table.csv`, `estimate/suji/tables/kimarite_table.csv` | Stage2 のセル別 2着・3着分布 / 出目のコース並び別の決まり手分布。レース単位に切り出したものが `RacePrediction.anaBasis`（`AnaBasis`） |
 | `IndexRow` / `IndexEntry` | `estimate/{predictor_id}` | 由来予想者 ID、状態（daily/realtime）、`componentKeys` ぶんの素点 / 寄与pt、強さpt |
 | `RaceResultRow` / `RaceResultFinish` / `RaceResultCourse` / `RaceResultWeather` | `results/realtime` | 着順、決まり手、ST、天候 |
 | `WakuTableRow` / `StadiumComponentWeightsRow` | `estimate/stadium/win_rate.csv`, `estimate/stadium/weights/...` | 場コード × 季節 × 6コース勝率 / 場名 × (μ, σ, w)（成分指定でパースする）。レース単位に切り出したものが `RacePrediction.wakuPtBasis`（`WakuPtBasis`） |
@@ -116,6 +127,7 @@ GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない�
 |---|---|
 | `RacePrediction` | レース 1 件分の統合予想。バッチが書き出し、Astro が読み込む |
 | `PredictorPrediction` | `RacePrediction.predictions[]` の要素。1 予想者 / 1 レースの AI 評価 + 買い目 + 回収率 |
+| `AnaBasis` / `AnaBasisState` / `AnaPickBasis` / `AnaPairTableView`（`RacePrediction.anaBasis`） | 穴予想 (`v10_kimarite`) の根拠。状態ごとに 荒れ度・Stage1 の 32 セル確率・コース → 艇番・買い目 5 点の根拠（コース並び・確率・決まり手分布）・荒れ側上位 3 セルの Stage2 ペア表。穴予想詳細ページ (`/race/.../ana/`) が読む。買い目そのものは `predictions[]` 側が正 |
 | `PredictorSpec` | 予想者の宣言的定義 (id, displayName, slot, componentKeys, status, startedAt, および UI 表示用の icon / badgeTailwindClass / showsAiPanels)。レジストリは [`packages/shared/src/predictors.ts`](../packages/shared/src/predictors.ts) |
 | `showsAiPanels` / `showsAiPanelsFor` | 予想者カードに AI 評価まわりの 3 パネル (「AI 評価の内訳」チャート / 「スタート予想」図 / 「1マーク予想」図) を出すか。未指定 = true。**表示専用**で買い目・回収率・集計には影響しないため boatracecsv 側 registry.py に対応フィールドは無い。`false` は買い目が CSV 由来 (`bettingStyle` が `"formation"` 以外) の `v9_suji`(スジ予想) / `v10_kimarite`(穴予想) — 1 マーク走行距離を使わないので出したままだと「この図から買い目が出ている」と誤読させ、かつ 3 者は index / 強さpt が同値なので本命予想 (`v1_basic`) のカードと重複する。現行 active では 3 パネルが出るのは本命予想のカードだけ |
 | `StartPrediction` / `StartPredictionEntry` | スタート予想（進入コース + スタートタイミング）。`exhibitionStartTiming` に stt 由来のスタート展示実測ST を保持（未計測=null）。`startTimingP25` / `startTimingP75` は予測 ST の 25/75 パーセンタイル（AI 推定 ST 版のみ。帯の描画に使う）。`RaceRacer` は 3連対率（`nationalTop3Rate` / `localTop3Rate` / `motorTop3Rate`）も保持し出走表で表示 |
@@ -228,6 +240,7 @@ CSV ミラーバケットは以下のライフサイクルで自動遷移する�
 | `状態` | `daily` / `realtime`。当日買い目 / 直前買い目に振り分ける |
 | `買い目1`〜`買い目5` | `"3-1-4"` 形式の出目(艇番) |
 | `決まり手1`〜`決まり手5` | 各出目の決まり手注釈(両案共通の静的テーブル由来) |
+| `確率1`〜`確率5` | 各出目のブレンド後 3連単確率（0〜1）。**2026-09-19 追加**。`AnaPick.probability` に読む。列が無い / 空欄（列追加前の行）は undefined で、穴予想詳細ページが確率列を出さないだけ |
 
 > suji CSV には `1着コース` / `1着艇番` 列もあるが、**型には持たせていない**。
 > B案は 120 通りの確率から上位 5 点を取るので **1 レースの買い目に複数の
@@ -252,4 +265,6 @@ BoatraceCSV `data/estimate/kimarite/YYYY/MM/DD.csv`。レース × 状態 で 1 
 
 > **argmax は使わない。** レース単位の決まり手予測はベースレートを超えない
 > (BoatraceCSV `docs/design/ana_prediction.md` §14.2)。94.5% のレースで
-> 最有力が「逃げ」になるため、確率値としてのみ扱う。
+> 最有力が「逃げ」になるため、確率値としてのみ扱う。32 セルの確率は
+> `RacePrediction.anaBasis` に載せ、穴予想詳細ページが**全セルを並べて**出す
+> (1 つを強調しない。同 §14.3)。

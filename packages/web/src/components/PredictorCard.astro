@@ -71,6 +71,14 @@ interface Props {
    * (気象は preview 由来成分なので daily 評価では凡例自体が出ない)。
    */
   weatherPtHref?: string;
+  /**
+   * カード見出し右に出す、この予想者の詳細ページへの URL (例: 穴予想の `/race/.../ana/`)。
+   * 買い目が AI 評価の 3 パネルから出ていない予想者 (`showsAiPanels=false`) は
+   * 凡例からの導線が無いので、代わりにここから根拠ページへ張る。未指定なら出さない。
+   */
+  detailHref?: string;
+  /** `detailHref` のリンク文言。未指定なら「詳細」。 */
+  detailLabel?: string;
 }
 
 const {
@@ -87,6 +95,8 @@ const {
   wakuPtHref,
   exhibitPtHref,
   weatherPtHref,
+  detailHref,
+  detailLabel = "詳細",
 } = Astro.props;
 
 // チャート用の評価: realtime 優先、無ければ daily。両方無ければ表示しない。
@@ -108,7 +118,14 @@ const showDiagrams = startPrediction !== undefined && oneMarkAiEvaluation !== un
       </span>
       <span>{prediction.predictorName}</span>
     </h2>
-    <span class="text-[11px] text-gray-400 font-mono">{prediction.predictorId}</span>
+    <span class="flex items-baseline gap-3 shrink-0">
+      {detailHref && (
+        <a href={detailHref} class="text-xs text-blue-700 hover:underline">
+          {detailLabel} <span aria-hidden="true">▸</span>
+        </a>
+      )}
+      <span class="text-[11px] text-gray-400 font-mono">{prediction.predictorId}</span>
+    </span>
   </header>
 
   {recipeNote && (

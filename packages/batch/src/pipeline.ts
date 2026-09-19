@@ -10,6 +10,7 @@ import {
 } from "./build-state.js";
 import { parseTriggerEvent } from "./event-parser.js";
 import { fetchAllCsvData } from "./fetcher/index.js";
+import { buildAnaTables } from "./site-builder/ana-basis.js";
 import { buildExhibitPtBasisByStadium } from "./site-builder/exhibit-pt-basis.js";
 import { buildAllRacePredictions, buildAndDeploy } from "./site-builder/index.js";
 import { buildMotorPtBasisByStadium } from "./site-builder/motor-pt-basis.js";
@@ -115,6 +116,7 @@ export const runPipeline = async (): Promise<void> => {
     buildWeatherPtBasisByStadium(csvData.suiParams, csvData.weatherWeights),
     buildExhibitPtBasisByStadium(csvData.exhibitWeights),
     buildMotorPtBasisByStadium(csvData.motorWeights),
+    buildAnaTables(csvData.kimaritePairTable, csvData.kimariteTable),
   );
   console.info(`Built ${predictions.length} predictions`);
 

@@ -8,7 +8,13 @@ import type { CsvType } from "./fetcher/csv-client.js";
  * 気象回帰係数は `sui_params` の形でキー化する
  * (boatrace.gcs_publisher の csv_type 命名と揃える)。
  */
-export type CsvGenerationKey = CsvType | `index:${string}` | "waku_table" | "sui_params";
+export type CsvGenerationKey =
+  | CsvType
+  | `index:${string}`
+  | "waku_table"
+  | "sui_params"
+  | "kimarite_pair_table"
+  | "kimarite_table";
 
 /**
  * 直近のビルドメタデータ。
@@ -114,6 +120,16 @@ const STATIC_TABLE_OBJECTS: { key: CsvGenerationKey; objectName: string }[] = [
   {
     key: "sui_params",
     objectName: `${CSV_GCS_PATH_ROOT}/estimate/stadium/sui_params.csv`,
+  },
+  // 穴予想 v10_kimarite の根拠テーブル (2026-09-19 追加)。変わると穴予想詳細ページの
+  // Stage2 ペア表・決まり手分布が変わるので同じく監視する。
+  {
+    key: "kimarite_pair_table",
+    objectName: `${CSV_GCS_PATH_ROOT}/estimate/kimarite/tables/pair_table.csv`,
+  },
+  {
+    key: "kimarite_table",
+    objectName: `${CSV_GCS_PATH_ROOT}/estimate/suji/tables/kimarite_table.csv`,
   },
 ];
 

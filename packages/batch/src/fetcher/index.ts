@@ -2,11 +2,13 @@ import type {
   AnaPicksRow,
   IndexRow,
   KimariteRow,
+  KimariteTableRow,
   MotorPtBaselineRow,
   MotorPtMotorRow,
   MotorPtRunRow,
   MotorStatsRow,
   OriginalExhibitionRow,
+  PairTableRow,
   PredictorSpec,
   RaceCardRow,
   RacePayoutRow,
@@ -26,9 +28,12 @@ import type {
 } from "@fun-site/shared";
 import { activePredictors } from "@fun-site/shared";
 import { parseAnaPicks } from "./ana-picks-schemas.js";
+import { parseKimariteTable, parsePairTable } from "./ana-tables-schemas.js";
 import {
   fetchCsvText,
   fetchIndexCsvText,
+  fetchKimaritePairTableCsvText,
+  fetchKimariteTableCsvText,
   fetchSuiParamsCsvText,
   fetchWakuTableCsvText,
   fetchWeightsCsv,
@@ -145,6 +150,17 @@ export type FetchedCsvData = {
    * 日付に依らない静的テーブル。取得失敗時は空配列。
    */
   readonly suiParams: readonly SuiParamsRow[];
+  /**
+   * 穴予想 v10_kimarite の Stage2 ペア表 (estimate/kimarite/tables/pair_table.csv)。
+   * 日付に依らない静的テーブル。取得失敗時は空配列 (穴予想詳細ページが
+   * 「テーブル未取得」表示に倒れるだけで、買い目には影響しない)。
+   */
+  readonly kimaritePairTable: readonly PairTableRow[];
+  /**
+   * 出目ごとの決まり手分布 (estimate/suji/tables/kimarite_table.csv)。
+   * 買い目 1 点ごとの決まり手注釈の出どころ。取得失敗時は空配列。
+   */
+  readonly kimariteTable: readonly KimariteTableRow[];
   /**
    * primary predictor の場別 μ / σ / w のうち 枠番pt 成分 (estimate/stadium/weights/...)。
    * `wakuTable` と 2 つ揃って初めて 枠番pt を再現できる。取得失敗時は undefined。
@@ -340,6 +356,9 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
   // slot 昇順の先頭 (activePredictors() が slot 順に返す)。
   const { wakuTable, suiParams, wakuWeights, weatherWeights, exhibitWeights, motorWeights } =
     await fetchStadiumTables(predictors[0], date);
+  // 穴予想 v10_kimarite の根拠テーブル。失敗しても穴予想詳細ページの一部が
+  // 「未取得」になるだけなので warn して空にする。
+  const { kimaritePairTable, kimariteTable } = await fetchAnaTables();
 
   return {
     titles,
@@ -365,10 +384,34 @@ export const fetchAllCsvData = async (date: string): Promise<FetchedCsvData> => 
     payouts,
     wakuTable,
     suiParams,
+    kimaritePairTable,
+    kimariteTable,
     ...(wakuWeights ? { wakuWeights } : {}),
     ...(weatherWeights ? { weatherWeights } : {}),
     ...(exhibitWeights ? { exhibitWeights } : {}),
     ...(motorWeights ? { motorWeights } : {}),
+  };
+};
+
+/**
+ * 穴予想 v10_kimarite の根拠テーブル 2 枚 (どちらも日付パーティション無し) を取得する。
+ * 上流で GCS ミラー対象に入る前 (404) でも害はない。
+ */
+const fetchAnaTables = async (): Promise<{
+  kimaritePairTable: PairTableRow[];
+  kimariteTable: KimariteTableRow[];
+}> => {
+  const warnAndSkip = (label: string) => (error: unknown) => {
+    console.warn(`Failed to fetch ${label}: ${error instanceof Error ? error.message : error}`);
+    return undefined;
+  };
+  const [pairText, kimariteText] = await Promise.all([
+    fetchKimaritePairTableCsvText().catch(warnAndSkip("kimarite pair table")),
+    fetchKimariteTableCsvText().catch(warnAndSkip("kimarite annotation table")),
+  ]);
+  return {
+    kimaritePairTable: pairText ? parsePairTable(pairText) : [],
+    kimariteTable: kimariteText ? parseKimariteTable(kimariteText) : [],
   };
 };
 
@@ -383,6 +426,7 @@ export { parsePayouts } from "./payout-schemas.js";
 export { parseMotorStats } from "./motor-stats-schemas.js";
 export { parseRacerSt } from "./racer-st-schemas.js";
 export { parseAnaPicks } from "./ana-picks-schemas.js";
+export { parseKimariteTable, parsePairTable } from "./ana-tables-schemas.js";
 export { parseKimarite } from "./kimarite-schemas.js";
 export {
   parseMotorPtBaseline,

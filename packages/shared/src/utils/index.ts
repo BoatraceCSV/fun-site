@@ -157,6 +157,20 @@ export {
   type RaceBetPayoutSummary,
 } from "./bet-payout.js";
 export {
+  ANA_BLEND_PARAMS,
+  KIMARITE_NAMES,
+  NIGE_CELL,
+  OTHER_KIMARITE,
+  cellProbabilityMatrix,
+  firstCourseDistribution,
+  kimariteDistribution,
+  modulatePairProbabilities,
+  parseCellName,
+  strengthZScore,
+  upsetFirstCourseShares,
+  type KimariteName,
+} from "./ana-blend.js";
+export {
   aggregateSeriesBetPayout,
   buildDailySnapshot,
   detectSeries,

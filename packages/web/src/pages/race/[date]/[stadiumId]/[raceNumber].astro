@@ -5,6 +5,7 @@ import type {
   SeriesBetPayoutAggregate,
 } from "@fun-site/shared";
 import {
+  bettingStyleFor,
   getPredictorBadge,
   getRaceGradeBadge,
   getStadiumById,
@@ -117,6 +118,8 @@ const racerPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${pred
 const motorPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/motors/`;
 // 枠番pt の詳細ページ。同じく AI 評価内訳の「枠番」から張る。
 const wakuPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/lanes/`;
+/** 穴予想 (v10_kimarite) の根拠ページ。荒れ度メーターと穴予想カードから張る */
+const anaHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/ana/`;
 // 展示pt の詳細ページ。AI 評価内訳の「展示」(realtime 評価でのみ出る凡例) と
 // 直前情報セクションの見出し右から張る。
 const exhibitPtHref = `/race/${prediction.raceDate}/${prediction.stadiumId}/${prediction.raceNumber}/exhibition/`;
@@ -401,6 +404,10 @@ const predictorPredictions: readonly PredictorPrediction[] =
   {prediction.upsetMeter && (
     <section class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
       <UpsetMeter meter={prediction.upsetMeter} />
+      {/* 荒れ度の中身 (決まり手 × 1着コースの確率) は穴予想詳細ページで開示する */}
+      <a href={anaHref} class="inline-block mt-1 text-xs text-blue-700 hover:underline">
+        穴予想の詳細 <span aria-hidden="true">▸</span>
+      </a>
     </section>
   )}
 
@@ -433,7 +440,9 @@ const predictorPredictions: readonly PredictorPrediction[] =
     const showsAiPanels = showsAiPanelsFor(pp.predictorId);
     // recipeNote: 本命予想 (control) からの差分説明。予想者ごとに固有文言。
     const recipeNote =
-      pp.predictorId === "v4_motor"
+      pp.predictorId === "v10_kimarite"
+        ? "本命予想と同じ5成分・同じ強さptですが、買い目は1マーク予想ではなく「決まり手 × 1着コース」の確率モデルから作ります。1コース頭を除いた確率上位5点を買う、当たりにくいが当たれば大きい構成です。"
+        : pp.predictorId === "v4_motor"
         ? "本命予想の5成分のうち、モーターpt をエキスパート評価でチューニングしたモーター能力指数に置き換えた構成です。"
         : pp.predictorId === "v5_slit"
           ? "本命予想と同じ5成分ですが、買い目の選定基準になる1マーク予想の予測STを、全国平均STから実測ST履歴ベースのAI推定STに置き換えた構成です。"
@@ -458,6 +467,8 @@ const predictorPredictions: readonly PredictorPrediction[] =
           oneMarkAiEvaluation={showsAiPanels ? oneMarkAiEvaluation : undefined}
           useOneMarkEstimatedST={usesEstimatedST}
           recipeNote={recipeNote}
+          detailHref={bettingStyleFor(pp.predictorId) === "kimarite" ? anaHref : undefined}
+          detailLabel="穴予想の詳細"
           racerPtHref={racerPtHref}
           motorPtHref={motorPtHref}
           wakuPtHref={wakuPtHref}

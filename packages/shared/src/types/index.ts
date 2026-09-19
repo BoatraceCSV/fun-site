@@ -34,7 +34,17 @@ export type {
 } from "./motor-pt-history.js";
 export type { RacerStEntry, RacerStRow } from "./racer-st.js";
 export type { KimariteRow } from "./kimarite.js";
-export type { AnaPick, AnaPicksRow } from "./ana.js";
+export type {
+  AnaBasis,
+  AnaBasisState,
+  AnaPairTableView,
+  AnaPick,
+  AnaPickBasis,
+  AnaPicksRow,
+  CourseTriple,
+  KimariteTableRow,
+  PairTableRow,
+} from "./ana.js";
 export type {
   OriginalExhibitionBoat,
   OriginalExhibitionRow,

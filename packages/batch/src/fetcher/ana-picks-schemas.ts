@@ -32,6 +32,14 @@ const parseCombo = (raw: string | undefined): BetCombo | null => {
   return [a, b, c] as BetCombo;
 };
 
+/** "0.036130" → 0.03613。空欄・非数・0〜1 の範囲外は undefined。 */
+const parseProbability = (raw: string | undefined): number | undefined => {
+  const s = (raw ?? "").trim();
+  if (s === "") return undefined;
+  const p = Number(s);
+  return Number.isFinite(p) && p >= 0 && p <= 1 ? p : undefined;
+};
+
 const parseRow = (row: Record<string, string>): AnaPicksRow | null => {
   const raceCode = (row["レースコード"] ?? "").trim();
   if (!raceCode) return null;
@@ -43,7 +51,14 @@ const parseRow = (row: Record<string, string>): AnaPicksRow | null => {
     const combo = parseCombo(row[`買い目${i}`]);
     // 買い目が 5 点未満のレースもある (該当スジが無い等)。空欄は読み飛ばす。
     if (!combo) continue;
-    picks.push({ combo, kimarite: (row[`決まり手${i}`] ?? "").trim() });
+    // 確率N は 2026-09-19 に追加された列。列が無い / 空欄 (列追加前に書かれた行) は
+    // undefined のまま (穴予想詳細ページが確率列を出さないだけで、買い目には影響しない)。
+    const probability = parseProbability(row[`確率${i}`]);
+    picks.push({
+      combo,
+      kimarite: (row[`決まり手${i}`] ?? "").trim(),
+      ...(probability !== undefined ? { probability } : {}),
+    });
   }
 
   return {
