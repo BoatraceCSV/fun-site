@@ -211,6 +211,26 @@ export const SUI_PARAMS_CSV_PATH = "estimate/stadium/sui_params.csv";
 
 export const fetchSuiParamsCsvText = async (): Promise<string> => fetchAt(SUI_PARAMS_CSV_PATH);
 
+/**
+ * 穴予想 v10_kimarite の Stage2 ペア表 (`data/estimate/kimarite/tables/pair_table.csv`)。
+ * 決まり手セル条件付きの 2着・3着コース分布。32 セル × 20 ペア = 640 行の静的テーブル。
+ * 穴予想詳細ページが読む (買い目の計算には使わない)。
+ */
+export const KIMARITE_PAIR_TABLE_CSV_PATH = "estimate/kimarite/tables/pair_table.csv";
+
+export const fetchKimaritePairTableCsvText = async (): Promise<string> =>
+  fetchAt(KIMARITE_PAIR_TABLE_CSV_PATH);
+
+/**
+ * 出目 (コース並び) ごとの決まり手分布 (`data/estimate/suji/tables/kimarite_table.csv`)。
+ * 買い目 1 点ごとの決まり手注釈の出どころ。120 行の静的テーブル。
+ * A案 v9_suji のディレクトリにあるが、v10_kimarite が読み続けている (2026-08-22 退役後も生成継続)。
+ */
+export const KIMARITE_TABLE_CSV_PATH = "estimate/suji/tables/kimarite_table.csv";
+
+export const fetchKimariteTableCsvText = async (): Promise<string> =>
+  fetchAt(KIMARITE_TABLE_CSV_PATH);
+
 /** 月をまたいで遡る上限。これを超えて古い weights しか無い状態は異常とみなす */
 const WEIGHTS_LOOKBACK_MONTHS = 12;
 

@@ -62,6 +62,7 @@ import {
   parseRaceCode,
 } from "@fun-site/shared";
 import type { PredictorIndexFetch } from "../fetcher/index.js";
+import { type AnaTables, buildAnaBasis } from "./ana-basis.js";
 import {
   buildMotorPtHistoryLookup,
   motorPtKey,
@@ -574,6 +575,8 @@ export const buildRacePrediction = (
   motorPtHistoryByKey: ReadonlyMap<string, MotorPtHistory> = new Map(),
   /** 当日の コース補正セル全件。このレースが引いたぶんだけ抜き出して載せる。 */
   motorPtBaselineRows: readonly MotorPtBaselineRow[] = [],
+  /** 穴予想の根拠テーブル (`buildAnaTables` の出力)。未取得なら undefined。 */
+  anaTables: AnaTables | undefined = undefined,
 ): RacePrediction => {
   const parsed = parseRaceCode(cards.raceCode);
   const stadium = getStadiumById(parsed.stadiumId);
@@ -617,6 +620,10 @@ export const buildRacePrediction = (
   const betPayout: RaceBetPayoutSummary | undefined = primary?.betPayout;
 
   const preview = buildRacePreview(tkz, sui, origEx);
+  const startPrediction = buildStartPrediction(racers, stt, false);
+  // 穴予想 (v10_kimarite) の根拠。買い目は predictions[] 側が正で、ここは説明の材料。
+  // 出目→コースの写像は realtime が展示進入、daily が枠なり (上流の買い目生成と同じ規約)。
+  const anaBasis = buildAnaBasis(kimariteRows, anaPicks?.kimarite, startPrediction, anaTables);
   const recentForm = buildRecentForm(recentNational, recentLocal);
   const waku10 = buildWaku10(waku10Row);
   const tokutenHayami = buildTokutenHayami(tokutenHayamiRow);
@@ -633,7 +640,7 @@ export const buildRacePrediction = (
     grade: title?.grade ?? "",
     votingDeadline: title?.votingDeadline ?? stt?.votingDeadline ?? "",
     racers,
-    startPrediction: buildStartPrediction(racers, stt, false),
+    startPrediction,
     ...(racers.some((r) => r.estimatedST !== undefined)
       ? { startPredictionEstimated: buildStartPrediction(racers, stt, true) }
       : {}),
@@ -655,6 +662,7 @@ export const buildRacePrediction = (
       const rt = kimariteRows?.realtime?.upsetRate;
       return d === undefined && rt === undefined ? undefined : { daily: d, realtime: rt };
     })(),
+    ...(anaBasis !== undefined ? { anaBasis } : {}),
     ...(wakuPtBasis !== undefined ? { wakuPtBasis } : {}),
     ...(weatherPtBasis !== undefined ? { weatherPtBasis } : {}),
     ...(exhibitPtBasis !== undefined ? { exhibitPtBasis } : {}),
@@ -706,6 +714,8 @@ export const buildAllRacePredictions = (
   exhibitPtBasisByStadium?: ReadonlyMap<string, ExhibitPtBasis>,
   /** 場コード → モーターpt の根拠。`buildMotorPtBasisByStadium` の出力。 */
   motorPtBasisByStadium?: ReadonlyMap<string, MotorPtBasis>,
+  /** 穴予想の根拠テーブル。`buildAnaTables` の出力。未取得なら undefined。 */
+  anaTables?: AnaTables,
 ): RacePrediction[] => {
   const sttByCode = new Map(stt.map((s) => [s.raceCode, s]));
   const racerStByCode = new Map(racerSt.map((r) => [r.raceCode, r]));
@@ -787,6 +797,7 @@ export const buildAllRacePredictions = (
       motorPtBasisByStadium?.get(parseRaceCode(cards.raceCode).stadiumId),
       motorPtHistoryByKey,
       motorPtBaseline,
+      anaTables,
     ),
   );
 };

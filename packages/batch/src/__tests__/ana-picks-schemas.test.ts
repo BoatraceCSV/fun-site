@@ -54,6 +54,27 @@ describe("parseAnaPicks", () => {
     expect(picks[0]?.combo).toEqual([3, 1, 4]);
   });
 
+  it("確率N 列があれば出目に載せ、空欄・範囲外は載せない", () => {
+    const header = `${HEADER},確率1,確率2,確率3,確率4,確率5`;
+    const line = [
+      row(
+        "realtime",
+        ["3-1-4", "3-1-2", "3-1-5", "", ""],
+        ["まくり差し", "まくり差し", "まくり差し", "", ""],
+      ),
+      "0.049974",
+      "",
+      "1.5",
+      "",
+      "",
+    ].join(",");
+    const picks = parseAnaPicks(`${header}\n${line}`)[0]?.picks ?? [];
+    expect(picks).toHaveLength(3);
+    expect(picks[0]?.probability).toBeCloseTo(0.049974);
+    expect(picks[1]?.probability).toBeUndefined();
+    expect(picks[2]?.probability).toBeUndefined();
+  });
+
   it("状態が不明な行とレースコード欠落行は落とす", () => {
     const csv = [
       HEADER,

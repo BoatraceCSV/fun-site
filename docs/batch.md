@@ -77,6 +77,8 @@ GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を�
 | `motor-stats-schemas.ts` | `programs/motor_stats`（モーター期成績）のパーサ。`parseMotorStats`。1 モーター 1 行 |
 | `result-schemas.ts` | `results/realtime` のパーサ |
 | `payout-schemas.ts` | `results/payouts` のパーサ |
+| `ana-picks-schemas.ts` | `estimate/kimarite/picks`（穴予想の買い目）のパーサ。`parseAnaPicks`。`買い目N` / `決まり手N` に加え、2026-09-19 から上流が配る `確率N`（ブレンド後の 3連単確率）を `AnaPick.probability` に読む（列が無い / 空欄なら undefined） |
+| `ana-tables-schemas.ts` | 穴予想の根拠テーブルのパーサ。`parsePairTable`（`estimate/kimarite/tables/pair_table.csv` = Stage2 `P(2着,3着 \| セル)` 640 行）/ `parseKimariteTable`（`estimate/suji/tables/kimarite_table.csv` = 出目のコース並びごとの決まり手分布 120 行）。どちらも日付を持たない |
 | `stadium-table-schemas.ts` | 静的テーブルのパーサ。`parseWakuTable`（`estimate/stadium/win_rate.csv` = 場×季節×コース勝率）/ `parseSuiParams`（`estimate/stadium/sui_params.csv` = 場×特徴量×コースの気象回帰係数。切片 `base_c*` は読まない）/ `parseStadiumComponentWeights`（`estimate/stadium/weights/{predictor_id}/YYYY-MM.csv` から指定成分の μ / σ / w）。いずれも日付を持たない |
 | `index.ts` | `fetchAllCsvData()` で固定 CSV（title / race_cards / stt / tkz / sui / original_exhibition / tokuten_hayami / recent_national / recent_local / waku10 / motor_stats / results / payouts）+ 各 active 予想者の index を並列取得して `FetchedCsvData` に統合 (`indexesByPredictor: PredictorIndexFetch[]` で予想者単位に分離)。tkz / sui / original_exhibition は `RacePrediction.preview`、recent_national / recent_local は `RacePrediction.recentForm`、waku10 は `RacePrediction.waku10`、tokuten_hayami は `RacePrediction.tokutenHayami`、motor_stats は `(場コード-モーター番号)` 突合で各 `RaceRacer.motorStats` に結合される |
 
@@ -85,6 +87,8 @@ GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を�
 weights は μ / σ / w が予想者ごとに違いうるため、両詳細ページが解説する
 **primary predictor (slot 最小)** のぶんだけを 1 回取得して 2 成分に切り分ける。
 取得失敗は非致命（`wakuPtBasis` / `weatherPtBasis` が付かず、UI が「テーブル未取得」表示に倒れる）。
+穴予想の根拠テーブル 2 枚（`kimaritePairTable` / `kimariteTable`）も同じく静的テーブルとして
+`fetchAnaTables()` で取得する（失敗は非致命。`anaBasis` の Stage2 ペア表と決まり手分布が欠けるだけ）。
 
 CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参照。
 
@@ -95,7 +99,9 @@ CSV 種別と取得元のパスは [data-sources.md](./data-sources.md) を参�
 レースコードで CSV を結合し、レース 1 件あたり `RacePrediction` を組み立てる。
 [`waku-pt-basis.ts`](../packages/batch/src/site-builder/waku-pt-basis.ts) と
 [`weather-pt-basis.ts`](../packages/batch/src/site-builder/weather-pt-basis.ts) が静的テーブルを
-場コード単位の `WakuPtBasis` / `WeatherPtBasis` に畳み込み、各レースの `wakuPtBasis` /
+場コード単位の `WakuPtBasis` / `WeatherPtBasis` に畳み込み、
+[`ana-basis.ts`](../packages/batch/src/site-builder/ana-basis.ts) が穴予想の根拠（荒れ度メーター CSV の
+32 セル確率 + 買い目 CSV の確率 + 静的テーブル 2 枚）をレース単位の `AnaBasis` に組み立て、各レースの `wakuPtBasis` /
 `weatherPtBasis` として**ビルド時点の値を JSON に焼き込む**（テーブルも重みも月次で動くので、後日ビルドし直しても当時の値で検算できるように）。`indexesByPredictor` を `(raceCode, predictorId)` でグループ化し、active 予想者ごとに `PredictorPrediction` (daily / realtime それぞれの `AiEvaluation`・買い目・回収率) を生成して `RacePrediction.predictions[]` に slot 昇順で並べる。後方互換用に primary predictor (slot=1) の `aiEvaluation` / `betPayout` / `betHitStatus` も平坦化して保持する。直前情報 (`RacePreview`) は tkz / sui / original_exhibition を結合したもので、sui からは天候・風速・**風向コード**・波高・気温・水温を持つ（風向は気象詳細ページが 追い風 / 向かい風 / 横風 の判定に使う）。
 
 ### 4.4. prediction-digest (集計用ダイジェストと incremental キャッシュ)
@@ -209,6 +215,14 @@ pnpm --filter @fun-site/batch run start
 - 出力: バッチが採点した買い目を `PredictorPrediction.dailyPicks` /
   `realtimePicks`、注釈を `dailyKimarite` / `realtimeKimarite` に載せる。
   **web はこれを描画するので、表示と集計が食い違わない**
+- 根拠: 穴予想詳細ページ (`/race/.../ana/`) 向けに `RacePrediction.anaBasis`
+  (`AnaBasis`) を `site-builder/ana-basis.ts` で組む。状態 (daily / realtime) ごとに
+  荒れ度・Stage1 の 32 セル確率 (`KimariteRow.cellProbabilities`)・買い目 5 点の根拠
+  (出目をコース並びに写像し、確率と `kimarite_table.csv` の決まり手分布を添える)・
+  荒れ側上位 3 セルの Stage2 ペア表 (`pair_table.csv` の上位 5 ペア) を持つ。
+  コースへの写像は上流の買い目生成と同じ規約 (daily は枠なり、realtime は展示進入、
+  stt が無ければ枠なり)。**確率も買い目もここで計算し直さない** (上流が配った値を
+  並べるだけ)。荒れ度メーターの行が無いレースでは付かない
 
 ## 予想者統計の体験指標
 

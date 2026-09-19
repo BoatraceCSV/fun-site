@@ -2,6 +2,7 @@ import type { ComponentKey } from "../predictors.js";
 import type { BetHitStatus } from "../utils/bet-hit.js";
 import type { RaceBetPayoutSummary } from "../utils/bet-payout.js";
 import type { BettingPicks } from "../utils/one-mark-distance.js";
+import type { AnaBasis } from "./ana.js";
 import type { MotorPtBaselineCell, MotorPtHistory } from "./motor-pt-history.js";
 import type { IndexState, SessionResultSlot } from "./race-card.js";
 import type { RacePayoutRow } from "./race-payout.js";
@@ -223,6 +224,8 @@ export type UpsetMeter = {
   /** 直前情報反映後の荒れ度 (0〜1)。 */
   readonly realtime?: number;
 };
+
+// 穴予想の根拠 (`AnaBasis`) は ./ana.ts。`RacePrediction.anaBasis` で参照する。
 
 /** 直前情報 - 1 艇分の展示データ（tkz 由来） */
 export type RacePreviewBoat = {
@@ -469,6 +472,13 @@ export type RacePrediction = {
   readonly predictions?: readonly PredictorPrediction[];
   /** 荒れ度メーター (レース単位)。CSV 未生成なら undefined。 */
   readonly upsetMeter?: UpsetMeter;
+  /**
+   * 穴予想 (`v10_kimarite`) の根拠 (Stage1 のセル確率・買い目ごとの確率と決まり手分布・
+   * 荒れ側上位セルの Stage2 ペア表)。穴予想詳細ページ (`/race/.../ana/`) が読む。
+   * 荒れ度メーター CSV が無いレースと **2026-09-19 以前の JSON では undefined**
+   * (UI 側は買い目と荒れ度だけの表示にフォールバックすること)。
+   */
+  readonly anaBasis?: AnaBasis;
   /**
    * 枠番pt の根拠（この場のコース強度テーブル + 場別 μ/σ/w）。
    * 枠番詳細ページが 枠番pt の内訳を再現するのに使う。
