@@ -56,4 +56,4 @@ Claude Code 向けの作業ルールは [CLAUDE.md](CLAUDE.md)。
 
 ## ライセンス
 
-Private
+MIT License. 詳細は [LICENSE](LICENSE) を参照。
