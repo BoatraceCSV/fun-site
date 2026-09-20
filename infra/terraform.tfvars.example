@@ -11,7 +11,7 @@ domain_name = "example.com"
 # 当日分の programs / race_cards / index が公開された直後に走らせる。
 batch_schedule  = "0 9 * * *"
 batch_timezone  = "Asia/Tokyo"
-batch_cpu       = "2"
+batch_cpu       = "1"
 batch_memory    = "2Gi"
 batch_timeout   = "1800s"
 batch_max_retries = 1

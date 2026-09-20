@@ -23,7 +23,7 @@ GCP 上の構成と Terraform の責務。アーキテクチャ全体像は [arc
 | [`infra/outputs.tf`](../infra/outputs.tf) | バケット名・URL・Job 名・LB IP などの出力 |
 | [`infra/artifact-registry.tf`](../infra/artifact-registry.tf) | Docker レジストリ（batch コンテナ用、最新 10 世代 + 30 日保持） |
 | [`infra/cloud-build.tf`](../infra/cloud-build.tf) | main ブランチ push トリガー |
-| [`infra/cloud-run-jobs.tf`](../infra/cloud-run-jobs.tf) | `fun-site-batch` Cloud Run Job |
+| [`infra/cloud-run-jobs.tf`](../infra/cloud-run-jobs.tf) | `fun-site-batch` Cloud Run Job（既定 1 vCPU / 2Gi。Astro ビルドは単一スレッド主体で、課金は vCPU 秒比例のため 2 vCPU にしない） |
 | [`infra/cloud-scheduler.tf`](../infra/cloud-scheduler.tf) | 空（旧朝バッチ廃止後、destroy 対象の受け皿） |
 | [`infra/cloud-storage.tf`](../infra/cloud-storage.tf) | Web / Data バケット |
 | [`infra/dns.tf`](../infra/dns.tf) | Cloud DNS ゾーン + A レコード |
@@ -47,8 +47,16 @@ GCP 上の構成と Terraform の責務。アーキテクチャ全体像は [arc
 | バケット名（テンプレ） | 用途 | ライフサイクル | 公開 |
 |---|---|---|---|
 | `fun-site-web-{project}` | 静的サイト配信 | なし | 公開読取（CDN 経由） |
-| `fun-site-data-{project}` | `last-build.json`、画像、中間ファイル | 90 日超 → NEARLINE、バージョン管理あり | 非公開 |
+| `fun-site-data-{project}` | `predictions/{date}/` (予想 JSON)、`_meta/` (ダイジェスト・節集計 state・`last-build.json`) | `predictions/` のみ 90 日超 → NEARLINE。旧バージョン (noncurrent) は削除。バージョン管理なし | 非公開 |
 | `boatrace-realtime-data-{project}` | preview-realtime が書く CSV ミラー | 30 日超 → NEARLINE、365 日超 → COLDLINE | 非公開 |
+
+3 バケットとも soft delete は無効 (`retention_duration_seconds = 0`)。2 分サイクルの
+上書き・削除で旧データが 7 日ぶん課金対象として残るのを避けるため。
+
+Data バケットは以前バージョン管理が有効で、ビルドごとの `predictions/` 上書きにより
+旧バージョンが無制限に蓄積していた (2026-09 時点で live 1.3 GB に対し noncurrent 約
+290 GB)。`num_newer_versions = 1` の削除ルールが既存の旧バージョンも順次消す
+(ライフサイクルによる削除は操作課金なし)。
 
 ## ネットワーク・配信
 

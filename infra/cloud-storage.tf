@@ -14,6 +14,12 @@ resource "google_storage_bucket" "web" {
     not_found_page   = "404.html"
   }
 
+  # 2 分サイクルの再デプロイで HTML を上書き・削除するたびに、既定の soft delete
+  # (7 日保持) が旧データを課金対象として残す。復旧用途は無いので無効化する。
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
+
   cors {
     origin          = ["*"]
     method          = ["GET", "HEAD"]
@@ -39,9 +45,13 @@ resource "google_storage_bucket" "data" {
   uniform_bucket_level_access = true
   force_destroy               = false
 
+  # 過去日の予想 JSON (predictions/{date}/) はダイジェスト生成後ほぼ読まれない
+  # ので NEARLINE に落とす。_meta/ 配下 (ダイジェスト・節集計 state・last-build)
+  # は毎ビルド読むため対象外 (NEARLINE だと読取ごとに取得料が乗る)。
   lifecycle_rule {
     condition {
-      age = var.storage_lifecycle_age_days
+      age            = var.storage_lifecycle_age_days
+      matches_prefix = ["predictions/"]
     }
     action {
       type          = "SetStorageClass"
@@ -49,7 +59,25 @@ resource "google_storage_bucket" "data" {
     }
   }
 
+  # 旧バージョン (noncurrent) は削除する。以前はバージョン管理を有効にしたまま
+  # 削除ルールが無く、ビルドごとの predictions/ 上書きで旧バージョンが無制限に
+  # 蓄積していた (2026-09 時点で live 1.3 GB に対し noncurrent 約 290 GB)。
+  # バージョン管理は無効化するが、既存の noncurrent オブジェクトはこのルールで
+  # 順次 (無料で) 消える。
+  lifecycle_rule {
+    condition {
+      num_newer_versions = 1
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
   versioning {
-    enabled = true
+    enabled = false
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = 0
   }
 }

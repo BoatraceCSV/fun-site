@@ -63,6 +63,12 @@ resource "google_storage_bucket" "csv_mirror" {
   versioning {
     enabled = false
   }
+
+  # preview-realtime が 2 分ごとに当日 CSV を上書きするため、既定の soft delete
+  # (7 日保持) だと上書き前のデータが課金対象として残り続ける。無効化する。
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
 }
 
 # -----------------------------------------------------------------------------

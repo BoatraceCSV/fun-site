@@ -25,9 +25,11 @@ variable "domain_name" {
 # (Scheduler `preview-realtime-daytime`) 発火で自動的に走る。
 
 variable "batch_cpu" {
+  # Astro ビルドは単一スレッド主体で 2 vCPU にしても短縮幅が小さい一方、
+  # Cloud Run Jobs の課金は vCPU 秒に比例する。1 vCPU を既定にする。
   description = "CPU allocation for Cloud Run Jobs batch"
   type        = string
-  default     = "2"
+  default     = "1"
 }
 
 variable "batch_memory" {
