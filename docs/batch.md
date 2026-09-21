@@ -161,12 +161,12 @@ predictor-stats と同じ `PredictionDigest[]` (pipeline が 1 回だけ集め�
 
 | ファイル | 役割 |
 |---|---|
-| `data-writer.ts` | `RacePrediction[]` を JSON として (a) ローカル `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に書き出し、(b) `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` へアップロード (節集計・統計集計の incremental キャッシュ生成用、非致命)。`mapHistoricalPredictions(date, project)` で過去日 JSON を 1 件ずつ射影しながら読むヘルパと、それを恒等射影で包んだ `fetchHistoricalPredictions(date)` (1 日ぶんを丸ごと返す。節集計の 7 日範囲向け) を持つ |
+| `data-writer.ts` | `RacePrediction[]` を JSON として (a) ローカル `packages/web/src/data/races/{YYYY-MM-DD}/{raceCode}.json` に書き出し、(b) `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` へアップロード (節集計・統計集計の incremental キャッシュ生成用、非致命)。(b) は差分のみ: 日付ごとに 1 回 `predictions/{date}/` を一覧し、既存オブジェクトのカスタムメタデータ `predictionContentHash` (`generatedAt` を除いた JSON の sha256) と一致するレースは書かない (`planPredictionUploads`)。一覧に失敗した日は全件アップロードに倒す。`mapHistoricalPredictions(date, project)` で過去日 JSON を 1 件ずつ射影しながら読むヘルパと、それを恒等射影で包んだ `fetchHistoricalPredictions(date)` (1 日ぶんを丸ごと返す。節集計の 7 日範囲向け) を持つ |
 | `dates-index.ts` | `gs://${GCS_WEB_BUCKET}/_meta/dates.json` を取得 → 当日マージ → `packages/web/src/data/_meta/dates.json` に書き出し。デプロイ後に GCS へ書き戻し |
 | `series-aggregator.ts` | 節集計 (直前買い目戦略の的中率・回収率)。会場ページの「今節成績」セクション用。`SERIES_LOOKBACK_DAYS = 7`。`_meta/series-summary.json` を `packages/web/src/data/_meta/` に書き出す |
 | `series-state-store.ts` | 節集計の incremental キャッシュ (統計集計側のキャッシュは `aggregator/prediction-digest-store.ts`)。`gs://${GCS_DATA_BUCKET}/_meta/series-state.json` で stadium × date のスナップショット + dayLabel を保持。過去日は再計算不要、当日分のみ毎ビルドで上書き。`lookback` 上限を超えた古い日は prune |
 | `build.ts` | Astro CLI を直接実行（pnpm 経由のオーバーヘッドを避ける） |
-| `deploy.ts` | `web/dist/` 配下を GCS の Web バケットへアップロード。content-type と cache-control (`.html`=`no-cache` / `_astro/`=`immutable` 1年 / その他=`max-age=3600`) を設定。古い日付の HTML (`race/{date}/`, `archive/{date}/`) と `_astro/` (content-hash 付き CSS / JS チャンク)、`images/`、`_meta/` は削除しないフィルタで GCS に残置 |
+| `deploy.ts` | `web/dist/` 配下を GCS の Web バケットへアップロード。content-type と cache-control (`.html`=`no-cache` / `_astro/`=`immutable` 1年 / その他=`max-age=3600`) を設定。既存オブジェクトの md5 と一致するファイルはスキップ。既存一覧はバケット全体ではなく、ルート直下 (delimiter 付き) + `selectRemotePrefixes` が選ぶプレフィックス (当日の `race/{date}/` / `archive/{date}/`、削除対象になり得るその他のプレフィックス、ローカル成果物を持つ `_astro/` 等) だけを取得する (過去日付の `race/` 数万件を毎回走査しない)。古い日付の HTML (`race/{date}/`, `archive/{date}/`) と `_astro/` (content-hash 付き CSS / JS チャンク)、`images/`、`_meta/` は削除しないフィルタで GCS に残置 |
 | `index.ts` | `buildAndDeploy(predictions, raceDate)` で上記を順に呼び、最後に `last-build.json` を更新 |
 
 ## 環境変数

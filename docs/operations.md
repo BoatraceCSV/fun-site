@@ -112,7 +112,7 @@ gcloud run jobs update fun-site-batch \
 
 | GCS パス | 役割 | 更新タイミング |
 |---|---|---|
-| `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` | レース予想の生 JSON。節集計の incremental キャッシュにヒットしなかった過去日を補完するために `fetchHistoricalPredictions(date)` で取得する | 当日ビルド毎に上書き |
+| `gs://${GCS_DATA_BUCKET}/predictions/{YYYY-MM-DD}/{raceCode}.json` | レース予想の生 JSON。節集計の incremental キャッシュにヒットしなかった過去日を補完するために `fetchHistoricalPredictions(date)` で取得する。カスタムメタデータ `predictionContentHash` (`generatedAt` を除いた内容の sha256) を持ち、次回ビルドの差分判定に使う | 当日ビルド毎、内容が変わったレースのみ上書き |
 | `gs://${GCS_DATA_BUCKET}/_meta/series-state.json` | stadium × date のスナップショット (`settledRaceCount` / `hitCount` / `totalBetCostYen` / `totalPayoutYen` + `dayLabel`) を保持。過去日エントリは再計算せずに再利用、当日分は毎ビルド上書き、`SERIES_LOOKBACK_DAYS` 上限を超えた古い日は prune | 当日ビルド毎 |
 | `gs://${GCS_DATA_BUCKET}/_meta/prediction-digests/{YYYY-MM-DD}.json` | 予想者統計 (`/predictors`) と分析軸別集計 (`/stats`) 用の日別ダイジェスト (`PredictionDigest[]`)。集計に必要な項目だけを持つ軽量版で、過去日はこれを再利用、当日は毎ビルド上書き。無い過去日は `predictions/{date}/` から射影して補完する ([batch.md](batch.md) 4.4) | 当日ビルド毎 (過去日は初回のみ) |
 | `packages/web/src/data/_meta/series-summary.json` | Astro が読む集計結果 (`byStadium[stadiumId]: SeriesBetPayoutAggregate`)。GCS にはアップロードせず Astro ビルド入力としてのみ使う | 当日ビルド毎 |
