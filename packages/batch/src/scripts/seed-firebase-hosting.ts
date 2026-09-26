@@ -39,6 +39,8 @@ import {
 const BUCKET = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web-boatrace-487212";
 const MAX_VERSIONS = Number(process.env["FIREBASE_MAX_VERSIONS"] ?? "5");
 const CONCURRENCY = 32;
+/** この期間内に更新されたオブジェクトは内容をメモリに保持する (バッチの上書きとの競合対策) */
+const RECENT_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 const main = async (): Promise<void> => {
   await setMaxVersions(MAX_VERSIONS);
@@ -46,27 +48,38 @@ const main = async (): Promise<void> => {
 
   const bucket = new Storage().bucket(BUCKET);
   const [objects] = await bucket.getFiles();
-  const names = objects
-    .map((o) => o.name)
-    .filter((n) => !(n.startsWith("_meta/") || n.endsWith("/")));
-  console.info(`Hashing ${names.length} objects from gs://${BUCKET}...`);
+  const targets = objects.filter((o) => !(o.name.startsWith("_meta/") || o.name.endsWith("/")));
+  console.info(`Hashing ${targets.length} objects from gs://${BUCKET}...`);
 
+  // 稼働中のバッチは 5 分ごとに当日ページ (と日付の無いページ) を上書きするため、
+  // ハッシュ計算からアップロードまでの間に中身が変わり得る。最近更新された
+  // オブジェクトは gzip 済み内容をメモリに持っておき、再ダウンロードしない
+  // (過去日付のページは更新されないので再ダウンロードで同じ内容が得られる)。
+  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
   const nameByHash = new Map<string, string>();
+  const recentContent = new Map<string, Buffer>();
   const files: Record<string, string> = {};
   let done = 0;
-  await mapWithConcurrency(names, CONCURRENCY, async (name) => {
-    const [content] = await bucket.file(name).download();
-    const { hash } = gzipAndHash(content);
-    files[name] = hash;
-    nameByHash.set(hash, name);
-    if (++done % 5000 === 0) console.info(`  hashed ${done}/${names.length}`);
+  await mapWithConcurrency(targets, CONCURRENCY, async (object) => {
+    const [content] = await object.download();
+    const { gzipped, hash } = gzipAndHash(content);
+    files[object.name] = hash;
+    nameByHash.set(hash, object.name);
+    const updated = Date.parse(String(object.metadata.updated ?? ""));
+    if (!(updated < recentThreshold)) recentContent.set(hash, gzipped);
+    if (++done % 5000 === 0) console.info(`  hashed ${done}/${targets.length}`);
   });
+  console.info(`Kept ${recentContent.size} recently updated contents in memory`);
 
   const version = await releaseFiles(files, async (hash) => {
+    const cached = recentContent.get(hash);
+    if (cached) return cached;
     const name = nameByHash.get(hash);
     if (!name) return undefined;
     const [content] = await bucket.file(name).download();
-    return gzipAndHash(content).gzipped;
+    const { gzipped, hash: current } = gzipAndHash(content);
+    // ハッシュ計算後に書き換わっていたら中身が得られない (再実行で解消する)
+    return current === hash ? gzipped : undefined;
   });
   await saveManifest({ version, files });
   console.info("Seed completed");
