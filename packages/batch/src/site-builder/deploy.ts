@@ -5,7 +5,7 @@ import { join, relative, resolve } from "node:path";
 import { toJSTDateString } from "@fun-site/shared";
 import { type Bucket, type File, Storage } from "@google-cloud/storage";
 
-const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
+export const WEB_DIST_DIR = resolve(import.meta.dirname, "../../../web/dist");
 // バケット名は Terraform の `${local.prefix}-web-${var.project_id}` 規則で
 // 生成される (例: fun-site-web-boatrace-487212)。Cloud Run Job では
 // GCS_WEB_BUCKET 環境変数経由で渡されるが、ローカル実行用にもデフォルトを
@@ -18,7 +18,7 @@ const UPLOAD_CONCURRENCY = 16;
 const storage = new Storage();
 
 /** ディレクトリ内の全ファイルを再帰的に取得 */
-const listFilesRecursively = async (dir: string): Promise<string[]> => {
+export const listFilesRecursively = async (dir: string): Promise<string[]> => {
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
@@ -88,7 +88,7 @@ const computeMd5Base64 = (filePath: string): Promise<string> =>
   });
 
 /** 並列度を制限しながら配列を処理 */
-const mapWithConcurrency = async <T, R>(
+export const mapWithConcurrency = async <T, R>(
   items: readonly T[],
   concurrency: number,
   fn: (item: T) => Promise<R>,
@@ -115,6 +115,28 @@ const PROTECTED_PREFIXES = ["images/", "_meta/", "_astro/"] as const;
 const DATE_PARTITIONED_PREFIXES = ["race/", "archive/"] as const;
 
 const DATE_PREFIX_RE = /^(race|archive)\/(\d{4}-\d{2}-\d{2})\//;
+
+/**
+ * デプロイ先に既にあるパス `name` が、今回のビルド成果物に無いために削除すべき
+ * ものかを判定する (pure)。GCS デプロイと Firebase Hosting デプロイで共通。
+ *
+ * - 今回アップロードするパス … 残す
+ * - `images/` / `_meta/` / `_astro/` … 残す (理由は deployToStorage 内のコメント参照)
+ * - `race/YYYY-MM-DD/` / `archive/YYYY-MM-DD/` で日付が当日以外 … 残す
+ *   (再ビルドは当日分だけなので過去日付のページはローカルに無い)
+ * - それ以外 … 削除
+ */
+export const isStaleRemote = (
+  name: string,
+  uploadedNames: ReadonlySet<string>,
+  today: string,
+): boolean => {
+  if (uploadedNames.has(name)) return false;
+  if (PROTECTED_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
+  const m = name.match(DATE_PREFIX_RE);
+  if (m && m[2] !== today) return false;
+  return true;
+};
 
 /**
  * 今回のデプロイで GCS から一覧取得するプレフィックスを決める (pure)。
@@ -282,13 +304,9 @@ export const deployToStorage = async (): Promise<void> => {
   // `race/YYYY-MM-DD/...` / `archive/YYYY-MM-DD/...` のうち日付が当日以外のものは
   // 削除対象から除外する。
   const uploadedNames = new Set(localEntries.map((e) => e.destination));
-  const toDelete = [...existingByName.keys()].filter((name) => {
-    if (uploadedNames.has(name)) return false;
-    if (PROTECTED_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
-    const m = name.match(DATE_PREFIX_RE);
-    if (m && m[2] !== todayJST) return false;
-    return true;
-  });
+  const toDelete = [...existingByName.keys()].filter((name) =>
+    isStaleRemote(name, uploadedNames, todayJST),
+  );
   if (toDelete.length > 0) {
     await mapWithConcurrency(toDelete, UPLOAD_CONCURRENCY, async (name) => {
       await bucket.file(name).delete();

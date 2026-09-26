@@ -3,7 +3,39 @@ import { runAstroBuild } from "./build.js";
 import { savePredictionDataToGcs, writePredictionData } from "./data-writer.js";
 import { fetchDatesIndex, mergeDate, saveDatesIndex, writeLocalDatesIndex } from "./dates-index.js";
 import { deployToStorage } from "./deploy.js";
+import { deployToFirebaseHosting } from "./firebase-hosting.js";
 import { buildSeriesSummary } from "./series-aggregator.js";
+
+const DEPLOYERS: Record<string, () => Promise<void>> = {
+  gcs: deployToStorage,
+  firebase: deployToFirebaseHosting,
+};
+
+/**
+ * `DEPLOY_TARGETS` (カンマ区切り、既定 `gcs`) の配信先へ順にデプロイする。
+ * Firebase Hosting への移行中は `gcs,firebase` で両方に出す。1 つが失敗しても
+ * 残りは試し、最後にまとめて失敗させる。
+ */
+const deploySite = async (): Promise<void> => {
+  const targets = (process.env["DEPLOY_TARGETS"] ?? "gcs")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const errors: string[] = [];
+  for (const target of targets) {
+    const deploy = DEPLOYERS[target];
+    if (!deploy) {
+      errors.push(`unknown deploy target: ${target}`);
+      continue;
+    }
+    try {
+      await deploy();
+    } catch (error) {
+      errors.push(`${target}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (errors.length > 0) throw new Error(`Deploy failed (${errors.join("; ")})`);
+};
 
 /**
  * データ書き出し → dates index 取得・マージ → 節集計 → Astro ビルド → デプロイ → dates index 書き戻し。
@@ -47,7 +79,7 @@ export const buildAndDeploy = async (
   }
 
   await runAstroBuild();
-  await deployToStorage();
+  await deploySite();
 
   // GCS に書き戻し（デプロイ成功後）。失敗しても次回ビルドで追従するので非致命扱い。
   try {
@@ -62,6 +94,7 @@ export const buildAndDeploy = async (
 export { runAstroBuild } from "./build.js";
 export { savePredictionDataToGcs, writePredictionData } from "./data-writer.js";
 export { deployToStorage } from "./deploy.js";
+export { deployToFirebaseHosting } from "./firebase-hosting.js";
 export {
   buildAllRacePredictions,
   buildRacePrediction,

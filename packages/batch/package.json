@@ -10,13 +10,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed-archive-dates": "node --import tsx/esm src/scripts/seed-archive-dates.ts",
-    "recover-past-css": "node --import tsx/esm src/scripts/recover-past-css.ts"
+    "recover-past-css": "node --import tsx/esm src/scripts/recover-past-css.ts",
+    "seed-firebase-hosting": "node --import tsx/esm src/scripts/seed-firebase-hosting.ts"
   },
   "dependencies": {
     "@fun-site/shared": "workspace:*",
     "@google-cloud/storage": "^7.15.0",
     "@google/genai": "^1.41.0",
     "csv-parse": "^5.6.0",
+    "google-auth-library": "^9.15.1",
     "p-map": "^7.0.3",
     "zod": "^3.24.2"
   },
