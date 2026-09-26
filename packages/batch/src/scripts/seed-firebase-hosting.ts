@@ -77,7 +77,11 @@ const main = async (): Promise<void> => {
         return [object.name, hash];
       },
     );
-    uploaded += await populateVersion(version, entries, async (hash) => contents.get(hash));
+    // await より前に uploaded を読むと並列チャンク間で加算が失われるので、先に待つ
+    const uploadedInChunk = await populateVersion(version, entries, async (hash) =>
+      contents.get(hash),
+    );
+    uploaded += uploadedInChunk;
     for (const [name, hash] of entries) files[name] = hash;
     done += entries.length;
     const elapsed = Math.round((Date.now() - startedAt) / 1000);
