@@ -72,7 +72,7 @@ export const HOSTING_CONFIG = {
 /** 内容を gzip してハッシュを取る。Firebase Hosting は gzip 後の SHA-256 で内容を識別する */
 export const gzipAndHash = (content: Buffer): { gzipped: Buffer; hash: string } => {
   // Node の gzip ヘッダは mtime=0 固定なので、同じ内容なら同じハッシュになる
-  const gzipped = gzipSync(content, { level: 9 });
+  const gzipped = gzipSync(content);
   return { gzipped, hash: createHash("sha256").update(gzipped).digest("hex") };
 };
 
@@ -170,29 +170,33 @@ export const setMaxVersions = async (maxVersions: number, siteId = SITE_ID): Pro
   });
 };
 
-/**
- * ファイル一覧 `files` で新しい version を作って release する。
- *
- * `getUpload` はハッシュから gzip 済み内容を返す。populateFiles が要求した
- * ハッシュの内容が得られない場合 (= 前回一覧にあるのに Firebase 側に中身が
- * 無い) はエラーにする。
- *
- * @returns release した version name
- */
-export const releaseFiles = async (
-  files: HostingFileMap,
-  getUpload: (hash: string) => Promise<Buffer | undefined>,
-  siteId = SITE_ID,
-): Promise<string> => {
+/** 新しい version を作成し、その name (`sites/{site}/versions/{id}`) を返す */
+export const createVersion = async (siteId = SITE_ID): Promise<string> => {
   const version = await requestJson<{ name: string }>(`${API}/sites/${siteId}/versions`, "POST", {
     config: HOSTING_CONFIG,
   });
+  return version.name;
+};
 
-  const entries = Object.entries(files);
+/**
+ * version にファイル一覧 `entries` (パス → ハッシュ) を追加し、Firebase 側に中身が
+ * 無いハッシュだけアップロードする。1 回の呼び出しは populateFiles の上限
+ * (1,000 件) ごとに分けて送る。
+ *
+ * `getUpload` はハッシュから gzip 済み内容を返す。中身が得られない場合
+ * (= 前回一覧にあるのに Firebase 側に中身が無い) はエラーにする。
+ *
+ * @returns アップロードした件数
+ */
+export const populateVersion = async (
+  version: string,
+  entries: readonly (readonly [string, string])[],
+  getUpload: (hash: string) => Promise<Buffer | undefined>,
+): Promise<number> => {
   let uploaded = 0;
   for (const batch of chunk(entries, POPULATE_BATCH_SIZE)) {
     const res = await requestJson<{ uploadRequiredHashes?: string[]; uploadUrl: string }>(
-      `${API}/${version.name}:populateFiles`,
+      `${API}/${version}:populateFiles`,
       "POST",
       { files: Object.fromEntries(batch.map(([path, hash]) => [`/${path}`, hash])) },
     );
@@ -210,17 +214,35 @@ export const releaseFiles = async (
     });
     uploaded += required.length;
   }
+  return uploaded;
+};
 
-  await requestJson(`${API}/${version.name}?updateMask=status`, "PATCH", { status: "FINALIZED" });
+/** version を確定 (FINALIZED) して release する */
+export const finalizeAndRelease = async (version: string, siteId = SITE_ID): Promise<void> => {
+  await requestJson(`${API}/${version}?updateMask=status`, "PATCH", { status: "FINALIZED" });
   await requestJson(
-    `${API}/sites/${siteId}/releases?versionName=${encodeURIComponent(version.name)}`,
+    `${API}/sites/${siteId}/releases?versionName=${encodeURIComponent(version)}`,
     "POST",
     {},
   );
-  console.info(
-    `Released ${version.name} (${entries.length} files, uploaded ${uploaded} new contents)`,
-  );
-  return version.name;
+};
+
+/**
+ * ファイル一覧 `files` で新しい version を作って release する。
+ *
+ * @returns release した version name
+ */
+export const releaseFiles = async (
+  files: HostingFileMap,
+  getUpload: (hash: string) => Promise<Buffer | undefined>,
+  siteId = SITE_ID,
+): Promise<string> => {
+  const version = await createVersion(siteId);
+  const entries = Object.entries(files);
+  const uploaded = await populateVersion(version, entries, getUpload);
+  await finalizeAndRelease(version, siteId);
+  console.info(`Released ${version} (${entries.length} files, uploaded ${uploaded} new contents)`);
+  return version;
 };
 
 // -----------------------------------------------------------------------------

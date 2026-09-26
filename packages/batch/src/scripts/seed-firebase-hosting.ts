@@ -10,10 +10,10 @@
  *
  * 動作:
  *   1. サイトの保持 version 数の上限を設定 (FIREBASE_MAX_VERSIONS)
- *   2. Web バケットの全オブジェクト (`_meta/` を除く) をダウンロードして
- *      gzip 後ハッシュを計算
- *   3. その一覧で version を作って release し、manifest を `_meta/` に保存
- *      (Firebase 側に中身が無いハッシュだけ再ダウンロードしてアップロード)
+ *   2. Web バケットの全オブジェクト (`_meta/` を除く) を 1,000 件ずつダウンロード →
+ *      gzip 後ハッシュを計算 → version に追加し、Firebase 側に中身が無いものだけ
+ *      アップロード (4 チャンク並列)
+ *   3. version を確定して release し、manifest を `_meta/` に保存
  *
  *   何度実行しても同じ結果になる (中身が同じファイルはアップロードされない)。
  *   移行期間中 (DEPLOY_TARGETS=gcs のまま) に日をまたいだ場合は、
@@ -30,17 +30,22 @@
 import { Storage } from "@google-cloud/storage";
 import { mapWithConcurrency } from "../site-builder/deploy.js";
 import {
+  chunk,
+  createVersion,
+  finalizeAndRelease,
   gzipAndHash,
-  releaseFiles,
+  populateVersion,
   saveManifest,
   setMaxVersions,
 } from "../site-builder/firebase-hosting.js";
 
 const BUCKET = process.env["GCS_WEB_BUCKET"] ?? "fun-site-web-boatrace-487212";
 const MAX_VERSIONS = Number(process.env["FIREBASE_MAX_VERSIONS"] ?? "5");
-const CONCURRENCY = 32;
-/** この期間内に更新されたオブジェクトは内容をメモリに保持する (バッチの上書きとの競合対策) */
-const RECENT_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+/** 1 チャンクの中でダウンロードする並列数 */
+const DOWNLOAD_CONCURRENCY = 32;
+/** 同時に処理するチャンク数 (チャンク = populateFiles 1 回ぶんの 1,000 件) */
+const CHUNK_CONCURRENCY = 4;
+const CHUNK_SIZE = 1000;
 
 const main = async (): Promise<void> => {
   await setMaxVersions(MAX_VERSIONS);
@@ -49,38 +54,42 @@ const main = async (): Promise<void> => {
   const bucket = new Storage().bucket(BUCKET);
   const [objects] = await bucket.getFiles();
   const targets = objects.filter((o) => !(o.name.startsWith("_meta/") || o.name.endsWith("/")));
-  console.info(`Hashing ${targets.length} objects from gs://${BUCKET}...`);
+  const chunks = chunk(targets, CHUNK_SIZE);
+  console.info(`Seeding ${targets.length} objects from gs://${BUCKET} in ${chunks.length} chunks`);
 
-  // 稼働中のバッチは 5 分ごとに当日ページ (と日付の無いページ) を上書きするため、
-  // ハッシュ計算からアップロードまでの間に中身が変わり得る。最近更新された
-  // オブジェクトは gzip 済み内容をメモリに持っておき、再ダウンロードしない
-  // (過去日付のページは更新されないので再ダウンロードで同じ内容が得られる)。
-  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
-  const nameByHash = new Map<string, string>();
-  const recentContent = new Map<string, Buffer>();
+  // 1,000 件ずつ「ダウンロード → ハッシュ → populateFiles → 要求された分だけ
+  // アップロード」を 1 パスで行う。ハッシュを取った内容をそのまま送るので、
+  // 実行中にバッチが当日ページを上書きしても内容とハッシュは食い違わない。
+  const version = await createVersion();
   const files: Record<string, string> = {};
   let done = 0;
-  await mapWithConcurrency(targets, CONCURRENCY, async (object) => {
-    const [content] = await object.download();
-    const { gzipped, hash } = gzipAndHash(content);
-    files[object.name] = hash;
-    nameByHash.set(hash, object.name);
-    const updated = Date.parse(String(object.metadata.updated ?? ""));
-    if (!(updated < recentThreshold)) recentContent.set(hash, gzipped);
-    if (++done % 5000 === 0) console.info(`  hashed ${done}/${targets.length}`);
+  let uploaded = 0;
+  const startedAt = Date.now();
+  await mapWithConcurrency(chunks, CHUNK_CONCURRENCY, async (objectsInChunk) => {
+    const contents = new Map<string, Buffer>();
+    const entries = await mapWithConcurrency(
+      objectsInChunk,
+      DOWNLOAD_CONCURRENCY,
+      async (object): Promise<[string, string]> => {
+        const [content] = await object.download();
+        const { gzipped, hash } = gzipAndHash(content);
+        contents.set(hash, gzipped);
+        return [object.name, hash];
+      },
+    );
+    // await より前に uploaded を読むと並列チャンク間で加算が失われるので、先に待つ
+    const uploadedInChunk = await populateVersion(version, entries, async (hash) =>
+      contents.get(hash),
+    );
+    uploaded += uploadedInChunk;
+    for (const [name, hash] of entries) files[name] = hash;
+    done += entries.length;
+    const elapsed = Math.round((Date.now() - startedAt) / 1000);
+    console.info(`  ${done}/${targets.length} files (uploaded ${uploaded}) in ${elapsed}s`);
   });
-  console.info(`Kept ${recentContent.size} recently updated contents in memory`);
 
-  const version = await releaseFiles(files, async (hash) => {
-    const cached = recentContent.get(hash);
-    if (cached) return cached;
-    const name = nameByHash.get(hash);
-    if (!name) return undefined;
-    const [content] = await bucket.file(name).download();
-    const { gzipped, hash: current } = gzipAndHash(content);
-    // ハッシュ計算後に書き換わっていたら中身が得られない (再実行で解消する)
-    return current === hash ? gzipped : undefined;
-  });
+  await finalizeAndRelease(version);
+  console.info(`Released ${version} (${done} files, uploaded ${uploaded} new contents)`);
   await saveManifest({ version, files });
   console.info("Seed completed");
 };
