@@ -33,6 +33,13 @@ const MANIFEST_OBJECT_NAME = "_meta/firebase-hosting-manifest.json.gz";
 /** populateFiles 1 回あたりの最大ファイル数 (API 上限) */
 const POPULATE_BATCH_SIZE = 1000;
 
+/**
+ * populateFiles を並列に送る数。サイトは 5 万件超あり、差分が数十件でも毎回
+ * 全件の一覧を送り直す必要がある。直列だと 54 回 × 約 2 秒 = 約 110 秒かかり、
+ * 1 日 100 回走るバッチの課金時間を大きく押し上げていた。
+ */
+const POPULATE_CONCURRENCY = 8;
+
 const UPLOAD_CONCURRENCY = 16;
 
 /** パス (先頭 `/` なし、GCS の object name と同形式) → gzip 後内容の SHA-256 hex */
@@ -180,8 +187,8 @@ export const createVersion = async (siteId = SITE_ID): Promise<string> => {
 
 /**
  * version にファイル一覧 `entries` (パス → ハッシュ) を追加し、Firebase 側に中身が
- * 無いハッシュだけアップロードする。1 回の呼び出しは populateFiles の上限
- * (1,000 件) ごとに分けて送る。
+ * 無いハッシュだけアップロードする。populateFiles の上限 (1,000 件) ごとに分け、
+ * `POPULATE_CONCURRENCY` 並列で送る。
  *
  * `getUpload` はハッシュから gzip 済み内容を返す。中身が得られない場合
  * (= 前回一覧にあるのに Firebase 側に中身が無い) はエラーにする。
@@ -193,28 +200,31 @@ export const populateVersion = async (
   entries: readonly (readonly [string, string])[],
   getUpload: (hash: string) => Promise<Buffer | undefined>,
 ): Promise<number> => {
-  let uploaded = 0;
-  for (const batch of chunk(entries, POPULATE_BATCH_SIZE)) {
-    const res = await requestJson<{ uploadRequiredHashes?: string[]; uploadUrl: string }>(
-      `${API}/${version}:populateFiles`,
-      "POST",
-      { files: Object.fromEntries(batch.map(([path, hash]) => [`/${path}`, hash])) },
-    );
-    const required = res.uploadRequiredHashes ?? [];
-    await mapWithConcurrency(required, UPLOAD_CONCURRENCY, async (hash) => {
-      const body = await getUpload(hash);
-      if (!body) {
-        throw new Error(`Firebase Hosting requires content for ${hash}, but it is not available`);
-      }
-      await request(`${res.uploadUrl}/${hash}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: new Uint8Array(body),
+  const uploadedPerBatch = await mapWithConcurrency(
+    chunk(entries, POPULATE_BATCH_SIZE),
+    POPULATE_CONCURRENCY,
+    async (batch) => {
+      const res = await requestJson<{ uploadRequiredHashes?: string[]; uploadUrl: string }>(
+        `${API}/${version}:populateFiles`,
+        "POST",
+        { files: Object.fromEntries(batch.map(([path, hash]) => [`/${path}`, hash])) },
+      );
+      const required = res.uploadRequiredHashes ?? [];
+      await mapWithConcurrency(required, UPLOAD_CONCURRENCY, async (hash) => {
+        const body = await getUpload(hash);
+        if (!body) {
+          throw new Error(`Firebase Hosting requires content for ${hash}, but it is not available`);
+        }
+        await request(`${res.uploadUrl}/${hash}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: new Uint8Array(body),
+        });
       });
-    });
-    uploaded += required.length;
-  }
-  return uploaded;
+      return required.length;
+    },
+  );
+  return uploadedPerBatch.reduce((a, b) => a + b, 0);
 };
 
 /** version を確定 (FINALIZED) して release する */
