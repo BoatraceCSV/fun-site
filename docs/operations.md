@@ -14,6 +14,42 @@ terraform plan
 terraform apply
 ```
 
+## Firebase Hosting への切替
+
+配信を Global LB + Cloud CDN から Firebase Hosting へ移す手順。`infra/terraform.tfvars`
+の `web_hosting` を 1 段ずつ進めて `terraform apply` する (各段階の意味は
+[infrastructure.md](./infrastructure.md#ネットワーク配信))。
+
+1. **`web_hosting = "lb"` で apply** — Firebase プロジェクト・Hosting サイト・カスタム
+   ドメイン・所有権確認の TXT を作り、バッチの `DEPLOY_TARGETS` を `gcs,firebase` にする。
+   配信は LB のまま。seed 前なので Firebase へのデプロイはスキップされる
+   (`has no release yet` の warn ログ)
+2. **seed** — Web バケットの全ファイルを Firebase Hosting へ初回 release する
+   (約 13 万ファイル / 10 GB。ローカルから数十分)。以降はバッチが当日分を重ねていく
+   ```bash
+   gcloud auth application-default login
+   pnpm --filter @fun-site/batch run seed-firebase-hosting
+   ```
+3. **既定 URL で確認** — `terraform output firebase_hosting_default_url`
+   (`https://boatrace-fun.web.app`) でトップ・当日レース・過去日付のレース・404 を確認する。
+   次のバッチ実行後に当日ページが更新されることも確認する
+4. **`web_hosting = "firebase"` で apply** — A レコードを Firebase Hosting に向ける。
+   証明書は DNS 切替後に発行されるため、**発行まで (数分〜1 時間程度) HTTPS がエラーになる**。
+   状態は `terraform output firebase_hosting_custom_domain_state` の `cert` が
+   `CERT_ACTIVE` になれば完了。LB は旧 DNS キャッシュ向けに残っている
+5. **`web_hosting = "firebase_only"` で apply** — 証明書が有効になり 1 日ほど様子を見てから。
+   LB 一式と Web バケットの公開設定を削除し、デプロイ先を Firebase のみにする。
+   Web バケットは `_meta/` の保管場所と切り戻し用のコピーとして残る (更新は止まる)
+
+切り戻しは `web_hosting` を 1 段戻して apply する。`firebase_only` から戻す場合、LB は
+作り直しになり (IP も変わる) 証明書の再発行を待つ必要がある。Web バケットは
+`firebase_only` の間更新されないので、戻した直後の過去日付ページは古いまま
+(当日分は次のバッチで追いつく)。
+
+Firebase Hosting 側の rollback は Firebase コンソールの Hosting → リリース履歴から
+直前の version に戻せる。次のバッチは manifest と live version の食い違いを検知して
+API から一覧を復元してからデプロイする。
+
 ## 動作確認
 
 ### 1. preview-realtime を手動実行して発火させる
@@ -199,7 +235,7 @@ gcloud run jobs update fun-site-batch \
 
 - Cloud Run Job の ERROR ログ検出 → メール通知（`alert_notification_email` 変数）
 - batch 実行時間のログメトリクス
-- ダッシュボード: Job 実行数、CDN リクエスト数、キャッシュヒット率、ストレージ容量
+- ダッシュボード: Job 実行数、CDN リクエスト数、キャッシュヒット率、ストレージ容量 (CDN 系は LB 廃止後は 0。Firebase Hosting の転送量・ストレージは Firebase コンソールの Hosting → 使用状況で見る)
 
 GCP コンソールの Monitoring → Dashboards から `fun-site overview` を開く。
 
@@ -242,8 +278,11 @@ Pub/Sub チェーン復旧後は `gcloud scheduler jobs delete` で削除する�
 | ビルドが空振りで終わる | `last-build.json` の generation を確認。`FORCE_REBUILD=1` で再実行 |
 | Cloud Build が失敗する | lint / typecheck / test のいずれかでエラー。ローカルで再現確認 |
 | LB 経由で 502 / 504 | backend bucket の設定、Web バケットの IAM（`allUsers` への `objectViewer`）、CDN キャッシュ |
+| Firebase Hosting に反映されない | batch ログの `Firebase Hosting` 行 (`has no release yet` なら seed 未実行、`requires content` なら manifest 不整合 → `_meta/firebase-hosting-manifest.json.gz` を削除すると次回 API から復元)。`DEPLOY_TARGETS` に `firebase` が入っているか |
+| カスタムドメインで証明書エラー | `terraform output firebase_hosting_custom_domain_state`。A レコード切替直後は発行待ち |
 
 ## 経緯
 
 - 2026-05: us-central1 から asia-northeast1 への移行。旧リソース（Cloud Scheduler、旧バケット、旧 LB / SSL）を destroy し、リアルタイムパイプラインを新設
 - 2026-05: 旧 `programs/YYYY/MM/DD.csv`（サブディレクトリなし）パスから新パスへの上流移行に追随、`results/realtime` の取り込みを追加
+- 2026-09: 配信を Firebase Hosting へ段階的に移す手順 (`web_hosting` 変数) を追加

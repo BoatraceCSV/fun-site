@@ -94,3 +94,30 @@ variable "csv_mirror_bucket_name" {
   type        = string
   default     = "boatrace-realtime-data"
 }
+
+variable "web_hosting" {
+  # Firebase Hosting への段階的な切替状態。docs/operations.md「Firebase Hosting への切替」参照。
+  #   lb            … DNS は LB。バッチは Web バケットと Firebase Hosting の両方へデプロイ
+  #                   (Firebase は seed-firebase-hosting を実行するまでスキップされる)
+  #   firebase      … DNS を Firebase Hosting へ向ける。LB は旧 DNS キャッシュ向けに残す
+  #   firebase_only … LB 一式と Web バケットの公開設定を削除。デプロイは Firebase のみ
+  description = "Web hosting stage: lb | firebase | firebase_only"
+  type        = string
+  default     = "lb"
+  validation {
+    condition     = contains(["lb", "firebase", "firebase_only"], var.web_hosting)
+    error_message = "web_hosting must be one of: lb, firebase, firebase_only"
+  }
+}
+
+variable "firebase_hosting_site_id" {
+  description = "Firebase Hosting site ID (<site_id>.web.app). Globally unique."
+  type        = string
+  default     = "boatrace-fun"
+}
+
+variable "firebase_hosting_ip" {
+  description = "A record target for Firebase Hosting custom domains"
+  type        = string
+  default     = "199.36.158.100"
+}

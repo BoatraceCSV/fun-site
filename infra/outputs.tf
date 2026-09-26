@@ -29,8 +29,22 @@ output "artifact_registry_url" {
 }
 
 output "load_balancer_ip" {
-  description = "Global IP address of the load balancer"
-  value       = google_compute_global_address.default.address
+  description = "Global IP address of the load balancer (null after web_hosting = firebase_only)"
+  value       = try(google_compute_global_address.default[0].address, null)
+}
+
+output "firebase_hosting_default_url" {
+  description = "Default URL of the Firebase Hosting site (切替前の動作確認用)"
+  value       = google_firebase_hosting_site.default.default_url
+}
+
+output "firebase_hosting_custom_domain_state" {
+  description = "Firebase Hosting custom domain host / ownership / cert state"
+  value = {
+    host      = google_firebase_hosting_custom_domain.default.host_state
+    ownership = google_firebase_hosting_custom_domain.default.ownership_state
+    cert      = try(google_firebase_hosting_custom_domain.default.cert[0].state, null)
+  }
 }
 
 output "site_url" {

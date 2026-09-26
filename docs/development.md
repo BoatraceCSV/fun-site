@@ -23,7 +23,7 @@ pnpm install
 fun-site/
 ├── packages/
 │   ├── shared/   # 共通型・定数・ユーティリティ
-│   ├── batch/    # CSV 取得 → JSON 生成 → Astro ビルド → GCS デプロイ
+│   ├── batch/    # CSV 取得 → JSON 生成 → Astro ビルド → GCS / Firebase Hosting デプロイ
 │   └── web/      # Astro SSG フロントエンド
 ├── infra/        # Terraform（GCP インフラ）
 ├── docs/         # ドキュメント
@@ -86,6 +86,9 @@ export GCS_DATA_BUCKET=fun-site-data-boatrace-487212
 
 # CSV 取得元（gcs を指定すると GCS ミラー、無指定で GitHub Pages 経由）
 export CSV_SOURCE=gcs
+
+# デプロイ先（既定 gcs。Firebase Hosting にも出すなら gcs,firebase）
+export DEPLOY_TARGETS=gcs
 
 gcloud auth application-default login
 

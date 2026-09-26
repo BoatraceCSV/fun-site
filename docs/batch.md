@@ -18,7 +18,7 @@
 
 ```
 event-parser  ─►  build-state check  ─►  fetcher  ─►  prediction-builder  ─►  site-builder
-                  (早期 return 判定)      (CSV 5 種)    (RacePrediction 生成)    (write local + GCS data → dates-index → series-aggregator → astro build → deploy → dates-index 書き戻し)
+                  (早期 return 判定)      (CSV 5 種)    (RacePrediction 生成)    (write local + GCS data → dates-index → series-aggregator → astro build → deploy (GCS / Firebase Hosting) → dates-index 書き戻し)
 ```
 
 ### 1. event-parser
@@ -167,7 +167,8 @@ predictor-stats と同じ `PredictionDigest[]` (pipeline が 1 回だけ集め�
 | `series-state-store.ts` | 節集計の incremental キャッシュ (統計集計側のキャッシュは `aggregator/prediction-digest-store.ts`)。`gs://${GCS_DATA_BUCKET}/_meta/series-state.json` で stadium × date のスナップショット + dayLabel を保持。過去日は再計算不要、当日分のみ毎ビルドで上書き。`lookback` 上限を超えた古い日は prune |
 | `build.ts` | Astro CLI を直接実行（pnpm 経由のオーバーヘッドを避ける） |
 | `deploy.ts` | `web/dist/` 配下を GCS の Web バケットへアップロード。content-type と cache-control (`.html`=`no-cache` / `_astro/`=`immutable` 1年 / その他=`max-age=3600`) を設定。既存オブジェクトの md5 と一致するファイルはスキップ。既存一覧はバケット全体ではなく、ルート直下 (delimiter 付き) + `selectRemotePrefixes` が選ぶプレフィックス (当日の `race/{date}/` / `archive/{date}/`、削除対象になり得るその他のプレフィックス、ローカル成果物を持つ `_astro/` 等) だけを取得する (過去日付の `race/` 数万件を毎回走査しない)。古い日付の HTML (`race/{date}/`, `archive/{date}/`) と `_astro/` (content-hash 付き CSS / JS チャンク)、`images/`、`_meta/` は削除しないフィルタで GCS に残置 |
-| `index.ts` | `buildAndDeploy(predictions, raceDate)` で上記を順に呼び、最後に `last-build.json` を更新 |
+| `firebase-hosting.ts` | `web/dist/` 配下を Firebase Hosting へデプロイ (REST API 直叩き)。Firebase の version はサイト全体のファイル一覧なので、前回 release の一覧 (パス → gzip 後 SHA-256) を `gs://${GCS_WEB_BUCKET}/_meta/firebase-hosting-manifest.json.gz` に持ち、`deploy.ts` と同じ削除判定 (`isStaleRemote`) を適用したうえで今回の成果物を重ねて新しい version を作る。中身が Firebase 側に無いハッシュだけアップロードする。manifest が live release と食い違うときは API (`versions.files.list`) から一覧を復元。release が 1 度も無い (seed 前) ときはスキップ。キャッシュヘッダは `_astro/`=`immutable` 1年 / HTML (ディレクトリ URL・拡張子なし・`.html`)=`max-age=0, s-maxage=86400` (Firebase の CDN は release ごとに破棄される) / その他=Firebase 既定 `max-age=3600` |
+| `index.ts` | `buildAndDeploy(predictions, raceDate)` で上記を順に呼び、最後に `last-build.json` を更新。デプロイ先は `DEPLOY_TARGETS` (`gcs` / `firebase` のカンマ区切り) の順に実行し、1 つが失敗しても残りを試してから最後に失敗させる |
 
 ## 環境変数
 
@@ -180,6 +181,8 @@ predictor-stats と同じ `PredictionDigest[]` (pipeline が 1 回だけ集め�
 | `CSV_GCS_BUCKET` | `CSV_SOURCE=gcs` 時の取得元バケット | `boatrace-realtime-data-{project}` |
 | `FORCE_REBUILD` | `1` で early-return を無効化 | 未設定 |
 | `BUILD_TARGET_DATE` | Astro 側で参照。ビルド対象日を `YYYY-MM-DD` で明示 | JST 当日 |
+| `DEPLOY_TARGETS` | デプロイ先 (`gcs` = Web バケット、`firebase` = Firebase Hosting) をカンマ区切りで | `gcs` |
+| `FIREBASE_HOSTING_SITE` | `firebase` デプロイ先の Hosting サイト ID | `boatrace-fun` |
 
 ## ローカル実行
 
@@ -189,6 +192,20 @@ export GCS_WEB_BUCKET=fun-site-web-boatrace-487212
 export GCS_DATA_BUCKET=fun-site-data-boatrace-487212
 gcloud auth application-default login
 pnpm --filter @fun-site/batch run start
+```
+
+### Firebase Hosting の初回投入 (seed)
+
+`firebase` デプロイは前回 release の一覧に当日分を重ねるだけなので、最初の 1 回は
+これまで Web バケットで配信してきた全ファイル (過去日付の `race/` を含む) を
+release しておく必要がある。`seed-firebase-hosting` がバケットの全オブジェクト
+(`_meta/` を除く) をダウンロード → ハッシュ → release し、manifest を保存する。
+あわせてサイトの保持 version 数 (`FIREBASE_MAX_VERSIONS`、既定 5) を設定する。
+何度実行しても同じ結果になる (中身が同じファイルはアップロードされない)。
+
+```bash
+gcloud auth application-default login
+FIREBASE_HOSTING_SITE=boatrace-fun pnpm --filter @fun-site/batch run seed-firebase-hosting
 ```
 
 詳細は [development.md](./development.md) を参照。

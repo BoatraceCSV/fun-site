@@ -27,10 +27,19 @@ provider "google" {
 provider "google-beta" {
   project = var.project_id
   region  = var.region
+
+  # Firebase Management API はユーザー認証 (ADC) で呼ぶと quota project の指定が必要
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 locals {
   prefix = var.project_name
+
+  # Firebase Hosting 切替の段階 (variables.tf の web_hosting 参照)
+  lb_enabled     = var.web_hosting != "firebase_only"
+  dns_on_lb      = var.web_hosting == "lb"
+  deploy_targets = local.lb_enabled ? "gcs,firebase" : "firebase"
   labels = {
     project = var.project_name
     managed = "terraform"
@@ -54,6 +63,8 @@ resource "google_project_service" "apis" {
     "eventarc.googleapis.com",
     "workflows.googleapis.com",
     "workflowexecutions.googleapis.com",
+    "firebase.googleapis.com",
+    "firebasehosting.googleapis.com",
   ])
 
   service            = each.value
