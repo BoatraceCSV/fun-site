@@ -7,8 +7,8 @@ fun-site の全体アーキテクチャ。データソース、処理パイプ�
 ボートレースの **スタート予想** と **AI 総合評価** を、当日全レース分の静的ページとして配信するファンサイト。
 
 - データソースは [BoatraceCSV](https://github.com/BoatraceCSV) の CSV のみ。自前の推論パイプラインは持たない
-- preview-realtime（BoatraceCSV 側）が JST 08:00〜22:59 の 2 分間隔で当日 CSV を更新するたびに、fun-site batch がイベント駆動で全ページを再ビルドする
-- 静的サイトは GCS + Cloud CDN で配信する。Astro SSG により JS ゼロのページを生成する
+- preview-realtime（BoatraceCSV 側）が JST 08:00〜22:59 の 5 分間隔で当日 CSV を更新するたびに、fun-site batch がイベント駆動で全ページを再ビルドする
+- 静的サイトは Firebase Hosting で配信する (LB + Cloud CDN からの移行中。段階は [infrastructure.md](./infrastructure.md#ネットワーク配信))。Astro SSG により JS ゼロのページを生成する
 
 ## システム構成図
 
@@ -16,7 +16,7 @@ fun-site の全体アーキテクチャ。データソース、処理パイプ�
 ┌────────────────────────────────────────────────────────────┐
 │ BoatraceCSV 側 (別 GCP project から運用)                   │
 │                                                            │
-│  preview-realtime (Cloud Run Job, JST 08:00〜22:59 2分毎)  │
+│  preview-realtime (Cloud Run Job, JST 08:00〜22:59 5分毎)  │
 │   ├ CSV 取得・パース                                       │
 │   ├ GCS にミラー → gs://boatrace-realtime-data-.../data/   │
 │   └ Pub/Sub publish → fun-site-realtime-completed          │
@@ -40,10 +40,10 @@ fun-site の全体アーキテクチャ。データソース、処理パイプ�
 │                       └────────────────────────────────┘   │
 │                                          │                 │
 │                                          ▼                 │
-│                              gs://fun-site-web-.../        │
+│                           Firebase Hosting (CDN)           │
 │                                          │                 │
 │                                          ▼                 │
-│                       Cloud CDN ──► HTTPS LB ──► ユーザー  │
+│                                       ユーザー             │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,14 +51,15 @@ fun-site の全体アーキテクチャ。データソース、処理パイプ�
 
 | コンポーネント | 実体 | 役割 |
 |---|---|---|
-| preview-realtime | 別リポジトリ (boatracecsv.github.io) の Cloud Run Job | BoatraceCSV を 2 分間隔でフェッチ・パース、GCS ミラー、Pub/Sub publish |
+| preview-realtime | 別リポジトリ (boatracecsv.github.io) の Cloud Run Job | BoatraceCSV を 5 分間隔でフェッチ・パース、GCS ミラー、Pub/Sub publish |
 | CSV ミラーバケット | `boatrace-realtime-data-{project_id}` (GCS) | preview-realtime が書込、fun-site batch が読込 |
 | Pub/Sub topic | `fun-site-realtime-completed` | preview-realtime の完了通知。`RealtimeCompletedMessage` を運ぶ |
 | Eventarc trigger | `fun-site-realtime-completed` | topic → Workflow を起動 |
 | Workflow | `fun-site-realtime-dispatcher` | Pub/Sub message を `containerOverrides.args` に乗せて Cloud Run Job を起動する中継 |
-| Cloud Run Job | `fun-site-batch` | このリポジトリの `packages/batch`。CSV 取得 → JSON 生成 → Astro build → GCS deploy |
-| Web バケット | `fun-site-web-{project_id}` (GCS) | 静的サイトの配信元 |
-| CDN + LB | Cloud CDN + HTTPS Global LB | エッジキャッシュ・SSL 終端・カスタムドメイン |
+| Cloud Run Job | `fun-site-batch` | このリポジトリの `packages/batch`。CSV 取得 → JSON 生成 → Astro build → Firebase Hosting / GCS deploy |
+| Firebase Hosting | サイト `boatrace-fun` | 静的サイトの配信 (CDN・SSL・カスタムドメイン) |
+| Web バケット | `fun-site-web-{project_id}` (GCS) | `_meta/` (ビルド状態) の保管。移行完了までは LB 経由の配信元も兼ねる |
+| CDN + LB | Cloud CDN + HTTPS Global LB | 移行完了 (`web_hosting = "firebase_only"`) で削除 |
 
 ## なぜ Workflow を挟むか
 
@@ -66,7 +67,7 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 
 ## データフローの粒度
 
-- **更新粒度**: preview-realtime が CSV を更新するたび（最小 2 分間隔）。`updatedRaces` 配列で差分レースの情報が渡る
+- **更新粒度**: preview-realtime が CSV を更新するたび（最小 5 分間隔）。`updatedRaces` 配列で差分レースの情報が渡る
 - **ビルド粒度**: 毎回フルリビルド。差分ビルドはしない（Astro SSG の構造上、当日分の依存関係が広いため）
 - **早期 return**: 全 CSV の GCS object generation が前回ビルド時と同じなら `last-build.json` を見て即終了する。`FORCE_REBUILD=1` で無効化できる
 
@@ -134,3 +135,4 @@ Terraform google provider 6.x の `google_eventarc_trigger.destination` は Clou
 - 2026-08-23: 展示詳細ページで **展示pt を再現**するようにした（従来は「再現不可」と表示）。展示pt の生値は「展示タイム + オリジナル展示 1〜3 を**レース内で偏差値化して等重み平均**」で、そのレースの直前情報だけで閉じている（項目別の重みは存在しない）。外から要るのは場別の μ / σ / w だけで、それは既に取得済みの weights CSV に `mu_exhibit` / `sigma_exhibit` / `w_exhibit` として入っていたため、**上流の配信物は変更していない** — `fetchStadiumTables` の成分切り出しを `waku` / `weather` の 2 つから `exhibit` を足した 3 つに増やし、`exhibitPtBasis` としてレース JSON に焼き込むだけで済んだ。枠番pt / 気象pt と違い突き合わせる静的テーブルが無いので、`exhibit-pt-basis.ts` は weights を場コードキーに読み替えるだけ。2026-07〜08 の実データ 49,092 艇で index CSV と小数第 2 位まで完全一致することを確認済み（代表 5 レースを `exhibit-pt.test.ts` のゴールデンに固定）。あわせて「展示ptはスタート展示ST も重み付けしている」という**誤った説明を訂正**した — 上流が `previews/stt` から読むのは進入コースだけで、展示ST・体重・チルトはどの成分の入力にもなっていない。残る再現不可成分は モーターpt のみ（6 節ぶんの走行履歴集計が必要で、weights を配っても再現できない）。
 - 2026-08-23: モーター詳細ページで **素点の内訳を表示**するようにした（従来は「再現不可」と表示）。素点は「級別 × グレード分類 × 進入コース」のセル統計で z 残差化するが、この μ/σ が **全 24 場を横断したコーパス**から作られるため、1 基ぶんの素点でも全場の履歴に依存する。当日ぶんの CSV しか取得しない fun-site 側では原理的に計算できないので、上流 (BoatraceCSV#13) に計算過程を明細として配ってもらう形にした — 選手pt に対する `recent_national` / `recent_local` と同じ関係。新しく読むのは `estimate/motor_pt/{runs,motors,baseline}` の 3 種で、`(場コード-モーター番号)` で各艇に突合して `RaceRacer.motorPtHistory` に、そのレースが引いたコース補正セルを `RacePrediction.motorPtBaseline` に焼き込む。素点から先の `50 + 10 × (素点 − μ) ÷ σ` と `w × モーターpt` は weights CSV の `motor` 成分（`motorPtBasis`）で fun-site 側が計算し、2026-08-22 の 933 セルで index CSV と小数第 2 位まで一致することを確認済み。ただし上流 CSV が素点を小数 6 桁に丸めるため、偏差値変換で 10/σ (≒ 50〜80) 倍された誤差が 2 桁表示の丸め境界をまたぐケースが 933 中 2 件あり、`motorPtMatchesIndex` は σ を受け取ってその分だけ許容幅を広げる。runs は 1 レース 230 走前後になるので、モーター単位で一定の 3 列を落とした `MotorPtHistoryRun` に詰め替えてからレース JSON に載せている（それでも整形済み JSON は 74KB → 183KB と太る）。これで再現不可成分は無くなった。
 - 2026-08-23: `fetchAllCsvData` が `exhibitWeights` を返り値に含めていなかったのを修正。`fetchStadiumTables` は取得していたが分割代入から漏れており、`csvData.exhibitWeights` が常に undefined → 展示詳細ページが「テーブル未取得」に倒れていた（2026-08-23 の展示pt 再現対応の取りこぼし）。
+- 2026-09: 費用削減のため配信を Global LB + Cloud CDN から Firebase Hosting へ移行。LB の forwarding rule 固定費 (月 ~$18) が最大の費用項目で、CDN ヒット率も約 10% と LB に見合う規模ではなかった。あわせて preview-realtime を 2 分間隔から 5 分間隔に戻した (反映遅延は最大 5 分)

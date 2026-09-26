@@ -28,7 +28,11 @@ resource "google_storage_bucket" "web" {
   }
 }
 
+# LB (backend bucket) 経由の配信用。Firebase Hosting へ切り替えた後は Web バケットを
+# _meta/ (ビルド状態) と切り戻し用のコピーとしてだけ使うので、公開を外す。
 resource "google_storage_bucket_iam_member" "web_public_read" {
+  count = local.lb_enabled ? 1 : 0
+
   bucket = google_storage_bucket.web.name
   role   = "roles/storage.objectViewer"
   member = "allUsers"
@@ -80,4 +84,9 @@ resource "google_storage_bucket" "data" {
   soft_delete_policy {
     retention_duration_seconds = 0
   }
+}
+
+moved {
+  from = google_storage_bucket_iam_member.web_public_read
+  to   = google_storage_bucket_iam_member.web_public_read[0]
 }

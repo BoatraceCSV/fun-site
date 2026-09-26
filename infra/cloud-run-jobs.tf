@@ -54,6 +54,15 @@ resource "google_cloud_run_v2_job" "batch" {
           value = "data"
         }
 
+        # デプロイ先。Firebase Hosting 切替の段階 (var.web_hosting) で決まる
+        env {
+          name  = "DEPLOY_TARGETS"
+          value = local.deploy_targets
+        }
+        env {
+          name  = "FIREBASE_HOSTING_SITE"
+          value = google_firebase_hosting_site.default.site_id
+        }
         env {
           name  = "VERTEX_AI_LOCATION"
           value = var.vertex_ai_location
