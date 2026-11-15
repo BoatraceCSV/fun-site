@@ -409,7 +409,7 @@ web はそれを描画する — 表示と集計が構造的に一致する。
 
 ## 参考情報源
 
-- [BoatraceCSV (GitHub)](https://github.com/BoatraceCSV/boatracecsv.github.io)
+- BoatraceCSV(`BoatraceCSV/boatracecsv.github.io`、private リポジトリ)
 - [BOAT RACE 公式サイト](https://www.boatrace.jp/)
 - [艇国データバンク - 場別1コース成績](https://boatrace-db.net/stadium/acourse/course/1/)
 - [ボートレース日和](https://kyoteibiyori.com)

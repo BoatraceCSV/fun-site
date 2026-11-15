@@ -84,9 +84,6 @@ export GCP_PROJECT_ID=boatrace-487212
 export GCS_WEB_BUCKET=fun-site-web-boatrace-487212
 export GCS_DATA_BUCKET=fun-site-data-boatrace-487212
 
-# CSV 取得元（gcs を指定すると GCS ミラー、無指定で GitHub Pages 経由）
-export CSV_SOURCE=gcs
-
 # デプロイ先（既定 gcs。Firebase Hosting にも出すなら gcs,firebase）
 export DEPLOY_TARGETS=gcs
 

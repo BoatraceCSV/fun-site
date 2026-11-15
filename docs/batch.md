@@ -67,7 +67,7 @@ GCS の `_meta/last-build.json` から前回ビルド時の CSV generation を�
 
 | ファイル | 役割 |
 |---|---|
-| `csv-client.ts` | HTTP / GCS 切り替え、リトライ、generation 取得。`fetchIndexCsvText(predictor, date)` で予想者別 index CSV を取得 |
+| `csv-client.ts` | GCS ミラーからの取得、リトライ、generation 取得。`fetchIndexCsvText(predictor, date)` で予想者別 index CSV を取得 |
 | `schemas.ts` | `programs/title` のパーサ |
 | `race-card-schemas.ts` | `programs/race_cards`, `previews/stt` と予想者別 `estimate/{predictor_id}` のパーサ。`parseIndex(csvText, predictor)` は `predictor.componentKeys` に基づいて CSV 列名を動的に解決する |
 | `preview-schemas.ts` | `previews/tkz`（体重・展示タイム・チルト）, `previews/sui`（水面気象）, `previews/original_exhibition`（場別オリジナル展示）のパーサ。`parseTkz` / `parseSui` / `parseOriginalExhibition` |
@@ -177,8 +177,7 @@ predictor-stats と同じ `PredictionDigest[]` (pipeline が 1 回だけ集め�
 | `GCP_PROJECT_ID` | GCS / Pub/Sub クライアントに渡す project | 必須 |
 | `GCS_WEB_BUCKET` | 静的サイトのデプロイ先バケット | 必須 |
 | `GCS_DATA_BUCKET` | `last-build.json` の保管先 | 必須 |
-| `CSV_SOURCE` | `gcs` で GCS ミラー、それ以外で HTTP（GitHub Pages） | HTTP |
-| `CSV_GCS_BUCKET` | `CSV_SOURCE=gcs` 時の取得元バケット | `boatrace-realtime-data-{project}` |
+| `CSV_GCS_BUCKET` | CSV の取得元バケット (GCS ミラー) | `boatrace-realtime-data-{GCP_PROJECT_ID}` |
 | `FORCE_REBUILD` | `1` で early-return を無効化 | 未設定 |
 | `BUILD_TARGET_DATE` | Astro 側で参照。ビルド対象日を `YYYY-MM-DD` で明示 | JST 当日 |
 | `DEPLOY_TARGETS` | デプロイ先 (`gcs` = Web バケット、`firebase` = Firebase Hosting) をカンマ区切りで | `gcs` |

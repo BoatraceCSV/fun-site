@@ -51,7 +51,7 @@ fun-site の全体アーキテクチャ。データソース、処理パイプ�
 
 | コンポーネント | 実体 | 役割 |
 |---|---|---|
-| preview-realtime | 別リポジトリ (boatracecsv.github.io) の Cloud Run Job | BoatraceCSV を 5 分間隔でフェッチ・パース、GCS ミラー、Pub/Sub publish |
+| preview-realtime | 別リポジトリ (boatracecsv.github.io、private) の Cloud Run Job | BoatraceCSV を 5 分間隔でフェッチ・パース、GCS ミラー、Pub/Sub publish |
 | CSV ミラーバケット | `boatrace-realtime-data-{project_id}` (GCS) | preview-realtime が書込、fun-site batch が読込 |
 | Pub/Sub topic | `fun-site-realtime-completed` | preview-realtime の完了通知。`RealtimeCompletedMessage` を運ぶ |
 | Eventarc trigger | `fun-site-realtime-completed` | topic → Workflow を起動 |
