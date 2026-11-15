@@ -1,6 +1,6 @@
 import { activePredictors } from "@fun-site/shared";
 import { Storage } from "@google-cloud/storage";
-import type { CsvType } from "./fetcher/csv-client.js";
+import { CSV_GCS_BUCKET, CSV_GCS_PATH_ROOT, type CsvType } from "./fetcher/csv-client.js";
 
 /**
  * CSV 種別 + 予想者別 index + 静的テーブルの generation トラッキングキー。
@@ -69,10 +69,8 @@ export const saveBuildState = async (state: BuildState): Promise<void> => {
 
 /**
  * preview-realtime が書き込んだ CSV の現在の generation を取得する。
- * `CSV_SOURCE=gcs` 経路と同じバケット/パス構造を見る前提。
+ * csv-client.ts の取得元と同じバケット/パス構造を見る。
  */
-const CSV_GCS_BUCKET = process.env["CSV_GCS_BUCKET"] ?? "boatrace-realtime-data";
-const CSV_GCS_PATH_ROOT = process.env["CSV_GCS_PATH_ROOT"] ?? "data";
 
 const CSV_PATH_PREFIX: Record<CsvType, string> = {
   title: "programs/title",

@@ -49,8 +49,8 @@ export const runPipeline = async (): Promise<void> => {
   }
 
   // Step 0b: GCS の CSV generation を確認し、前回ビルドから変化が無ければスキップ。
-  //          early-return 用のショートカット。CSV_SOURCE=gcs の前提で動く。
-  if (process.env["CSV_SOURCE"] === "gcs" && process.env["FORCE_REBUILD"] !== "1") {
+  //          early-return 用のショートカット。
+  if (process.env["FORCE_REBUILD"] !== "1") {
     try {
       const [previous, current] = await Promise.all([
         loadBuildState(),
@@ -150,21 +150,19 @@ export const runPipeline = async (): Promise<void> => {
   await buildAndDeploy(predictions, raceDate);
 
   // Step 4: last-build.json を GCS に保存（次回ビルド時の早期 return 比較用）
-  if (process.env["CSV_SOURCE"] === "gcs") {
-    try {
-      const generations = await fetchCurrentCsvGenerations(raceDate);
-      await saveBuildState({
-        lastBuildAt: new Date().toISOString(),
-        raceDate,
-        csvGenerations: generations,
-      });
-    } catch (error) {
-      console.warn(
-        `Failed to save build state (non-fatal): ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+  try {
+    const generations = await fetchCurrentCsvGenerations(raceDate);
+    await saveBuildState({
+      lastBuildAt: new Date().toISOString(),
+      raceDate,
+      csvGenerations: generations,
+    });
+  } catch (error) {
+    console.warn(
+      `Failed to save build state (non-fatal): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
   }
 
   console.info("Pipeline completed successfully");

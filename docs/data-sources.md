@@ -68,25 +68,22 @@ weights CSV は 1 回だけ取得して `waku` / `weather` / `exhibit` の 3 成
 ## 取得元
 
 実装は [`packages/batch/src/fetcher/csv-client.ts`](../packages/batch/src/fetcher/csv-client.ts)。
-`CSV_SOURCE` 環境変数で切り替える。
+取得元は GCS ミラーのみ。
 
-### GCS ミラー（推奨・本番）
-
-`CSV_SOURCE=gcs`
+### GCS ミラー
 
 `gs://boatrace-realtime-data-{project_id}/data/{種別}/{YYYY}/{MM}/{DD}.csv`
 
-preview-realtime が CSV を取得して直接書き込む。HTTPS / CDN ラグなしで読める。本番の Cloud Run Job ではこちらを使う。
+preview-realtime / daily-sync が CSV を取得して直接書き込む。本番・ローカル開発とも
+こちらを使う(ローカルでは `gcloud auth application-default login` が必要)。
+バケットは `CSV_GCS_BUCKET` で上書きでき、未指定時は `GCP_PROJECT_ID` から組み立てる。
 
-### HTTP（デフォルト・開発）
-
-`https://boatracecsv.github.io/data/{種別}/{YYYY}/{MM}/{DD}.csv`
-
-GitHub Pages 経由。ローカル開発や検証で GCS を使いたくない場合のフォールバック。
+> 旧来の HTTP 経路(GitHub Pages `https://boatracecsv.github.io/data/...`)は、
+> BoatraceCSV のデータ公開停止(2026-11)に伴い廃止した。
 
 ### リトライと world generation
 
-- HTTP / GCS のいずれも exponential backoff で最大 3 回リトライ
+- exponential backoff で最大 3 回リトライ(GCS 404 は即時失敗)
 - GCS object の `generation`（更新時刻ベースの整数）を取得し、`_meta/last-build.json` に記録
   （`waku_table` / `sui_params` も対象。月次でテーブルが差し替わったら全レースの解説が変わるため。
   weights は月ごとにパスが変わり stat だけで解決できないので対象外）
